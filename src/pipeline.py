@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+from glob import glob
 from os.path import join as pjoin
 import sys
 from argparse import ArgumentParser
@@ -8,8 +9,10 @@ import subprocess
 import logging
 import re
 import urllib.request
-import time
+import textwrap
 
+from colorama import Fore
+import pandas as pd
 from imctools.scripts import ometiff2analysis
 from imctools.scripts import ome2micat
 from imctools.scripts import probablity2uncertainty
@@ -28,6 +31,8 @@ STEPS = [
 ]
 
 STEPS_INDEX = dict(enumerate(STEPS))
+
+DOCKER_IMAGE = "afrendeiro/cellprofiler"  # "cellprofiler/cellprofiler"
 
 #  DIRS = ['base', 'input', 'analysis', 'ilastik', 'ome', 'cp', 'histocat' 'uncertainty']
 
@@ -50,23 +55,22 @@ def main():
     finally:
         if args.step == "all":
             for step in STEPS:
-                logger.info(f"Doing '{args.step}' step.")
+                logger.info("Doing '%s' step." % args.step)
                 eval(step)()
-                logger.info(f"Done with '{args.step}' step.")
+                logger.info("Done with '%s' step." % args.step)
         else:
-            logger.info(f"Doing '{args.step}' step.")
+            logger.info("Doing '%s' step." % args.step)
             eval(args.step)()
-            logger.info(f"Done with '{args.step}' step.")
+            logger.info("Done with '%s' step." % args.step)
 
 
 def setup_logger(level=logging.DEBUG):
     logger = logging.getLogger()
     logger.setLevel(logging.DEBUG)
-    logging.Formatter.converter = time.gmtime
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(level)
-    formatter = logging.Formatter("%(asctime)s - %(message)s")
+    formatter = logging.Formatter(Fore.BLUE + "%(asctime)s - %(message)s")
     handler.setFormatter(formatter)
     logger.addHandler(handler)
     return logger
@@ -77,8 +81,9 @@ def get_cli_arguments():
     out = pjoin(os.curdir, "pipeline")
 
     # Software
-
-    # if cellprofiler locations do not exist, clone to some default location
+    choices = ['docker', 'singularity']
+    parser.add_argument("--container", dest="containerized", default=None, choices=choices)
+    # # if cellprofiler locations do not exist, clone to some default location
     parser.add_argument(
         "--cellprofiler-pipeline-path",
         dest="cellprofiler_pipeline_path",
@@ -92,13 +97,9 @@ def get_cli_arguments():
     parser.add_argument(
         "--ilastik-path",
         dest="ilastik_sh_path",
-        default="src/ilastik-1.3.3post2-Linux/run_ilastik.sh",
+        default=None,  # "src/ilastik-1.3.3post2-Linux/run_ilastik.sh",
     )
-    parser.add_argument(
-        "--docker-image",
-        dest="docker_image",
-        default=None,  # "afrendeiro:cellprofiler"
-    )
+    parser.add_argument("--docker-image", dest="docker_image", default=DOCKER_IMAGE)
 
     # Input
     parser.add_argument("--file-regexp", dest="file_regexp", default=".*.zip")
@@ -122,6 +123,8 @@ def get_cli_arguments():
     )
     # /home/afr/projects/data/fluidigm_example_data/fluidigm_example_data.ilp
 
+    parser.add_argument("--overwrite", action="store_true")
+
     # Pipeline steps
     choices = STEPS + [str(x) for x in range(len(STEPS))]
     parser.add_argument(
@@ -143,9 +146,19 @@ def get_cli_arguments():
     dirs["uncertainty"] = pjoin(dirs["base"], "uncertainty")
     args.dirs = dirs
 
-    args.csv_pannel = args.csv_pannel or pjoin(
-        args.input_dirs[0], "example_pannel.csv"
-    )
+    if args.containerized is not None:
+        dirbind = {"docker": "-v", "singularity": '-B'}
+        args.dirbind = dirbind[args.containerized]
+
+    if args.csv_pannel is None:
+        if args.input_dirs is not None:
+            args.csv_pannel = pjoin(args.input_dirs[0], "example_pannel.csv")
+
+    # Update channel number with pannel for quantification step
+    if args.csv_pannel is not None:
+        # with open(args.csv_pannel, "r") as handle:
+        #     args.channel_number = len(handle.read().strip().split("\n")) - 1
+        args.channel_number = pd.read_csv(args.csv_pannel).query("full == 1").shape[0]
 
     args.suffix_mask = "_mask.tiff"
     args.suffix_probablities = "_Probabilities"
@@ -158,9 +171,21 @@ def get_cli_arguments():
 
 
 def check_requirements(func):
+    def docker_or_singularity():
+        import shutil
+        for run in ['docker', 'singularity']:
+            if shutil.which("docker"):
+                logger.debug("Selecting %s as container runner." % run)
+                return run
+        raise ValueError("Neither docker or singularity are available!")
+
     def inner():
-        if args.docker_image is None:
-            get_docker_image_or_pull()
+        if args.containerized is not None:
+            if args.containerized == 'docker':
+                if args.docker_image != DOCKER_IMAGE:
+                    get_docker_image_or_pull()
+            elif args.containerized == 'docker':
+                args.docker_image = "docker://" + args.docker_image
         if args.cellprofiler_plugin_path is None:
             get_zanotelli_code("cellprofiler_plugin_path", "ImcPluginsCP")
         if args.cellprofiler_pipeline_path is None:
@@ -174,14 +199,13 @@ def check_requirements(func):
 
 def get_zanotelli_code(arg, repo):
     if repo not in ["ImcSegmentationPipeline", "ImcPluginsCP"]:
-        raise ValueError("")
-    _dir = pjoin("src", repo)
+        raise ValueError("Please choose only one of the two available repos.")
+    _dir = os.path.abspath(pjoin(os.path.curdir, "src", repo))
     if not os.path.exists(_dir):
         url = f"https://github.com/BodenmillerGroup/{repo} {_dir}"
         cmd = f"git clone {url}"
         run_shell_command(cmd)
-    else:
-        setattr(args, arg, os.path.abspath(pjoin(os.path.curdir, "src", repo)))
+    setattr(args, arg, _dir)
 
 
 def get_docker_image_or_pull():
@@ -194,7 +218,7 @@ def get_docker_image_or_pull():
                 .strip()
             )
             for line in out.split("\n")[1:]:
-                if line.split(" ")[0] == default_docker_image:
+                if line.split(" ")[0] == DOCKER_IMAGE:
                     return True
         except FileNotFoundError:
             logger.error("Docker installation not detected.")
@@ -203,23 +227,31 @@ def get_docker_image_or_pull():
             pass
         return False
 
-    default_docker_image = "afrendeiro/cellprofiler"  # "cellprofiler/cellprofiler"
     if not check_image():
         logger.debug("Found docker image.")
         # build
         logger.debug("Did not find cellprofiler docker image. Will build.")
-        cmd = f"docker pull {default_docker_image}"
+        cmd = f"docker pull {DOCKER_IMAGE}"
         run_shell_command(cmd)
-    args.docker_image = default_docker_image
+    args.docker_image = DOCKER_IMAGE
 
 
-def get_ilastik(version="1.3.3"):
-    os.chdir("src")
-    url = "https://files.ilastik.org/"
-    file = f"ilastik-{version}post2-Linux.tar.bz2"
-    run_shell_command(f"wget {url + file}")
-    run_shell_command(f"tar xfz {file}")
-    os.chdir("..")
+def check_ilastik(func):
+    def get_ilastik(version="1.3.3"):
+        url = "https://files.ilastik.org/"
+        file = f"ilastik-{version}post2-Linux.tar.bz2"
+        run_shell_command(f"wget -o {pjoin('src', file)} {url + file}")
+        run_shell_command(f"tar xf {pjoin('src', file)}")
+
+    def inner():
+        def_ilastik_sh_path = pjoin("src", "ilastik-1.3.3post2-Linux", "run_ilastik.sh")
+        if args.ilastik_sh_path is None:
+            if not os.path.exists(def_ilastik_sh_path):
+                get_ilastik()
+            args.ilastik_sh_path = def_ilastik_sh_path
+        func()
+
+    return inner
 
 
 def download_test_data():
@@ -268,7 +300,7 @@ def prepare():
         )
 
     def prepare_histocat():
-        if not (os.path.exists(args.dirs["histocat"])):
+        if not os.path.exists(args.dirs["histocat"]):
             os.makedirs(args.dirs["histocat"])
         for fol in os.listdir(args.dirs["ome"]):
             ome2micat.omefolder2micatfolder(
@@ -299,19 +331,34 @@ def prepare():
 
     @check_requirements
     def prepare_ilastik():
-        cmd = f"""docker run \
-            --name cellprofiler_prepare_ilastik --rm \
-            -v {args.dirs['base']}:/data:rw \
-            -v {args.cellprofiler_plugin_path}:/ImcPluginsCP:ro \
-            -v {args.cellprofiler_pipeline_path}:/ImcSegmentationPipeline:ro \
-            -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
-            -e DISPLAY=$DISPLAY \
-            {args.docker_image} \
-                --run-headless --run \
-                --plugins-directory /ImcPluginsCP/plugins/ \
-                --pipeline /ImcSegmentationPipeline/cp3_pipelines/1_prepare_ilastik.cppipe \
-                -i /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/ \
+        if args.containerized:
+            extra = (
+                "--name cellprofiler_prepare_ilastik --rm"
+                if args.containerized == 'docker'
+                else "")
+            cmd = f"""
+        {args.containerized} run \\
+        {extra} \\
+            {args.dirbind} {args.dirs['base']}:/data:rw \\
+            {args.dirbind} {args.cellprofiler_plugin_path}:/ImcPluginsCP:ro \\
+            {args.dirbind} {args.cellprofiler_pipeline_path}:/ImcSegmentationPipeline:ro \\
+            {args.docker_image} \\
+                --run-headless --run \\
+                --plugins-directory /ImcPluginsCP/plugins/ \\
+                --pipeline /ImcSegmentationPipeline/cp3_pipelines/1_prepare_ilastik.cppipe \\
+                -i /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/ \\
                 -o /{args.dirs['ilastik'].replace(args.dirs['base'], 'data')}/"""
+        else:
+            cmd = f"""
+            cellprofiler \\
+                --run-headless --run \\
+                --plugins-directory {args.cellprofiler_plugin_path}/plugins/ \\
+                --pipeline {args.cellprofiler_pipeline_path}/cp3_pipelines/1_prepare_ilastik.cppipe \\
+                -i {args.dirs['analysis']}/ \\
+                -o {args.dirs['ilastik']}/"""
+
+        # {args.dirbind} /tmp/.X11-unix:/tmp/.X11-unix:ro \\
+        # -e DISPLAY=$DISPLAY \\
         run_shell_command(cmd)
 
     export_acquisition()
@@ -319,61 +366,117 @@ def prepare():
     prepare_ilastik()
 
 
+@check_ilastik
 def train():
-    cmd = f"""{args.ilastik_sh_path}"""
-    run_shell_command(cmd)
+    """Inputs are the files in ilastik/*.h5"""
+    if args.step == 'all' and args.ilastik_model is not None:
+        logger.info("Pre-trained model provided. Skipping training step.")
+    else:
+        logger.info("No model provided. Launching interactive ilastik session.")
+        cmd = f"""{args.ilastik_sh_path}"""
+        run_shell_command(cmd)
 
 
+@check_ilastik
 def predict():
-    cmd = f"""{args.ilastik_sh_path} \
-        --headless \
-        --project={args.ilastik_model} \
-        {args.dirs['analysis']}/*_s2.h5"""
+    cmd = f"""{args.ilastik_sh_path} \\
+        --headless \\
+        --export_source probabilities \\
+        --project {args.ilastik_model} \\
+        """
+    # Shell expansion of input files won't happen in subprocess call
+    cmd += " ".join(glob(f"{args.dirs['analysis']}/*_s2.h5"))
     run_shell_command(cmd)
 
 
 @check_requirements
 def segment():
-    cmd = f"""docker run \
-    --name cellprofiler_segment --rm \
-    -v {args.dirs['base']}:/data:rw \
-    -v {args.cellprofiler_plugin_path}:/ImcPluginsCP:ro \
-    -v {args.cellprofiler_pipeline_path}:/ImcSegmentationPipeline:ro \
-    -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
-    -e DISPLAY=$DISPLAY \
-    {args.docker_image} \
-        --run-headless --run \
-        --plugins-directory /ImcPluginsCP/plugins/ \
-        --pipeline /ImcSegmentationPipeline/cp3_pipelines/2_segment_ilastik.cppipe \
-        -i /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/ \
-        -o /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/"""
+    extra = (
+        "--name cellprofiler_segment --rm"
+        if args.containerized == 'docker'
+        else "")
+
+    if args.containerized:
+        cmd = f"""{args.containerized} run \\
+        {extra} \\
+        {args.dirbind} {args.dirs['base']}:/data:rw \\
+        {args.dirbind} {args.cellprofiler_plugin_path}:/ImcPluginsCP:ro \\
+        {args.dirbind} {args.cellprofiler_pipeline_path}:/ImcSegmentationPipeline:ro \\
+        {args.docker_image} \\
+            --run-headless --run \\
+            --plugins-directory /ImcPluginsCP/plugins/ \\
+            --pipeline /ImcSegmentationPipeline/cp3_pipelines/2_segment_ilastik.cppipe \\
+            -i /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/ \\
+            -o /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/"""
+    else:
+        cmd = f"""
+        cellprofiler \\
+            --run-headless --run \\
+            --plugins-directory {args.cellprofiler_plugin_path}/plugins/ \\
+            --pipeline {args.cellprofiler_pipeline_path}/cp3_pipelines/2_segment_ilastik.cppipe \\
+            -i {args.dirs['analysis']}/ \\
+            -o {args.dirs['analysis']}/"""
     run_shell_command(cmd)
 
 
 @check_requirements
 def quantify():
-    """
-    For this step, the number of channels should be updated in the pipeline file (line 126 and 137).
-    """
-    cmd = f"""docker run \
-    --name cellprofiler_quantify --rm \
-    -v {args.dirs['base']}:/data:rw \
-    -v {args.cellprofiler_plugin_path}:/ImcPluginsCP:ro \
-    -v {args.cellprofiler_pipeline_path}:/ImcSegmentationPipeline:ro \
-    -v /tmp/.X11-unix:/tmp/.X11-unix:ro \
-    -e DISPLAY=$DISPLAY \
-    {args.docker_image} \
-        --run-headless --run \
-        --plugins-directory /ImcPluginsCP/plugins/ \
-        --pipeline /ImcSegmentationPipeline/cp3_pipelines/3_measure_mask_basic.cppipe \
-        -i /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/ \
-        -o /{args.dirs['cp'].replace(args.dirs['base'], 'data')}"""
+    # For this step, the number of channels should be updated
+    # in the pipeline file (line 126 and 137).
+    pipeline_file = pjoin(
+        args.cellprofiler_pipeline_path,
+        "cp3_pipelines",
+        "3_measure_mask_basic.cppipe",
+    )
+    new_pipeline_file = pipeline_file.replace(".cppipe", ".new.cppipe")
+
+    default_channel_number = r"\xff\xfe2\x004\x00"
+    new_channel_number = (
+        str(str(args.channel_number).encode("utf-16"))
+        .replace("b'", "")
+        .replace("'", "")
+    )
+    logger.info(f"Changing the channel number to {args.channel_number}.")
+
+    with open(pipeline_file, "r") as ihandle:
+        with open(new_pipeline_file, "w") as ohandle:
+            c = ihandle.read()
+            cc = c.replace(default_channel_number, new_channel_number)
+            ohandle.write(cc)
+
+    if args.containerized:
+        extra = (
+            "--name cellprofiler_quantify --rm"
+            if args.containerized == 'docker'
+            else "")
+        cmd = f"""{args.containerized} run \\
+        {extra} \\
+        {args.dirbind} {args.dirs['base']}:/data:rw \\
+        {args.dirbind} {args.cellprofiler_plugin_path}:/ImcPluginsCP:ro \\
+        {args.dirbind} {args.cellprofiler_pipeline_path}:/ImcSegmentationPipeline:ro \\
+        {args.docker_image} \\
+            --run-headless --run \\
+            --plugins-directory /ImcPluginsCP/plugins/ \\
+            --pipeline /ImcSegmentationPipeline/cp3_pipelines/3_measure_mask_basic.new.cppipe \\
+            -i /{args.dirs['analysis'].replace(args.dirs['base'], 'data')}/ \\
+            -o /{args.dirs['cp'].replace(args.dirs['base'], 'data')}"""
+    else:
+        cmd = f"""
+        cellprofiler
+            --run-headless --run \\
+            --plugins-directory {args.cellprofiler_plugin_path}/plugins/ \\
+            --pipeline {args.cellprofiler_pipeline_path}/cp3_pipelines/3_measure_mask_basic.new.cppipe \\
+            -i {args.dirs['analysis']}/ \\
+            -o {args.dirs['cp']}"""
+
     run_shell_command(cmd)
+
+    os.remove(new_pipeline_file)
 
 
 def uncertainty():
     """
-    This would require LZW decompression which is given by the `imagecodecs`
+    This requires LZW decompression which is given by the `imagecodecs`
     Python library (has extensive system-level dependencies in Ubuntu)."""
     for fn in os.listdir(args.dirs["ilastik"]):
         if fn.endswith(args.suffix_probablities + ".tiff"):
@@ -400,9 +503,10 @@ def uncertainty():
 
 
 def run_shell_command(cmd):
-    cmd = re.findall(r"\S+", cmd)
-    logger.debug(f"Running command: {' '.join(cmd)}")
-    subprocess.call(cmd)
+    logger.debug("Running command:\n%s" % textwrap.dedent(cmd) + "\n")
+    # cmd = cmd)
+    c = re.findall(r"\S+", cmd.replace("\\\n", ""))
+    subprocess.call(c)
 
 
 if __name__ == "__main__":
