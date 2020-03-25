@@ -52,12 +52,14 @@ def main():
     # This is a major security concern
     try:
         args.step = STEPS_INDEX[int(args.step)]
+    except (ValueError, IndexError):
+        pass
     finally:
         if args.step == "all":
-            for step in STEPS:
-                logger.info("Doing '%s' step." % args.step)
+            for step in STEPS[1:]:
+                logger.info("Doing '%s' step." % step)
                 eval(step)()
-                logger.info("Done with '%s' step." % args.step)
+                logger.info("Done with '%s' step." % step)
         else:
             logger.info("Doing '%s' step." % args.step)
             eval(args.step)()
@@ -129,6 +131,9 @@ def get_cli_arguments():
     choices = STEPS + [str(x) for x in range(len(STEPS))]
     parser.add_argument(
         "-s", "--step", dest="step", default="all", choices=choices
+    )
+    parser.add_argument(
+        "-d", "--dry-run", dest="dry_run", action="store_true"
     )
     parser.add_argument(dest="output_dir", default=out)
 
@@ -292,9 +297,13 @@ def prepare():
                 if re_fn.match(fn):
                     fn_full = pjoin(fol, fn)
                     print(fn_full)
+                    if args.dry_run:
+                        continue
                     convertfolder2imcfolder.convert_folder2imcfolder(
                         fn_full, out_folder=args.dirs["ome"], dozip=False
                     )
+        if args.dry_run:
+            return
         exportacquisitioncsv.export_acquisition_csv(
             args.dirs["ome"], fol_out=args.dirs["cp"]
         )
@@ -303,6 +312,8 @@ def prepare():
         if not os.path.exists(args.dirs["histocat"]):
             os.makedirs(args.dirs["histocat"])
         for fol in os.listdir(args.dirs["ome"]):
+            if args.dry_run:
+                continue
             ome2micat.omefolder2micatfolder(
                 pjoin(args.dirs["ome"], fol),
                 args.dirs["histocat"],
@@ -317,6 +328,8 @@ def prepare():
                 basename = img.rstrip(".ome.tiff")
                 print(img)
                 for (col, suffix, addsum) in args.list_analysis_stacks:
+                    if args.dry_run:
+                        continue
                     ometiff2analysis.ometiff_2_analysis(
                         pjoin(sub_fol, img),
                         args.dirs["analysis"],
@@ -506,7 +519,8 @@ def run_shell_command(cmd):
     logger.debug("Running command:\n%s" % textwrap.dedent(cmd) + "\n")
     # cmd = cmd)
     c = re.findall(r"\S+", cmd.replace("\\\n", ""))
-    subprocess.call(c)
+    if not args.dry_run:
+        subprocess.call(c)
 
 
 if __name__ == "__main__":
