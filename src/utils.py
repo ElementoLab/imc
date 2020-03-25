@@ -10,7 +10,8 @@ import h5py
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
-import statsmodels.api as sm
+from skimage import exposure
+from sklearn.linear_model import LinearRegression
 from scipy.stats import pearsonr
 
 
@@ -107,26 +108,22 @@ def plot_overlayied_channels_subplots():
 
 def check_channel_axis_correlation(d, output_prefix):
     # # Plot and regress
-    res = list()
     n, m = get_grid_dims(d.shape[0])
     fig, axis = plt.subplots(m, n, figsize=(n * 4, m * 4), squeeze=False, sharex=True, sharey=True)
+
+    res = list()
     for channel in range(d.shape[0]):
-
         for ax in [0, 1]:
-            s = d[channel].mean(axis=ax) * 1e4
-            s += abs(s.min())
+            s = d[channel].mean(axis=ax)
             order = np.arange(s.shape[0])
-            axis.flatten()[channel].plot(order, s)
-            axis.flatten()[channel].set_yscale("log")
+            model = LinearRegression()
+            model.fit(order[:, np.newaxis] / max(order), s)
+            res.append([channel, ax, model.coef_[0], model.intercept_, pearsonr(order, s)[0]])
 
-            to_fit = pd.DataFrame([s, order], index=["axis", "signal"]).T
-            to_fit['intercept'] = 1
-            mod = sm.OLS(to_fit['signal'], to_fit[['axis', 'intercept']])
-            fit = mod.fit()
-            res.append([channel, ax, fit.params[0], fit.params[1], fit.rsquared_adj, pearsonr(order, s)[0]])
+            axis.flatten()[channel].plot(order, s)
         axis.flatten()[channel].set_title(f"{labels[channel]}\nr[X] = {res[-2][-1]:.2f}; r[Y] = {res[-1][-1]:.2f}")
 
-    axis[int(m / 2), 0].set_ylabel("Log(signal)")
+    axis[int(m / 2), 0].set_ylabel("Mean signal along axis")
     axis[-1, int(n / 2)].set_xlabel("Order along axis")
     c = sns.color_palette("colorblind")
     patches = [mpatches.Patch(color=c[0], label="X"), mpatches.Patch(color=c[1], label="Y")]
@@ -134,11 +131,62 @@ def check_channel_axis_correlation(d, output_prefix):
         handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., title="Axis")
     fig.savefig(output_prefix + "channel-axis_correlation.svg", **fig_kws)
 
-    res = pd.DataFrame(res, columns=['channel', 'axis', 'coef', 'intercept', 'r2', 'r'])
+    res = pd.DataFrame(res, columns=['channel', 'axis', 'coef', 'intercept', 'r'])
     res['axis_label'] = res['axis'].replace(0, "X").replace(1, "Y")
     res['channel_label'] = [x for x in labels for _ in range(2)]
     res['abs_r'] = res['r'].abs()
     res.to_csv(output_prefix + "channel-axis_correlation.csv", index=False)
+    return res
+
+
+def fix_signal_axis_dependency(d, res, output_prefix):
+    # res = pd.read_csv(pjoin("processed", "case_b", "plots", "qc", roi + "_channel-axis_correlation.csv"))
+    corr_d = {ftype: np.empty_like(d)}
+    for channel in range(datas[ftype].shape[0]):
+        r = res.query(f"channel == {channel}")
+        x = r.query(f"axis_label == 'X'")['coef'].squeeze()
+        xinter = r.query(f"axis_label == 'X'")['intercept'].squeeze()
+        y = r.query(f"axis_label == 'Y'")['coef'].squeeze()
+        yinter = r.query(f"axis_label == 'Y'")['intercept'].squeeze()
+        # to_reg = pd.DataFrame(d[channel]).reset_index().melt(id_vars='index').rename(columns=dict(index="X", variable="Y"))
+
+        order = np.arange(d[channel].shape[0])
+        dd = d[channel]
+        m = np.ones_like(d[channel])
+        m = m * (order / max(order) * x) + (xinter)
+        m = (m.T * (order / max(order) * y)).T + (yinter)
+        ddfix = (dd - m) + dd.mean()
+        corr_d[channel] = ddfix
+
+        fig, axis = plt.subplots(1, 7, sharex=True, sharey=False, figsize=(7 * 3, 3 * 1))
+        fig.suptitle(labels[channel])
+        axis[0].set_title("Original")
+        axis[0].imshow(dd)
+        axis[1].set_title("Original, equalized")
+        axis[1].imshow(exposure.equalize_hist(dd))
+        axis[2].set_title("Bias mask")
+        axis[2].imshow(m)
+        axis[3].set_title("Bias removed")
+        axis[3].imshow(ddfix)
+        axis[4].set_title("Bias removed, equalized")
+        axis[4].imshow(exposure.equalize_hist(ddfix))
+        axis[5].set_title("Channel bias")
+        axis[5].plot(order, dd.mean(axis=0), label="Original", alpha=0.5)
+        axis[5].plot(order, ddfix.mean(axis=0), label="Bias removed", alpha=0.5)
+        axis[5].set_xlabel("Position along X axis")
+        axis[5].set_ylabel("Signal along X axis")
+        axis[5].legend()
+        axis[6].set_title("Channel bias")
+        axis[6].plot(order, dd.mean(axis=1), label="Original", alpha=0.5)
+        axis[6].plot(order, ddfix.mean(axis=1), label="Bias removed", alpha=0.5)
+        axis[6].set_xlabel("Position along Y axis")
+        axis[6].set_ylabel("Signal along Y axis")
+        axis[6].legend()
+        for ax in axis[:-2]:
+            ax.axis('off')
+        fig.savefig(output_prefix + f"channel-axis_correlation_removal.{labels[channel]}.demonstration.svg", **fig_kws)
+        plt.close("all")
+    return corr_d
 
 
 fig_kws = dict(bbox_inches="tight", dpi=300)
@@ -176,34 +224,36 @@ for roi in rois:
     files = dict()
     # files['tiff'] = pjoin(root_dir, "ometiff", sample, sample + "_" + roi + ".ome.tiff")
     files['tiff'] = pjoin(root_dir, "tiffs", sample + "_" + roi + "_full.tiff")
-    files['channels'] = pjoin(root_dir, "tiffs", sample + "_" + roi + "_ilastik_s2.h5")
+    # files['channels'] = pjoin(root_dir, "tiffs", sample + "_" + roi + "_ilastik_s2.h5")
     # files['features'] = pjoin(root_dir, "tiffs", sample + "_" + roi + "_ilastik_s2_Features.h5")
-    # files['probabilities'] = pjoin(root_dir, "tiffs", sample + "_" + roi + "_ilastik_s2_Probabilities.tiff")
+    files['probabilities'] = pjoin(root_dir, "tiffs", sample + "_" + roi + "_ilastik_s2_Probabilities.tiff")
     files['uncertainty'] = pjoin(root_dir, "uncertainty", sample + "_" + roi + '_ilastik_s2_Probabilities_uncertainty.tiff')
-    # files['mask'] = pjoin(root_dir, "cpout", sample + "_" + roi + "_ilastik_s2_Probabilities_mask.tiff")
+    files['mask'] = pjoin(root_dir, "cpout", sample + "_" + roi + "_ilastik_s2_Probabilities_mask.tiff")
 
     datas = dict()
     ndatas = dict()
     for ftype, file in files.items():
         csize = size * 2 if "s2" in file else size
         if file.endswith("_mask.tiff"):
-            datas[ftype] = tifffile.imread(file) > 0
+            d = tifffile.imread(file) > 0
         elif file.endswith(".ome.tiff"):
-            datas[ftype] = tifffile.imread(file, is_ome=True)
+            d = tifffile.imread(file, is_ome=True)
         elif file.endswith(".tiff"):
-            datas[ftype] = tifffile.imread(file)
+            d = tifffile.imread(file)
         elif file.endswith(".h5"):
             with h5py.File(file, 'r') as f:
-                datas[ftype] = np.asarray(f[list(f.keys())[0]])
+                d = np.asarray(f[list(f.keys())[0]])
 
-        if len(datas[ftype].shape) == 3:
-            if (min(datas[ftype].shape) == datas[ftype].shape[-1]):
-                datas[ftype] = np.moveaxis(datas[ftype], -1, 0)
-            datas[ftype] = norm(datas[ftype])
-        ndatas[ftype] = datas[ftype]
+        if len(d.shape) == 3:
+            if (min(d.shape) == d.shape[-1]):
+                d = np.moveaxis(d, -1, 0)
+            ndatas[ftype] = exposure.equalize_hist(d)  # norm(d)
+        datas[ftype] = d
 
-    # 
-    check_channel_axis_correlation(datas["tiff"], pjoin(results_dir, "qc", roi + "_"))
+    #
+    output_prefix = pjoin(results_dir, "qc", roi + "_")
+    res = check_channel_axis_correlation(ndatas["tiff"], output_prefix)
+    corr_d = fix_signal_axis_dependency(ndatas['tiff'], res, output_prefix)
 
     # Plot all channels
     ftype = "tiff"
@@ -321,130 +371,3 @@ for roi in rois:
     fig = plot_overlayied_channels(datas["probabilities"], ['nuclei', 'cytoplasm', 'background'], "Set1")
     fig.axes[0].imshow(d, cmap="binary_r", interpolation="bilinear", rasterized=True, alpha=0.5)
     fig.savefig(pjoin(results_dir, "segmentation", roi + "_" + f"segmentation.overlayed.svg"), **fig_kws)
-
-
-# Remove smear effect
-ftype = "tiff"
-roi = "s0_p7_r4_a4_ac"
-res = pd.read_csv(pjoin("processed", "case_b", "plots", "qc", roi + "_channel-axis_correlation.csv"))
-for channel in range(datas[ftype].shape[0]):
-    r = res.query(f"channel == {channel}")
-    x = r.query(f"axis_label == 'X'")['coef'].squeeze()
-    xinter = r.query(f"axis_label == 'X'")['intercept'].squeeze()
-    y = r.query(f"axis_label == 'Y'")['coef'].squeeze()
-    yinter = r.query(f"axis_label == 'Y'")['intercept'].squeeze()
-    # to_reg = pd.DataFrame(d[channel]).reset_index().melt(id_vars='index').rename(columns=dict(index="X", variable="Y"))
-
-    dd = d[channel]
-    dd = (dd - dd.mean()) / dd.std()
-
-    l = dd.shape[0]
-    order = np.arange(l)
-
-    m = np.ones_like(d[channel])
-    m = m * (order / l * x)  # + (yinter)
-    m = (m.T * (order / l * y)).T  # + (xinter)
-    m = (m - m.mean()) / m.std() / 5
-
-    from skimage import exposure
-    fig, axis = plt.subplots(1, 7, sharex=True, sharey=False, figsize=(7 * 3, 3 * 1))
-    fig.suptitle(labels[channel])
-    axis[0].set_title("Original")
-    axis[0].imshow(dd)
-    axis[1].set_title("Original, equalized")
-    axis[1].imshow(exposure.equalize_hist(dd))
-    axis[2].set_title("Bias mask")
-    axis[2].imshow(m)
-    axis[3].set_title("Bias removed")
-    axis[3].imshow(dd - m)
-    axis[4].set_title("Bias removed, equalized")
-    axis[4].imshow(exposure.equalize_hist(dd - m))
-    axis[5].set_title("Channel bias")
-    axis[5].plot(order, dd.mean(axis=0), label="Original", alpha=0.5)
-    axis[5].plot(order, (dd - m).mean(axis=0), label="Bias removed", alpha=0.5)
-    axis[5].set_xlabel("Position along X axis")
-    axis[5].set_ylabel("Signal along X axis")
-    axis[5].legend()
-    axis[6].set_title("Channel bias")
-    axis[6].plot(order, dd.mean(axis=1), label="Original", alpha=0.5)
-    axis[6].plot(order, (dd - m).mean(axis=1), label="Bias removed", alpha=0.5)
-    axis[6].set_xlabel("Position along Y axis")
-    axis[6].set_ylabel("Signal along Y axis")
-    axis[6].legend()
-    for ax in axis[:-2]:
-        ax.axis('off')
-    fig.savefig(pjoin(results_dir, "qc", roi + "_" + f"channel-axis_correlation_removal.{labels[channel]}.demonstration.svg"), **fig_kws)
-    plt.close("all")
-
-
-#
-
-
-sigy = dd.mean(axis=1)
-
-c = dd + (dd * -y * order)
-
-fig, axis = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(3 * 2, 3 * 1))
-axis[0].imshow(dd)
-axis[1].imshow(c)
-
-
-# # exagerate effect 5 time
-dde = np.subtract(dd.T, x * 5 * order).T
-ex_dd = np.subtract(dde, y * 5 * order)
-
-# # remove effect
-ddt = np.subtract(dd.T, -x * 5 * order).T
-new_dd = np.subtract(ddt, -y * 5 * order)
-
-
-dd = np.log1p(dd + abs(dd.min()))
-ex_dd = np.log1p(ex_dd + abs(ex_dd.min()))
-new_dd = np.log1p(new_dd + abs(new_dd.min()))
-
-fig, axis = plt.subplots(1, 4, sharex=True, sharey=False, figsize=(3 * 4, 3 * 1))
-axis[0].plot(order, d[channel].mean(axis=0))
-axis[0].plot(order, d[channel].mean(axis=1))
-m = dd.mean()
-s = dd.std()
-axis[1].imshow(dd, vmin=m - s, vmax=m + s)
-m = ex_dd.mean()
-s = ex_dd.std()
-axis[2].imshow(ex_dd, vmin=m - s, vmax=m + s)
-m = new_dd.mean()
-s = new_dd.std()
-axis[3].imshow(new_dd, vmin=m - s, vmax=m + s)
-plt.show()
-
-
-#
-
-
-#
-
-
-from skimage.measure import label
-
-plt.imshow(scipy.ndimage.label(d)[0])
-plt.imshow(label(d))
-
-# Features
-
-# # Feature extraction (per channel)
-
-# # # Color/Intensity
-# # # # Gaussian smoothing
-sigmas = [0.3, 0.7, 1.0, 1.6, 3.5, 5, 10]
-
-# # # Edge
-# # # # Laplacian of Gaussian
-
-# # # # Gaussian Gradient Magnitude
-
-# # # # Difference of Gaussians
-
-# # # Texture
-# # # # Structure of Tensor Eigenvalues
-
-# # # # Hessian of Gaussian Eigenvalues
-f = [scipy.ndimage.gaussian_filter(data, s) for s in sigmas]
