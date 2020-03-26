@@ -22,7 +22,7 @@ dist/
 
 # toy/experimental files
 *.txt
-*.csv
+# *.csv
 *.tsv
 *.pkl
 *.pickle
@@ -30,6 +30,9 @@ dist/
 *.png
 *.jpg
 *.jpeg
+
+# ignore mypy
+.mypy*
 
 # ignore eggs
 .eggs/
