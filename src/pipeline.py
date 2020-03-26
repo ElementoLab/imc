@@ -85,6 +85,8 @@ def get_cli_arguments():
     # Software
     choices = ['docker', 'singularity']
     parser.add_argument("--container", dest="containerized", default=None, choices=choices)
+    parser.add_argument("--docker-image", dest="docker_image", default=DOCKER_IMAGE)
+
     # # if cellprofiler locations do not exist, clone to some default location
     parser.add_argument(
         "--cellprofiler-pipeline-path",
@@ -101,8 +103,6 @@ def get_cli_arguments():
         dest="ilastik_sh_path",
         default=None,  # "src/ilastik-1.3.3post2-Linux/run_ilastik.sh",
     )
-    parser.add_argument("--docker-image", dest="docker_image", default=DOCKER_IMAGE)
-
     # Input
     parser.add_argument("--file-regexp", dest="file_regexp", default=".*.zip")
     parser.add_argument("--csv-pannel", dest="csv_pannel", default=None)

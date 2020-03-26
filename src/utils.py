@@ -1,18 +1,86 @@
+import os
+from typing import Union, Tuple, Dict, List, Iterable, Optional
+
 from os.path import join as pjoin
 
-import tifffile
-import pandas as pd
+from tqdm import tqdm
+import h5py
 import numpy as np
+import pandas as pd
 import scipy
 import scipy.ndimage
-import h5py
+import tifffile
 
-import matplotlib.pyplot as plt
+import matplotlib
 import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import seaborn as sns
+
+import skimage
+import skimage.io
+from scipy.stats import pearsonr
 from skimage import exposure
 from sklearn.linear_model import LinearRegression
-from scipy.stats import pearsonr
+
+
+matplotlib.rcParams['svg.fonttype'] = "none"
+
+
+def read_image_from_file(file: str, equalize: bool = True) -> np.ndarray:
+    """
+    Read images from a tiff or hdf5 file into a numpy array.
+    Channels, if existing will be in first array dimension.
+    If `equalize` is :obj:`True`, convert to float type bounded at [0, 1].
+    """
+    if not os.path.exists(file):
+        raise FileNotFoundError(f"Cound not find file: '{file}")
+    if file.endswith("_mask.tiff"):
+        arr = tifffile.imread(file) > 0
+    elif file.endswith(".ome.tiff"):
+        arr = tifffile.imread(file, is_ome=True)
+    elif file.endswith(".tiff"):
+        arr = tifffile.imread(file)
+    elif file.endswith(".h5"):
+        with h5py.File(file, 'r') as f:
+            arr = np.asarray(f[list(f.keys())[0]])
+
+    if len(arr.shape) == 3:
+        if (min(arr.shape) == arr.shape[-1]):
+            arr = np.moveaxis(arr, -1, 0)
+    if equalize:
+        arr = exposure.equalize_hist(d)
+    return arr
+
+
+def write_image_to_file(arr: np.ndarray, channel_labels: Iterable, output_prefix: str, file_format: str = "png", **kwargs) -> None:
+    if len(arr.shape) != 3:
+        skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, arr)
+    else:
+        s = np.multiply(exposure.equalize_hist(arr.mean(axis=0)), 256).astype(np.uint8)
+        skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, s)
+        for channel, label in tqdm(enumerate(channel_labels), total=arr.shape[0]):
+            skimage.io.imsave(
+                output_prefix + "." + label + "." + file_format,
+                np.multiply(arr[channel], 256).astype(np.uint8))
+
+
+def read_mcd_file(mcd_file, roi=None):
+    import imctools.io.mcdparser as mcdparser
+
+    mcd = mcdparser.McdParser(mcd_file)
+    for roi in mcd.acquisition_ids:
+        imc_ac = mcd.get_imc_acquisition(roi)
+        # imc_ac.data
+        fn_out = ".".join([file, f"ROI_{roi}", 'all_channels', 'ome.tiff'])
+        img = imc_ac.get_image_writer(filename=fn_out)
+        img.save_image(mode='ome', compression=0, dtype=None, bigtiff=False)
+
+        for n, m in zip(imc_ac.channel_labels, imc_ac.channel_metals):
+            print(roi, n)
+            fn_out = ".".join([file, f"ROI_{roi}", n, m, 'ome.tiff'])
+            img = imc_ac.get_image_writer(filename=fn_out, metals=[m])
+            img.save_image(mode='ome', compression=0, dtype=None, bigtiff=False)
+    mcd.close()
 
 
 def norm(array):
@@ -45,7 +113,10 @@ def get_transparent_cmaps(n=3, from_palette="colorblind"):
         for p in sns.color_palette(from_palette)[:n]]
 
 
-def get_grid_dims(dims, nstart=None):
+def get_grid_dims(dims, nstart=None) -> Tuple[int, int]:
+    """Given a number of `dims` subplots,
+    choose optimal x/y dimentions of plotting grid maximizing in order
+    to be as square as posible and if not with more columns than rows."""
     if nstart is None:
         n = min(dims, 1 + int(np.ceil(np.sqrt(dims))))
     else:
@@ -65,56 +136,42 @@ def get_grid_dims(dims, nstart=None):
     return n, m
 
 
-def plot_single_channel(d, cmap=None):
-    fig, axis = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
-    axis.imshow(d, cmap=cmap, interpolation="bilinear", rasterized=True)
-    axis.axis('off')
-    return fig
+def plot_single_channel(arr, axis=None, cmap=None) -> \
+        Union[matplotlib.figure.Figure, matplotlib.axis.Axis]:
+    """Plot a single image channel either in a new figure or in an existing axis"""
+    if axis is None:
+        fig, ax = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
+    ax.imshow(arr, cmap=cmap, interpolation="bilinear", rasterized=True)
+    ax.axis('off')
+    return fig if axis is None else ax
 
 
-def plot_overlayied_channels(d, channel_labels, palette=None):
-
-    fig, axis = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
-    cmaps = get_transparent_cmaps(d.shape[0], from_palette=palette)
+def plot_overlayied_channels(arr, channel_labels, axis=None, palette=None) -> \
+        Union[matplotlib.figure.Figure, matplotlib.axis.Axis]:
+    if axis is None:
+        fig, ax = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
+    cmaps = get_transparent_cmaps(arr.shape[0], from_palette=palette)
     patches = list()
     for i, (m, c) in enumerate(zip(channel_labels, cmaps)):
         x = d[i].squeeze()
-        # v = x.std() / 5
-        axis.imshow(x, cmap=c, label=m, interpolation="bilinear", rasterized=True, alpha=0.9)
-        axis.axis('off')
+        ax.imshow(x, cmap=c, label=m, interpolation="bilinear", rasterized=True, alpha=0.9)
+        ax.axis('off')
         patches.append(mpatches.Patch(color=c(256), label=m))
-    axis.legend(
+    ax.legend(
         handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    return fig
+    return fig if axis is None else ax
 
 
-def plot_overlayied_channels_subplots():
-    n, m = get_grid_dims(d.shape[0])
-    fig, axis = plt.subplots(n, m, figsize=(6 * m, 6 * n), sharex=True, sharey=True, squeeze=False)
-    axis = axis.flatten()
-    for i, (marker_set, markers) in enumerate(marker_sets.items()):
-        patches = list()
-        cmaps = get_transparent_cmaps(len(markers))
-        for j, (m, c) in enumerate(zip(markers, cmaps)):
-            x = d[labels == m, :, :].squeeze()
-            v = x.mean() + x.std() * 2
-            axis[i].imshow(x, cmap=c, vmin=0, vmax=v, label=m, interpolation="bilinear", rasterized=True)
-            axis[i].axis('off')
-            patches.append(mpatches.Patch(color=c(256), label=m))
-        axis[i].legend(
-            handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.,
-            title=marker_set)
 
-
-def check_channel_axis_correlation(d, output_prefix):
+def check_channel_axis_correlation(arr, output_prefix):
     # # Plot and regress
-    n, m = get_grid_dims(d.shape[0])
+    n, m = get_grid_dims(arr.shape[0])
     fig, axis = plt.subplots(m, n, figsize=(n * 4, m * 4), squeeze=False, sharex=True, sharey=True)
 
     res = list()
-    for channel in range(d.shape[0]):
+    for channel in range(arr.shape[0]):
         for ax in [0, 1]:
-            s = d[channel].mean(axis=ax)
+            s = arr[channel].mean(axis=ax)
             order = np.arange(s.shape[0])
             model = LinearRegression()
             model.fit(order[:, np.newaxis] / max(order), s)
@@ -139,20 +196,20 @@ def check_channel_axis_correlation(d, output_prefix):
     return res
 
 
-def fix_signal_axis_dependency(d, res, output_prefix):
+def fix_signal_axis_dependency(arr, res, output_prefix):
     # res = pd.read_csv(pjoin("processed", "case_b", "plots", "qc", roi + "_channel-axis_correlation.csv"))
-    corr_d = {ftype: np.empty_like(d)}
+    corr_d = np.empty_like(d)
     for channel in range(datas[ftype].shape[0]):
         r = res.query(f"channel == {channel}")
         x = r.query(f"axis_label == 'X'")['coef'].squeeze()
         xinter = r.query(f"axis_label == 'X'")['intercept'].squeeze()
         y = r.query(f"axis_label == 'Y'")['coef'].squeeze()
         yinter = r.query(f"axis_label == 'Y'")['intercept'].squeeze()
-        # to_reg = pd.DataFrame(d[channel]).reset_index().melt(id_vars='index').rename(columns=dict(index="X", variable="Y"))
+        # to_reg = pd.DataFrame(arr[channel]).reset_index().melt(id_vars='index').rename(columns=dict(index="X", variable="Y"))
 
-        order = np.arange(d[channel].shape[0])
-        dd = d[channel]
-        m = np.ones_like(d[channel])
+        order = np.arange(arr[channel].shape[0])
+        dd = arr[channel]
+        m = np.ones_like(dd)
         m = m * (order / max(order) * x) + (xinter)
         m = (m.T * (order / max(order) * y)).T + (yinter)
         ddfix = (dd - m) + dd.mean()
@@ -244,9 +301,9 @@ for roi in rois:
             with h5py.File(file, 'r') as f:
                 d = np.asarray(f[list(f.keys())[0]])
 
-        if len(d.shape) == 3:
-            if (min(d.shape) == d.shape[-1]):
-                d = np.moveaxis(d, -1, 0)
+        if len(arr.shape) == 3:
+            if (min(arr.shape) == arr.shape[-1]):
+                d = np.moveaxis(arr, -1, 0)
             ndatas[ftype] = exposure.equalize_hist(d)  # norm(d)
         datas[ftype] = d
 
@@ -262,13 +319,13 @@ for roi in rois:
     cmaps = ['viridis', 'plasma', 'magma', 'inferno', 'gist_earth', 'cubehelix']
 
     kwargs = dict(rasterized=True, cmap="magma", interpolation="bilinear")
-    n, m = get_grid_dims(d.shape[0])
-    choices = range(d.shape[0])
+    n, m = get_grid_dims(arr.shape[0])
+    choices = range(arr.shape[0])
 
     if ftype == "tiff":
-        assert len(labels) == d.shape[0]
+        assert len(labels) == arr.shape[0]
     if ftype == "features":
-        choices = np.random.choice(d.shape[0], n * n, replace=False)
+        choices = np.random.choice(arr.shape[0], n * n, replace=False)
     fig, axis = plt.subplots(m, n, sharex=True, sharey=True, figsize=(4 * n, 4 * m), gridspec_kw=dict(wspace=0, hspace=0.1))
     for i, ax in zip(choices, axis.flatten()):
         v = d[i].std() / 2
@@ -362,12 +419,12 @@ for roi in rois:
     # # Plot segmentation
     d = datas['mask']
     fig, axis = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
-    axis.imshow(d, cmap="binary", interpolation="bilinear", rasterized=True)
+    axis.imshow(arr, cmap="binary", interpolation="bilinear", rasterized=True)
     axis.axis('off')
     fig.savefig(pjoin(results_dir, "segmentation", roi + "_" + f"segmentation.mask.svg"), **fig_kws)
 
 
     # # overlay segmentation on probabilities
     fig = plot_overlayied_channels(datas["probabilities"], ['nuclei', 'cytoplasm', 'background'], "Set1")
-    fig.axes[0].imshow(d, cmap="binary_r", interpolation="bilinear", rasterized=True, alpha=0.5)
+    fig.axes[0].imshow(arr, cmap="binary_r", interpolation="bilinear", rasterized=True, alpha=0.5)
     fig.savefig(pjoin(results_dir, "segmentation", roi + "_" + f"segmentation.overlayed.svg"), **fig_kws)
