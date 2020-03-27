@@ -37,15 +37,15 @@ long_description = open("README.md").read()
 
 # setup
 setup(
-    name="imc-pipeline",
+    name="imcpipeline",
     packages=find_packages(),
     use_scm_version={
-        'write_to': 'src/_version.py',
+        'write_to': 'imcpipeline/_version.py',
         'write_to_template': '__version__ = "{version}"\n'
     },
     entry_points={
         "console_scripts": [
-            "imc-pipeline = src.pipeline:main"]
+            "imcpipeline = imcpipeline.pipeline:main"]
     },
     description="A pipeline and utils for IMC data analysis.",
     long_description=long_description,
@@ -62,7 +62,7 @@ setup(
     url="https://github.com/elementolab/hyperion-cytof",
     project_urls={
         "Bug Tracker": "https://github.com/elementolab/hyperion-cytof/issues",
-        # "Documentation": "https://imc-pipeline.readthedocs.io",
+        # "Documentation": "https://imcpipeline.readthedocs.io",
         "Source Code": "https://github.com/elementolab/hyperion-cytof",
     },
     author=u"Andre Rendeiro",
@@ -74,10 +74,10 @@ setup(
     # extras_require={
     #     "testing": requirements_test,
     #     "docs": requirements_docs},
-    # package_data={"imc-pipeline": ["config/*.yaml", "templates/*.html", "models/*"]},
+    # package_data={"imcpipeline": ["config/*.yaml", "templates/*.html", "models/*"]},
     data_files=[
-        "requirements/requirements.txt",
-        "requirements/requirements.test.txt",
+        "requirements.txt",
+        # "requirements/requirements.test.txt",
     ],
     **extra
 )
