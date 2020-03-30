@@ -19,6 +19,11 @@ variational autoencoders (VAE).
 
 ## Organization
 
-- Sample and technical (CyTOF panels) metadata are present in the
+This repo is for now hosting a [pipeline](imcpipeline/pipeline.py), [OOP models for IMC data](imcpipeline/data_models.py) and other [various utilities](imcpipeline/utils.py).
+All is pip installable. The pipeline script `imcpipeline` will be installed.
+Other runnables are in the [src](src/) directory.
+
+Sample and technical (CyTOF panels) metadata are present in the
 [metadata](metadata/) directory.
-- Pipeline are analysis source code are avaible in the [src](src/) directory.
+
+
