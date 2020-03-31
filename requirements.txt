@@ -3,3 +3,4 @@ tifffile
 imctools==1.0.6
 imagecodecs
 colorama
+divvy
