@@ -5,3 +5,4 @@ imagecodecs
 colorama
 divvy
 h5py
+tempfile
