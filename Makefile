@@ -26,3 +26,9 @@ run_locally:
 			--ilastik-model models/lymphoma/lymphoma.ilp \
 			--csv-pannel metadata/panel_data.csv \
 			--container docker
+
+checkfailure:
+	grep -H "Killed" submission/*.log
+
+checksuccess:
+	ls -l processed/*/cpout/cell.csv
