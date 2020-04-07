@@ -3,7 +3,10 @@ src/ilastik-*
 src/ImcPluginsCP/*
 src/ImcSegmentationPipeline/
 data
+submission
 processed
+results
+figures
 
 *.tiff
 
