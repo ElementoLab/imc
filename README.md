@@ -28,9 +28,19 @@ Sample and technical (CyTOF panels) metadata are present in the
 The specific commands to reproduce the processed data and analysis and their
 order is in the [Makefile](Makefile).
 
+Scripts supporting exploratory analysis or other functions that are still work
+in progress are present in the [scripts directory](scripts).
+
+
 ## Requirements
 
 - Python >= 3.7
 - The requirements specified in [requirements.txt](requirements.txt) - use `pip install -r requirements.txt`.
 - One of: `docker`, `singularity` or `cellprofiler` in a local installation.
 
+
+## Running the pipeline
+
+### Inputs
+
+### Running
