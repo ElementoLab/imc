@@ -1,9 +1,9 @@
 
 clean_dist:
-	-rm -rf dist/
+	rm -rf dist/
 
 clean_eggs:
-	-rm -r *.egg-info
+	rm -rf *.egg-info
 
 clean: clean_dist clean_eggs
 
