@@ -28,7 +28,14 @@ run_locally:
 			--container docker
 
 checkfailure:
-	grep -H "Killed" submission/*.log
+	grep -H "Killed" submission/*.log; \
+	grep -H "Error" submission/*.log; \
+	grep -H "CANCELLED" submission/*.log; \
+	grep -H "exceeded" submission/*.log
+
+fail: checkfailure
 
 checksuccess:
-	ls -l processed/*/cpout/cell.csv
+	ls -hl processed/*/cpout/cell.csv
+
+succ: checksuccess
