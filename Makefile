@@ -1,7 +1,11 @@
 
-clean:
-	rm -rf dist/
-	rm -r *.egg-info
+clean_dist:
+	-rm -rf dist/
+
+clean_eggs:
+	-rm -r *.egg-info
+
+clean: clean_dist clean_eggs
 
 _install:
 	python setup.py sdist
@@ -28,9 +32,9 @@ run_locally:
 			--container docker
 
 checkfailure:
-	grep -H "Killed" submission/*.log; \
-	grep -H "Error" submission/*.log; \
-	grep -H "CANCELLED" submission/*.log; \
+	grep -H "Killed" submission/*.log && \
+	grep -H "Error" submission/*.log && \
+	grep -H "CANCELLED" submission/*.log && \
 	grep -H "exceeded" submission/*.log
 
 fail: checkfailure
