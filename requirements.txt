@@ -6,3 +6,6 @@ colorama
 divvy
 h5py
 ordered-set
+anndata
+scanpy
+python-louvain
