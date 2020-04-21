@@ -9,3 +9,4 @@ ordered-set
 anndata
 scanpy
 python-louvain
+networkx
