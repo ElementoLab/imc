@@ -10,3 +10,4 @@ anndata
 scanpy
 python-louvain
 networkx
+parmap
