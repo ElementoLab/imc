@@ -43,3 +43,6 @@ checksuccess:
 	ls -hl processed/*/cpout/cell.csv
 
 succ: checksuccess
+
+
+.PHONY : clean install run
