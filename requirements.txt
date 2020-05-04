@@ -8,6 +8,7 @@ h5py
 ordered-set
 anndata
 scanpy
+leidenalg
 python-louvain
 networkx
 parmap
