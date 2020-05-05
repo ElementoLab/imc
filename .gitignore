@@ -5,6 +5,8 @@ src/ImcSegmentationPipeline/
 data
 submission
 processed
+processed2
+models
 analysis
 results
 figures
