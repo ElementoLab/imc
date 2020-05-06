@@ -19,7 +19,7 @@ run:
 	python imcpipeline/runner.py \
 		--divvy slurm \
 		metadata/annotation.csv \
-			--ilastik-model models/lymphoma/lymphoma.ilp \
+			--ilastik-model _models/lymphoma/lymphoma.ilp \
 			--csv-pannel metadata/panel_markers.csv \
 			--cellprofiler-exec "source ~/.miniconda2/bin/activate && conda activate cellprofiler && cellprofiler"
 
@@ -27,7 +27,7 @@ run_locally:
 	python imcpipeline/runner.py \
 		--divvy local \
 		metadata/annotation.csv \
-			--ilastik-model models/lymphoma/lymphoma.ilp \
+			--ilastik-model _models/lymphoma/lymphoma.ilp \
 			--csv-pannel metadata/panel_data.csv \
 			--container docker
 
