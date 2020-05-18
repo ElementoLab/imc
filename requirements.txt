@@ -12,3 +12,7 @@ leidenalg
 python-louvain
 networkx
 parmap
+
+napari
+xarray
+h5netcdf
