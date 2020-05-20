@@ -1,12 +1,23 @@
 #! /usr/bin/env python
 
+"""
+Installer script for the ``imc`` library and the ``imcpipeline`` pipeline.
+
+Install with ``pip install .``.
+"""
+
 import sys
 
 
 def parse_requirements(req_file):
-    requirements = open(req_file).read().strip().split("\n")
-    requirements = [r for r in requirements if not r.startswith("#")]
-    return [r for r in requirements if "#egg=" not in r]
+    """Parse requirements.txt files."""
+    reqs = open(req_file).read().strip().split("\n")
+    reqs = [r for r in reqs if not r.startswith("#")]
+    return [r for r in reqs if "#egg=" not in r]
+
+
+REQUIREMENTS_FILE = "requirements.txt"
+README_FILE = "README.md"
 
 
 # take care of extra required modules depending on Python version
@@ -25,26 +36,25 @@ except ImportError:
         extra["dependencies"] = ["argparse"]
 
 # Requirements
-requirements = parse_requirements(
-    "requirements.txt")
-# requirements_test = parse_requirements(
-#     "requirements/requirements.test.txt")
-# requirements_docs = parse_requirements(
-#     "requirements/requirements.docs.txt")
+requirements = parse_requirements(REQUIREMENTS_FILE)
+# requirements_test = parse_requirements("requirements/requirements.test.txt")
+# requirements_docs = parse_requirements("requirements/requirements.docs.txt")
 
-long_description = open("README.md").read()
+# Description
+long_description = open(README_FILE).read()
 
 
 # setup
 setup(
-    name="imcpipeline",
+    name="imc",
     packages=find_packages(),
     use_scm_version={
-        'write_to': 'imcpipeline/_version.py',
+        'write_to': 'imc/_version.py',
         'write_to_template': '__version__ = "{version}"\n'
     },
     entry_points={
         "console_scripts": [
+            "imcrunner = imcpipeline.runner:main",
             "imcpipeline = imcpipeline.pipeline:main"]
     },
     description="A pipeline and utils for IMC data analysis.",
@@ -54,15 +64,19 @@ setup(
         "Development Status :: 3 - Alpha",
         "License :: OSI Approved :: "
         "GNU General Public License v3 or later (GPLv3+)",
-        "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3.7",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    keywords="bioinformatics, sequencing, ngs, ngs analysis, "
-             "ATAC-Seq, ChIP-seq, RNA-seq, project management",
+    keywords=",".join([
+        "computational biology",
+        "bioinformatics",
+        "imaging",
+        "mass cytometry",
+        "mass spectrometry"]),
     url="https://github.com/elementolab/hyperion-cytof",
     project_urls={
         "Bug Tracker": "https://github.com/elementolab/hyperion-cytof/issues",
-        # "Documentation": "https://imcpipeline.readthedocs.io",
+        # "Documentation": "https://imc.readthedocs.io",
         "Source Code": "https://github.com/elementolab/hyperion-cytof",
     },
     author=u"Andre Rendeiro",
@@ -74,9 +88,9 @@ setup(
     # extras_require={
     #     "testing": requirements_test,
     #     "docs": requirements_docs},
-    # package_data={"imcpipeline": ["config/*.yaml", "templates/*.html", "models/*"]},
+    # package_data={"imc": ["config/*.yaml", "templates/*.html", "models/*"]},
     data_files=[
-        "requirements.txt",
+        REQUIREMENTS_FILE,
         # "requirements/requirements.test.txt",
     ],
     **extra
