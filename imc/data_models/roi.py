@@ -450,10 +450,9 @@ class ROI:
                     else:
                         if not dont_warn:
                             print(
-                                "Could not find out channel '%s' in "
+                                f"Could not find out channel '{channel}' in "
                                 "`sample.channel_labels` "
-                                "but could find '%s'. Returning sum of those.",
-                                (channel, names),
+                                f"but could find '{names}'. Returning sum of those."
                             )
                         order = match.reset_index(drop=True)[match.values].index
                         m = np.empty((match.sum(),) + stack.shape[1:])
@@ -552,11 +551,14 @@ class ROI:
             # If the clusters contain a numeric prefix, use that
             # that will help having consistent color across ROIs
             if not ns.isnull().any():
-                clusters = clusters.replace(dict(zip(labels, ns.astype(int))))
+                ns = ns.astype(int)
+                clusters = clusters.replace(dict(zip(labels, ns)))
             else:
+                ns = labels.index.to_series()
                 clusters = clusters.replace(dict(zip(labels, np.arange(len(labels)))))
         else:
             labels = sorted(np.unique(clusters.values))
+            ns = pd.Series(range(len(labels)))
 
         # simply plot all cell types jointly
         if cell_type_combinations in [None, "all"]:
@@ -586,7 +588,7 @@ class ROI:
             res = cell_labels_to_mask(self.cell_mask, clusters)
             rgb = numbers_to_rgb_colors(res, from_palette=cast(palette))
             axes[i, 0].imshow(rgb)
-            colors = sns.color_palette(palette, len(labels))
+            colors = pd.Series(sns.color_palette(palette, max(ns.values))).reindex(ns.values - 1)
             patches += [mpatches.Patch(color=c, label=l) for c, l in zip(colors, labels)]
             axes[i, 0].axis("off")
             if add_scale:

@@ -257,7 +257,8 @@ def numbers_to_rgb_colors(
 
     if n_colors > len(sns.color_palette(from_palette)):
         warnings.warn("Chosen palette has less than the requested number of colors." "Will reuse!")
-    colors = sns.color_palette(from_palette, n_colors)
+
+    colors = pd.Series(sns.color_palette(from_palette, ident.max())).reindex(ident - 1)
     res = np.zeros((mask.shape) + (3,))
     for c, i in zip(colors, ident):
         x, y = np.nonzero(np.isin(mask, i))
