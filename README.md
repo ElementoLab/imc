@@ -19,8 +19,10 @@ variational autoencoders (VAE).
 
 ## Organization
 
-This repo is for now hosting a [pipeline](imcpipeline/pipeline.py), a [cross-environment job submitter](imcpipeline/runner.py) for the pipeline, [OOP models for IMC data](imcpipeline/data_models.py) and other [various utilities](imcpipeline/utils.py).
-All is pip installable. The pipeline script `imcpipeline` will be installed.
+This repo is for now hosting a [pipeline](imcpipeline/pipeline.py), a
+[cross-environment job submitter](imcpipeline/runner.py) for the pipeline,
+[OOP models for IMC data](imc/data_models.py) and other [various utilities](imc/utils.py).
+All is pip installable. The pipeline scripts `imcrunner` and `imcpipeline` will be installed.
 
 Sample and technical (CyTOF panels) metadata are present in the
 [metadata](metadata/) directory (work in progress).
@@ -35,7 +37,11 @@ in progress are present in the [scripts directory](scripts).
 ## Requirements
 
 - Python >= 3.7
-- The requirements specified in [requirements.txt](requirements.txt) - use `pip install -r requirements.txt`.
+- The requirements specified in [requirements.txt](requirements.txt) - use
+`pip install -r requirements.txt`.
+
+For the image processing pipeline:
+
 - One of: `docker`, `singularity` or `cellprofiler` in a local installation.
 
 
