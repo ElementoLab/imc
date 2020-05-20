@@ -44,7 +44,8 @@ import imctools.io.mcdparser
 from imc.exceptions import cast
 from imc.types import Axis, Patch, DataFrame, Series, Array, ColorMap, Figure, Path, GenericType
 
-matplotlib.rcParams['svg.fonttype'] = "none"
+
+matplotlib.rcParams["svg.fonttype"] = "none"
 FIG_KWS = dict(bbox_inches="tight", dpi=300)
 
 
@@ -62,33 +63,91 @@ def cleanup_channel_names(series: Series) -> Series:
         ("/", ""),
         ("INFgamma", "IFNgamma"),
         ("pHistone", "pH"),
-        ("cmycp67", "cMYCp67")]
+        ("cmycp67", "cMYCp67"),
+    ]
     for k, v in to_replace:
         series = series.str.replace(k, v)
     series = series.replace("", np.nan).fillna("<EMPTY>")
     series[series.str.contains(r"\(").values] = (
-        series.str.extract(r"(.*)\(", expand=False).dropna().values)
+        series.str.extract(r"(.*)\(", expand=False).dropna().values
+    )
     return series
 
 
+def parse_acquisition_metadata(
+    acquisition_csv: Path,
+    acquisition_id: Optional[Union[str, int]] = None,
+    reference: Optional[Union[Path, DataFrame]] = None,
+    filter_full: bool = False,
+):
+    acquired = pd.read_csv(acquisition_csv)
+    acquired = acquired.loc[~acquired["ChannelLabel"].isin(["X", "Y", "Z"]), :].drop_duplicates()
+    if acquisition_id is not None:
+        acquired = acquired.loc[
+            acquired["AcquisitionID"].isin([acquisition_id, str(acquisition_id)])
+        ]
+        acquired = acquired[["ChannelLabel", "ChannelName"]]
+    else:
+        acquired = acquired[["AcquisitionID", "ChannelLabel", "ChannelName"]]
+
+    # remove parenthesis from metal column
+    acquired["ChannelName"] = acquired["ChannelName"].str.replace("(", "").str.replace(")", "")
+
+    # clean up the channel name
+    acquired["ChannelLabel"] = cleanup_channel_names(acquired["ChannelLabel"])
+    acquired.index = acquired["ChannelLabel"] + "(" + acquired["ChannelName"] + ")"
+
+    if reference is None:
+        return acquired
+
+    # Check matches, report missing
+    if isinstance(reference, str):
+        reference = pd.read_csv(reference, index_col=0)
+    __c = acquired.index.isin(reference.index)
+    if not __c.all():
+        miss = "\n - ".join(acquired.loc[~__c, "ChannelLabel"])
+        raise ValueError(
+            f"Given reference panel '{acquisition_csv}'"
+            f" is missing the following channels: \n - {miss}"
+        )
+
+    # align and sort by acquisition
+    joint_panel = acquired.join(reference)
+
+    # make sure order of ilastik channels is same as the original panel
+    # this important in order for the channels to always be the same
+    # and the ilastik models to be reusable
+    assert all(
+        reference.query("ilastik == True").index == joint_panel.query("ilastik == True").index
+    )
+
+    if filter_full:
+        joint_panel = joint_panel.loc[joint_panel["full"].isin([1, "1", True, "TRUE"])]
+    return joint_panel
+
+
 def metal_order_to_channel_labels(
-    metal_csv: Path, channel_metadata: Path, roi_number: Union[str, int]):
+    metal_csv: Path, channel_metadata: Path, roi_number: Union[str, int]
+):
 
     order = (
         pd.read_csv(metal_csv, header=None, squeeze=True)
-        .to_frame(name="ChannelName").set_index("ChannelName"))
+        .to_frame(name="ChannelName")
+        .set_index("ChannelName")
+    )
     # read reference
     ref = parse_acquisition_metadata(channel_metadata)
-    ref = ref.loc[ref['AcquisitionID'].isin([roi_number, str(roi_number)])]
+    ref = ref.loc[ref["AcquisitionID"].isin([roi_number, str(roi_number)])]
     return (
-        order
-        .join(ref.reset_index().set_index("ChannelName"))
-        ["index"]
+        order.join(ref.reset_index().set_index("ChannelName"))["index"]
         .reset_index(drop=True)
-        .rename("channel"))
+        .rename("channel")
+    )
+
 
 def get_threshold_from_gaussian_mixture(x: Array, n_components: int = 2) -> int:
     from sklearn.mixture import GaussianMixture
+
     mix = GaussianMixture(n_components=n_components)
     x = pd.Series(x.flatten()).abs().sort_values()
     xx = x.values.reshape((-1, 1))
@@ -111,6 +170,7 @@ def sorted_nicely(iterable: Sequence[GenericType]) -> Sequence[GenericType]:
     iterable
         Sorted iterable
     """
+
     def convert(text):
         return int(text) if text.isdigit() else text
 
@@ -129,13 +189,13 @@ def read_image_from_file(file: Path, equalize: bool = False) -> Array:
     if not file.exists():
         raise FileNotFoundError(f"Cound not find file: '{file}")
     # if str(file).endswith("_mask.tiff"):
-        # arr = tifffile.imread(file) > 0
+    # arr = tifffile.imread(file) > 0
     if file.endswith(".ome.tiff"):
         arr = tifffile.imread(str(file), is_ome=True)
     elif file.endswith(".tiff"):
         arr = tifffile.imread(str(file))
     elif file.endswith(".h5"):
-        with h5py.File(file, 'r') as __f:
+        with h5py.File(file, "r") as __f:
             arr = np.asarray(__f[list(__f.keys())[0]])
 
     if len(arr.shape) == 3:
@@ -147,10 +207,8 @@ def read_image_from_file(file: Path, equalize: bool = False) -> Array:
 
 
 def write_image_to_file(
-        arr: Array,
-        channel_labels: Sequence,
-        output_prefix: Path,
-        file_format: str = "png") -> None:
+    arr: Array, channel_labels: Sequence, output_prefix: Path, file_format: str = "png"
+) -> None:
     if len(arr.shape) != 3:
         skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, arr)
     else:
@@ -159,55 +217,56 @@ def write_image_to_file(
         for channel, label in tqdm(enumerate(channel_labels), total=arr.shape[0]):
             skimage.io.imsave(
                 output_prefix + "." + label + "." + file_format,
-                np.multiply(arr[channel], 256).astype(np.uint8))
+                np.multiply(arr[channel], 256).astype(np.uint8),
+            )
 
 
 def minmax_scale(x):
-    return ((x - x.min()) / (x.max() - x.min()))
+    return (x - x.min()) / (x.max() - x.min())
 
 
 def estimate_noise(i):
     """https://stackoverflow.com/a/25436112/1469535"""
     import math
     from scipy.signal import convolve2d
+
     h, w = i.shape
-    m = [[1 , -2,  1],
-         [-2,  4, -2],
-         [1 , -2,  1]]
+    m = [[1, -2, 1], [-2, 4, -2], [1, -2, 1]]
     sigma = np.sum(np.sum(np.absolute(convolve2d(i, m))))
-    sigma = sigma * math.sqrt(0.5 * math.pi) / (6 * (w-2) * (h-2))
+    sigma = sigma * math.sqrt(0.5 * math.pi) / (6 * (w - 2) * (h - 2))
     return sigma
 
 
 def fractal_dimension(Z, threshold=0.9):
     """https://gist.github.com/viveksck/1110dfca01e4ec2c608515f0d5a5b1d1"""
     # Only for 2d image
-    assert(len(Z.shape) == 2)
+    assert len(Z.shape) == 2
 
     # From https://github.com/rougier/numpy-100 (#87)
     def boxcount(Z, k):
         S = np.add.reduceat(
             np.add.reduceat(Z, np.arange(0, Z.shape[0], k), axis=0),
-                               np.arange(0, Z.shape[1], k), axis=1)
+            np.arange(0, Z.shape[1], k),
+            axis=1,
+        )
 
         # We count non-empty (0) and non-full boxes (k*k)
-        return len(np.where((S > 0) & (S < k*k))[0])
-
+        return len(np.where((S > 0) & (S < k * k))[0])
 
     # Transform Z into a binary array
-    Z = (Z < threshold)
+    Z = Z < threshold
 
     # Minimal dimension of image
     p = min(Z.shape)
 
     # Greatest power of 2 less than or equal to p
-    n = 2**np.floor(np.log(p)/np.log(2))
+    n = 2 ** np.floor(np.log(p) / np.log(2))
 
     # Extract the exponent
-    n = int(np.log(n)/np.log(2))
+    n = int(np.log(n) / np.log(2))
 
     # Build successive box sizes (from 2**n down to 2**1)
-    sizes = 2**np.arange(n, 1, -1)
+    sizes = 2 ** np.arange(n, 1, -1)
 
     # Actual box counting with decreasing size
     counts = []
@@ -235,7 +294,7 @@ def lacunarity(image, box_size=30):
     data." Applied Geography 32.2 (2012): 660-667.
     """
     kernel = np.ones((box_size, box_size))
-    accumulator = scipy.signal.convolve2d(image, kernel, mode='valid')
+    accumulator = scipy.signal.convolve2d(image, kernel, mode="valid")
     mean_sqrd = np.mean(accumulator) ** 2
     if mean_sqrd == 0:
         return 0.0
@@ -247,6 +306,7 @@ def get_canny_edge_image(image: Array, mask: Optional[Array], radius=30, sigma=0
     from skimage.filters.rank import equalize
     from skimage.morphology import disk
     from skimage.feature import canny
+
     inverse_mask = ~mask
     result = equalize(image, selem=disk(radius), mask=inverse_mask)
     result = canny(result, sigma=sigma, mask=inverse_mask)
@@ -254,22 +314,21 @@ def get_canny_edge_image(image: Array, mask: Optional[Array], radius=30, sigma=0
 
 
 def mcd_to_dir(
-        mcd_file: Path,
-        panel_csv: Path,
-        output_dir: Path = None,
-        partition_panels: bool = False,
-        filter_full: bool = True) -> None:
+    mcd_file: Path,
+    panel_csv: Path,
+    output_dir: Path = None,
+    partition_panels: bool = False,
+    filter_full: bool = True,
+) -> None:
     def get_dataframe_from_channels(mcd):
-        return pd.DataFrame([
-            mcd.get_acquisition_channels(x)
-            for x in mcd.acquisition_ids],
-            index=mcd.acquisition_ids)
+        return pd.DataFrame(
+            [mcd.get_acquisition_channels(x) for x in mcd.acquisition_ids],
+            index=mcd.acquisition_ids,
+        )
 
     def all_channels_equal(mcd):
         chs = get_dataframe_from_channels(mcd)
-        return all([
-            (chs[c].value_counts() == mcd.n_acquisitions).all()
-            for c in chs.columns])
+        return all([(chs[c].value_counts() == mcd.n_acquisitions).all() for c in chs.columns])
 
     def get_panel_partitions(mcd):
         chs = get_dataframe_from_channels(mcd)
@@ -285,36 +344,38 @@ def mcd_to_dir(
     def build_channel_name(ac):
         return (
             cleanup_channel_names(pd.Series(ac.channel_labels))
-            + "(" + pd.Series(ac.channel_metals) + ")").rename("channel")
+            + "("
+            + pd.Series(ac.channel_metals)
+            + ")"
+        ).rename("channel")
 
     def clip_hot_pixels(img, hp_filter_shape=(3, 3), hp_threshold=50):
         if hp_filter_shape[0] % 2 != 1 or hp_filter_shape[1] % 2 != 1:
-            raise ValueError(
-                "Invalid hot pixel filter shape: %s" % str(hp_filter_shape))
+            raise ValueError("Invalid hot pixel filter shape: %s" % str(hp_filter_shape))
         hp_filter_footprint = np.ones(hp_filter_shape)
         hp_filter_footprint[int(hp_filter_shape[0] / 2), int(hp_filter_shape[1] / 2)] = 0
-        max_img = ndi.maximum_filter(img, footprint=hp_filter_footprint, mode='reflect')
+        max_img = ndi.maximum_filter(img, footprint=hp_filter_footprint, mode="reflect")
         hp_mask = img - max_img > hp_threshold
         img = img.copy()
         img[hp_mask] = max_img[hp_mask]
         return img
 
-    H5_YXC_AXISTAG = '''{\n  "axes": [\n    {\n      "key": "y",\n      "typeFlags": 2,\n
+    H5_YXC_AXISTAG = """{\n  "axes": [\n    {\n      "key": "y",\n      "typeFlags": 2,\n
     "resolution": 0,\n      "description": ""\n    },\n    {\n
     "key": "x",\n      "typeFlags": 2,\n      "resolution": 0,\n
     "description": ""\n    },\n    {\n      "key": "c",\n
     "typeFlags": 1,\n      "resolution": 0,\n
-    "description": ""\n    }\n  ]\n}'''
+    "description": ""\n    }\n  ]\n}"""
 
     if output_dir is None:
         output_dir = mcd_file.parent / "imc_dir"
     os.makedirs(output_dir, exist_ok=True)
-    dirs = ['tiffs', 'ilastik']
+    dirs = ["tiffs", "ilastik"]
     for d in dirs:
         os.makedirs(output_dir / d, exist_ok=True)
 
     panel = pd.read_csv(panel_csv, index_col=0)
-    ilastik_channels = panel.query('ilastik == 1').index
+    ilastik_channels = panel.query("ilastik == 1").index
     CROP_WIDTH = CROP_HEIGHT = 500
     N_RANDOM_CROPS = 5
 
@@ -327,49 +388,56 @@ def mcd_to_dir(
         # Filter channels
         channel_labels = build_channel_name(ac)
         to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-        to_exp_ind = ac.get_metal_indices(list(map(lambda x: x[1].split(')')[0], to_exp.str.split("("))))
+        to_exp_ind = ac.get_metal_indices(
+            list(map(lambda x: x[1].split(")")[0], to_exp.str.split("(")))
+        )
         assert to_exp_ind == to_exp.index.tolist()
 
         if filter_full:
             # remove background and empty channels
             # TODO: find way to do this more systematically
-            channel_labels = channel_labels[~(
-                channel_labels.str.contains(r'^\d')
-                | channel_labels.str.contains('<EMPTY>'))].reset_index(drop=True)
+            channel_labels = channel_labels[
+                ~(channel_labels.str.contains(r"^\d") | channel_labels.str.contains("<EMPTY>"))
+            ].reset_index(drop=True)
 
         # Save full image as TIFF
-        prefix = (
-            output_dir / "tiffs" /
-            (ac.image_description.replace(" ", "_") + "_ac"))
+        prefix = output_dir / "tiffs" / (ac.image_description.replace(" ", "_") + "_ac")
         p = prefix + "_full."
         ac.save_image(p + "tiff", metals=channel_labels.str.extract(r"\((.*)\)")[0])
         channel_labels.to_csv(p + "csv")
 
         # Make input for ilastik training
         to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-        to_exp_ind = np.array(ac.get_metal_indices(list(map(lambda x: x[1].split(')')[0], to_exp.str.split("("))))) + 3
+        to_exp_ind = (
+            np.array(
+                ac.get_metal_indices(list(map(lambda x: x[1].split(")")[0], to_exp.str.split("("))))
+            )
+            + 3
+        )
         # assert to_exp_ind == to_exp.index.tolist()
 
         # # clip hot pixels and zoom
         s = tuple(x * 2 for x in ac.shape[:-1])
-        full = np.moveaxis(np.asarray([resize(clip_hot_pixels(x), s) for x in ac.data[to_exp_ind]]), 0, -1)
+        full = np.moveaxis(
+            np.asarray([resize(clip_hot_pixels(x), s) for x in ac.data[to_exp_ind]]), 0, -1
+        )
         # Save input for ilastik prediction
-        with h5py.File(prefix + "_ilastik_s2.h5", mode='w') as handle:
+        with h5py.File(prefix + "_ilastik_s2.h5", mode="w") as handle:
             d = handle.create_dataset("stacked_channels", data=full)
-            d.attrs['axistags'] = H5_YXC_AXISTAG
+            d.attrs["axistags"] = H5_YXC_AXISTAG
 
         # # random crops
-        iprefix = (
-            output_dir / "ilastik" /
-            (ac.image_description.replace(" ", "_") + "_ac"))
+        iprefix = output_dir / "ilastik" / (ac.image_description.replace(" ", "_") + "_ac")
         for i in range(N_RANDOM_CROPS):
             x = np.random.choice(range(s[0] - CROP_WIDTH))
             y = np.random.choice(range(s[1] - CROP_HEIGHT))
-            crop = full[x:(x + CROP_WIDTH), y:(y + CROP_HEIGHT), :]
+            crop = full[x : (x + CROP_WIDTH), y : (y + CROP_HEIGHT), :]
             assert crop.shape == (CROP_WIDTH, CROP_HEIGHT, len(to_exp))
-            with h5py.File(iprefix + f"_ilastik_x{x}_y{y}_w{CROP_WIDTH}_h{CROP_HEIGHT}.h5", mode='w') as handle:
+            with h5py.File(
+                iprefix + f"_ilastik_x{x}_y{y}_w{CROP_WIDTH}_h{CROP_HEIGHT}.h5", mode="w"
+            ) as handle:
                 d = handle.create_dataset("stacked_channels", data=crop)
-                d.attrs['axistags'] = H5_YXC_AXISTAG
+                d.attrs["axistags"] = H5_YXC_AXISTAG
     mcd.close()
 
     # all_channels_equal(mcd)
@@ -382,8 +450,8 @@ def mcd_to_dir(
 
 def get_mean_expression_per_cluster(a: AnnData) -> DataFrame:
     means = dict()
-    for cluster in a.obs['cluster'].unique():
-        means[cluster] = a[a.obs['cluster'] == cluster, :].X.mean(0)
+    for cluster in a.obs["cluster"].unique():
+        means[cluster] = a[a.obs["cluster"] == cluster, :].X.mean(0)
     mean_expr = pd.DataFrame(means, index=a.var.index)
     mean_expr.columns.name = "cluster"
     return mean_expr
@@ -402,6 +470,7 @@ def filter_hot_pixels(img, n_bins=1000):
     from sklearn.linear_model import LinearRegression
     import statsmodels.api as sm
     from jax import grad, vmap
+
     m = img.max()
     x = np.linspace(0, m, n_bins, dtype=float)
     y = np.asarray([(img > i).sum() for i in x]).astype(float)
@@ -410,9 +479,7 @@ def filter_hot_pixels(img, n_bins=1000):
     x2 = x[filter_]
     y2 = y[filter_]
 
-    mod = sm.GLM(
-        y2, np.vstack([x2, np.ones(x2.shape)]).T,
-        family=sm.families.Poisson())
+    mod = sm.GLM(y2, np.vstack([x2, np.ones(x2.shape)]).T, family=sm.families.Poisson())
     res = mod.fit()
     f1 = lambda x: np.e ** (res.params[0] * x + res.params[1])
     g1 = vmap(grad(f1))
@@ -515,4 +582,3 @@ def filter_hot_pixels(img, n_bins=1000):
 #     mod = IdentifyPrimaryObjects()
 #     mod.create_settings()
 #     mod.x_name.value = "filepath"
-

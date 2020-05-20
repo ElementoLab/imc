@@ -2,6 +2,7 @@
 
 from typing import Dict, Tuple, List, Union, Optional, Any
 import warnings
+from functools import wraps
 
 import numpy as np
 import pandas as pd
@@ -25,20 +26,12 @@ SEQUENCIAL_CMAPS = [
     "hot", "afmhot", "gist_heat", "copper"]
 
 
-def _minmax_scale(x: Union[pd.Series, pd.DataFrame, np.ndarray]):
-    return (x - x.min()) / (x.max() - x.min())
+def to_color_series(x: pd.Series, cmap: Optional[str] = "Greens") -> pd.Series:
+    return pd.Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
 
 
-def _to_color_series(x: pd.Series, cmap: Optional[str] = "Greens") -> pd.Series:
-    y = _minmax_scale(x)
-    return pd.Series(
-        plt.get_cmap(cmap)(y).tolist(),
-        index=x.index, name=x.name)
-
-
-def _to_color_dataframe(
-        x: Union[pd.Series, pd.DataFrame],
-        cmaps: Optional[Union[str, List[str]]] = None
+def to_color_dataframe(
+    x: Union[pd.Series, pd.DataFrame], cmaps: Optional[Union[str, List[str]]] = None
 ) -> pd.DataFrame:
     if isinstance(x, pd.Series):
         x = x.to_frame()
@@ -46,7 +39,7 @@ def _to_color_dataframe(
         cmaps = [plt.get_cmap(cmap) for cmap in SEQUENCIAL_CMAPS[: x.shape[1]]]
     if isinstance(cmaps, str):
         cmaps = [cmaps]
-    return pd.concat([_to_color_series(x[col], cmap) for col, cmap in zip(x, cmaps)], axis=1)
+    return pd.concat([to_color_series(x[col], cmap) for col, cmap in zip(x, cmaps)], axis=1)
 
 
 def _add_extra_colorbars_to_clustermap(
@@ -54,7 +47,7 @@ def _add_extra_colorbars_to_clustermap(
     datas: Union[pd.Series, pd.DataFrame],
     cmaps: Optional[Union[str, List[str]]] = None,
     location="cols",
-    **kwargs
+    **kwargs,
 ) -> None:
     def add(data: pd.Series, cmap: str, bbox: List[List[int]], orientation: str) -> None:
         ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
@@ -104,41 +97,43 @@ def _add_extra_colorbars_to_clustermap(
 
 
 def _add_colorbars(
-        grid,
-        rows: pd.DataFrame = None,
-        cols: pd.DataFrame = None,
-        row_cmaps: Optional[List[str]] = None,
-        col_cmaps: Optional[List[str]] = None
+    grid,
+    rows: pd.DataFrame = None,
+    cols: pd.DataFrame = None,
+    row_cmaps: Optional[List[str]] = None,
+    col_cmaps: Optional[List[str]] = None,
 ) -> None:
     if rows is not None:
-        _add_extra_colorbars_to_clustermap(
-            grid, rows, location="row", cmaps=row_cmaps)
+        _add_extra_colorbars_to_clustermap(grid, rows, location="row", cmaps=row_cmaps)
     if cols is not None:
-        _add_extra_colorbars_to_clustermap(
-            grid, cols, location="cols", cmaps=col_cmaps)
+        _add_extra_colorbars_to_clustermap(grid, cols, location="cols", cmaps=col_cmaps)
 
 
 def colorbar_decorator(f):
     """The actual decorator of seaborn.clustermap"""
+    # TODO: edit original seaborn.clustermap docstring to document {row,col}_colors_cmaps arguments.
+    @wraps(f)
     def clustermap(*args, **kwargs):
         cmaps = {"row": None, "col": None}
         # capture "row_cmaps" and "col_cmaps" out of the kwargs
-        for arg in ['row', 'col']:
+        for arg in ["row", "col"]:
             if arg + "_colors_cmaps" in kwargs:
-                cmaps[arg] = kwargs[arg + '_colors_cmaps']
-                del kwargs[arg + '_colors_cmaps']
+                cmaps[arg] = kwargs[arg + "_colors_cmaps"]
+                del kwargs[arg + "_colors_cmaps"]
         # get dataframe with colors and respective colormaps for rows and cols
         # instead of the original numerical values
         _kwargs = dict(rows=None, cols=None)
-        for arg in ['row', 'col']:
+        for arg in ["row", "col"]:
             if arg + "_colors" in kwargs:
                 if isinstance(kwargs[arg + "_colors"], (pd.DataFrame, pd.Series)):
                     _kwargs[arg + "s"] = kwargs[arg + "_colors"]
-                    kwargs[arg + "_colors"] = _to_color_dataframe(
-                        kwargs[arg + "_colors"], cmaps[arg])
+                    kwargs[arg + "_colors"] = to_color_dataframe(
+                        kwargs[arg + "_colors"], cmaps[arg]
+                    )
         grid = f(*args, **kwargs)
-        _add_colorbars(grid, **_kwargs, row_cmaps=cmaps['row'], col_cmaps=cmaps['col'])
+        _add_colorbars(grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"])
         return grid
+
     return clustermap
 
 
@@ -154,22 +149,30 @@ def add_scale(_ax: Optional[Axis] = None, width: int = 100, unit: str = DEFAULT_
     xposition = 3
     yposition = -height - 3
     text_separation = text_separation * height
-    _ax.add_patch(mpatches.Rectangle(
-        (xposition, yposition), width, height, color="black", clip_on=False))
+    _ax.add_patch(
+        mpatches.Rectangle((xposition, yposition), width, height, color="black", clip_on=False)
+    )
     _ax.text(
-        xposition + (width / 2), yposition + height + text_separation,
-        s=f"{width}{unit}", color="white", ha="center",
-        fontsize=4 * (__h / 1000))
+        xposition + (width / 2),
+        yposition + height + text_separation,
+        s=f"{width}{unit}",
+        color="white",
+        ha="center",
+        fontsize=4 * (__h / 1000),
+    )
 
 
-def add_legend(patches: List[Patch], ax: Axis, **kwargs) -> None:
+def add_legend(patches: List[Patch], ax: Optional[Axis] = None, **kwargs) -> None:
+    if ax is None:
+        ax = plt.gca()
     _patches = np.asarray(patches)
     _patches = _patches[
-        pd.Series(
-            [(p.get_facecolor(), p.get_label()) for p in _patches])
-        .drop_duplicates().index.tolist()]
+        pd.Series([(p.get_facecolor(), p.get_label()) for p in _patches])
+        .drop_duplicates()
+        .index.tolist()
+    ]
 
-    defaults = dict(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    defaults = dict(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0)
     defaults.update(kwargs)
     ax.legend(handles=_patches.tolist(), **defaults)
 
@@ -187,49 +190,48 @@ def rgb_to(arr, to=Tuple[Any, Any, Any]):
     """
     # TODO: replace PIL with own implementation
     import PIL
+
     if arr.shape[2] != 3:
         arr = np.moveaxis(arr, 0, -1)
     img = PIL.Image.fromarray(np.uint8(arr * 255))
     x = (
-        np.asarray([
-            np.asarray(PIL.ImageOps.colorize(x, 'black', to[i]))
-            for i, x in enumerate(img.split())
-        ])
+        np.asarray(
+            [
+                np.asarray(PIL.ImageOps.colorize(x, "black", to[i]))
+                for i, x in enumerate(img.split())
+            ]
+        )
         .squeeze()
-        .sum(0))
+        .sum(0)
+    )
     return x / x.max(0)
 
 
 def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
-    return tuple([
-        matplotlib.colors.LinearSegmentedColormap.from_list('', p * r)
-        for p in np.eye(3)])
+    return tuple(
+        [matplotlib.colors.LinearSegmentedColormap.from_list("", p * r) for p in np.eye(3)]
+    )
 
 
-def get_dark_cmaps(
-        n: int = 3, from_palette: str = "colorblind") -> List[ColorMap]:
+def get_dark_cmaps(n: int = 3, from_palette: str = "colorblind") -> List[ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
     if n > len(sns.color_palette(from_palette)):
-        warnings.warn(
-            "Chosen palette has less than the requested number of colors. "
-            "Will reuse!")
+        warnings.warn("Chosen palette has less than the requested number of colors. " "Will reuse!")
     return [
-        matplotlib.colors.LinearSegmentedColormap.from_list('', np.array(p) * r)
-        for p in sns.color_palette(from_palette, n)]
+        matplotlib.colors.LinearSegmentedColormap.from_list("", np.array(p) * r)
+        for p in sns.color_palette(from_palette, n)
+    ]
 
 
-def get_transparent_cmaps(
-        n: int = 3, from_palette: Optional[str] = "colorblind") -> List[ColorMap]:
+def get_transparent_cmaps(n: int = 3, from_palette: Optional[str] = "colorblind") -> List[ColorMap]:
     __r = np.linspace(0, 1, 100)
     if n > len(sns.color_palette(from_palette)):
-        warnings.warn(
-            "Chosen palette has less than the requested number of colors. "
-            "Will reuse!")
+        warnings.warn("Chosen palette has less than the requested number of colors. " "Will reuse!")
     return [
-        matplotlib.colors.LinearSegmentedColormap.from_list(
-            '', [p + (c,) for c in __r])
-        for p in sns.color_palette(from_palette, n)]
+        matplotlib.colors.LinearSegmentedColormap.from_list("", [p + (c,) for c in __r])
+        for p in sns.color_palette(from_palette, n)
+    ]
 
 
 # TODO: see if function can be sped up e.g. with Numba
@@ -242,9 +244,8 @@ def cell_labels_to_mask(mask: Array, labels: Union[Series, Dict]) -> Array:
 
 
 def numbers_to_rgb_colors(
-        mask: Array,
-        from_palette: str = "tab20",
-        remove_zero: bool = True) -> Array:
+    mask: Array, from_palette: str = "tab20", remove_zero: bool = True
+) -> Array:
     """Colors each integer in the 2D `mask` array with a unique color by
     expanding the array to 3 dimensions."""
 
@@ -254,11 +255,9 @@ def numbers_to_rgb_colors(
     n_colors = len(ident)
 
     if n_colors > len(sns.color_palette(from_palette)):
-        warnings.warn(
-            "Chosen palette has less than the requested number of colors."
-            "Will reuse!")
+        warnings.warn("Chosen palette has less than the requested number of colors." "Will reuse!")
     colors = sns.color_palette(from_palette, n_colors)
-    res = np.zeros((mask.shape) + (3, ))
+    res = np.zeros((mask.shape) + (3,))
     for c, i in zip(colors, ident):
         x, y = np.nonzero(np.isin(mask, i))
         res[x, y, :] = c
@@ -324,22 +323,21 @@ def share_axes_by(axes: Axis, by: str) -> None:
 
 
 def plot_single_channel(
-        arr: Array,
-        axis: Optional[Axis] = None,
-        cmap: Optional[ColorMap] = None) -> Union[Figure, Axis]:
+    arr: Array, axis: Optional[Axis] = None, cmap: Optional[ColorMap] = None
+) -> Union[Figure, Axis]:
     """Plot a single image channel either in a new figure or in an existing axis"""
     if axis is None:
         fig, axs = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
     axs.imshow(arr, cmap=cmap, interpolation="bilinear", rasterized=True)
-    axs.axis('off')
+    axs.axis("off")
     return fig if axis is None else axs
 
 
 def plot_overlayied_channels(
-        arr: Array,
-        channel_labels: List[str],
-        axis: Optional[Axis] = None,
-        palette: Optional[str] = None
+    arr: Array,
+    channel_labels: List[str],
+    axis: Optional[Axis] = None,
+    palette: Optional[str] = None,
 ) -> Union[Figure, Axis]:
     if axis is None:
         fig, ax = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
@@ -348,10 +346,9 @@ def plot_overlayied_channels(
     for i, (m, c) in enumerate(zip(channel_labels, cmaps)):
         x = arr[i].squeeze()
         ax.imshow(x, cmap=c, label=m, interpolation="bilinear", rasterized=True, alpha=0.9)
-        ax.axis('off')
+        ax.axis("off")
         patches.append(mpatches.Patch(color=c(256), label=m))
-    ax.legend(
-        handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0)
     return fig if axis is None else ax
 
 

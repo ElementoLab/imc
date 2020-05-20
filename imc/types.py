@@ -13,7 +13,8 @@ class Path(pathlib.Path):
     A pathlib.Path child that allows concatenation with strings using the
     addition operator
     """
-    _flavour = pathlib._windows_flavour if os.name == 'nt' else pathlib._posix_flavour
+
+    _flavour = pathlib._windows_flavour if os.name == "nt" else pathlib._posix_flavour
 
     def __add__(self, string: str) -> "Path":
         return Path(str(self) + string)
@@ -28,7 +29,7 @@ class Path(pathlib.Path):
         return Path(str(self).replace(patt, repl))
 
 
-GenericType = TypeVar('GenericType')
+GenericType = TypeVar("GenericType")
 
 # type aliasing (done with Union to distinguish from other declared variables)
 Axis = Union[matplotlib.axis.Axis]
