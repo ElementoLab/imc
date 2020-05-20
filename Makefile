@@ -1,3 +1,15 @@
+.DEFAULT_GOAL := all
+
+all: install clean
+
+move_models_out:
+	mv _models ../
+
+move_models_in:
+	mv ../_models ./
+
+clean_build:
+	rm -rf build/
 
 clean_dist:
 	rm -rf dist/
@@ -5,15 +17,14 @@ clean_dist:
 clean_eggs:
 	rm -rf *.egg-info
 
-clean: clean_dist clean_eggs
+clean: clean_dist clean_eggs clean_build
 
 _install:
 	python setup.py sdist
 	python -m pip wheel --no-index --no-deps --wheel-dir dist dist/*.tar.gz
 	python -m pip install dist/*-py3-none-any.whl --user --upgrade
 
-
-install: clean _install clean
+install: move_models_out clean _install move_models_in
 
 run:
 	python imcpipeline/runner.py \
