@@ -1,4 +1,4 @@
-.DEFAULT_GOAL := all
+.DEFAULT_GOAL := install
 
 all: install clean
 
@@ -24,7 +24,12 @@ _install:
 	python -m pip wheel --no-index --no-deps --wheel-dir dist dist/*.tar.gz
 	python -m pip install dist/*-py3-none-any.whl --user --upgrade
 
-install: move_models_out clean _install move_models_in
+install:
+	${MAKE} move_models_out
+	${MAKE} clean
+	${MAKE} _install
+	${MAKE} clean
+	${MAKE} move_models_in
 
 run:
 	python imcpipeline/runner.py \
@@ -32,7 +37,8 @@ run:
 		metadata/annotation.csv \
 			--ilastik-model _models/lymphoma/lymphoma.ilp \
 			--csv-pannel metadata/panel_markers.csv \
-			--cellprofiler-exec "source ~/.miniconda2/bin/activate && conda activate cellprofiler && cellprofiler"
+			--cellprofiler-exec \
+				"source ~/.miniconda2/bin/activate && conda activate cellprofiler && cellprofiler"
 
 run_locally:
 	python imcpipeline/runner.py \
@@ -56,4 +62,5 @@ checksuccess:
 succ: checksuccess
 
 
-.PHONY : clean install run
+.PHONY : move_models_out move_models_in clean_build clean_dist clean_eggs \
+clean _install install run run_locally checkfailure fail checksuccess succ

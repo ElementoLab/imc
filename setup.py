@@ -61,10 +61,11 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     classifiers=[
-        "Development Status :: 3 - Alpha",
-        "License :: OSI Approved :: "
-        "GNU General Public License v3 or later (GPLv3+)",
+        "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.7",
+        "Development Status :: 3 - Alpha",
+        "Typing :: Typed",
+        "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
     keywords=",".join([
