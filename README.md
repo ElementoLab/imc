@@ -34,16 +34,33 @@ Scripts supporting exploratory analysis or other functions that are still work
 in progress are present in the [scripts directory](scripts).
 
 
-## Requirements
+## Requirements and installation
+
+Requires:
 
 - Python >= 3.7
-- The requirements specified in [requirements.txt](requirements.txt) - use
-`pip install -r requirements.txt`.
+- The requirements specified in [requirements.txt](requirements.txt) (will be installed
+automatically by `pip`).
 
 For the image processing pipeline:
 
 - One of: `docker`, `singularity` or `cellprofiler` in a local installation.
 
+In due time it will be released to [Pypi](), but while the repository is private you can install with:
+
+```shell
+pip install git+ssh://git@github.com/elementolab/hyperion-cytof.git
+```
+
+The `git+ssh` protocol requires proper git configuration.
+
+## Testing
+
+Tests are still very limited, but you can run tests this way:
+
+```
+python -m pytest --pyargs imc
+```
 
 ## Running the pipeline
 
