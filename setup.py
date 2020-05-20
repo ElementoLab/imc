@@ -63,6 +63,7 @@ setup(
     classifiers=[
         "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
         "Development Status :: 3 - Alpha",
         "Typing :: Typed",
         "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",

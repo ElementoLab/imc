@@ -14,7 +14,7 @@ plt.rcParams["svg.fonttype"] = "none"
 
 
 def setup_logger(level=logging.INFO):
-    logger = logging.getLogger("imcpipeline")
+    logger = logging.getLogger("imc")
     logger.setLevel(level)
 
     handler = logging.StreamHandler(sys.stdout)
@@ -28,7 +28,7 @@ def setup_logger(level=logging.INFO):
 LOGGER = setup_logger()
 
 # Setup joblib memory
-JOBLIB_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".imcpipeline")
+JOBLIB_CACHE_DIR = os.path.join(os.path.expanduser("~"), ".imc")
 MEMORY = Memory(location=JOBLIB_CACHE_DIR, verbose=0)
 
 # Decorate seaborn clustermap

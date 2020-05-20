@@ -4,8 +4,7 @@
 Functions for high order operations.
 """
 
-from __future__ import annotations
-# ^^ this will fix the type annotatiton of not yet undefined classes
+from __future__ import annotations  # fix the type annotatiton of not yet undefined classes
 from collections import Counter
 import os
 import re
@@ -42,12 +41,7 @@ from imc import MEMORY
 from imc.exceptions import cast
 from imc.types import DataFrame, Series, Array, Path, MultiIndexSeries
 from imc.utils import read_image_from_file, estimate_noise, double_z_score
-from imc.graphics import colorbar_decorator, get_grid_dims, rasterize_scanpy, add_legend
-
-# import leidenalg as la
-
-
-sns.clustermap = colorbar_decorator(sns.clustermap)
+from imc.graphics import get_grid_dims, rasterize_scanpy, add_legend
 
 
 matplotlib.rcParams["svg.fonttype"] = "none"
@@ -582,9 +576,7 @@ def single_cell_analysis(
 
     kwargs = dict(
         row_colors=row_means,
-        row_colors_cmaps=["Greens"],
         col_colors=col_counts,
-        col_colors_cmaps=["Purples"],
         metric="correlation",
         robust=True,
         xticklabels=True,
@@ -742,8 +734,8 @@ def derive_reference_cell_type_labels(
         robust=True,
         xticklabels=True,
         yticklabels=True,
-        row_colors=cmeans,  #  row_colors_cmaps=['Greens'],
-        # col_colors=fractions, col_colors_cmaps=["Purples"]
+        row_colors=cmeans,
+        # col_colors=fractions,
     )
     opts = [
         (mean_expr, "original", dict()),
@@ -775,9 +767,7 @@ def derive_reference_cell_type_labels(
         cmap="RdBu_r",
         cbar_kws=dict(label="Mean expression (Z-score)"),
         row_colors=cmeans,
-        row_colors_cmaps=["Greens"],
         col_colors=fractions,
-        col_colors_cmaps=["Purples"],
     )
     opts = [
         (mean_expr_z_l, "labeled.both_z", dict()),
@@ -798,9 +788,7 @@ def derive_reference_cell_type_labels(
         xticklabels=True,
         yticklabels=True,
         row_colors=fractions_l,
-        row_colors_cmaps=["Purples"],
         col_colors=fractions_l,
-        col_colors_cmaps=["Purples"],
     )
     grid.savefig(
         output_prefix + "mean_expression_per_cluster.labeled.both_z.correlation.svg", **FIG_KWS
@@ -1030,6 +1018,7 @@ def measure_cell_type_adjacency(
     kws2 = dict(vmin=-v, vmax=v, cbar_kws=dict(label="Log odds interaction"))
     sns.heatmap(norm_freqs, ax=axes[1], **kws, **kws2)
     fig.savefig(output_prefix + "cluster_adjacency_graph.norm_over_random.heatmap.svg", **FIG_KWS)
+    del kws["square"]
     grid = sns.clustermap(norm_freqs, **kws, **kws2)
     grid.savefig(
         output_prefix + "cluster_adjacency_graph.norm_over_random.clustermap.svg", **FIG_KWS

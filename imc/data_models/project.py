@@ -349,9 +349,7 @@ class Project:
                     res,
                     cbar_kws=dict(label=red_func.capitalize() + cbar_label),
                     row_colors=channel_mean,
-                    row_colors_cmap="Greens",
                     col_colors=cell_density,
-                    col_colors_cmap="BuPu",
                     metric="correlation",
                     xticklabels=True,
                     yticklabels=True,
@@ -441,9 +439,8 @@ class Project:
             quantification = self.quantify_cell_intensity(samples=samples, rois=rois)
         if not set_attribute:
             return quantification
-        else:
-            self.quantification = quantification
-            return None
+        self.quantification = quantification
+        return None
 
     def quantify_cell_intensity(
         self,
@@ -948,10 +945,11 @@ class Project:
         )
         sns.clustermap(mean_f, cmap="RdBu_r", center=0, robust=True)
 
-        __v = np.percentile(melted["value"].abs(), 95)
+        v = np.percentile(melted["value"].abs(), 95)
         n, m = get_grid_dims(len(freqs))
         fig, axes = plt.subplots(n, m, figsize=(m * 5, n * 5), sharex=True, sharey=True)
         axes = axes.flatten()
+        i = -1
         for i, (dfs, roi) in enumerate(zip(freqs, rois)):
             axes[i].set_title(roi.name)
             sns.heatmap(
@@ -963,8 +961,8 @@ class Project:
                 square=True,
                 xticklabels=True,
                 yticklabels=True,
-                vmin=-__v,
-                vmax=__v,
+                vmin=-v,
+                vmax=v,
             )
         for axs in axes[i + 1 :]:
             axs.axis("off")

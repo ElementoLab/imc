@@ -1,6 +1,6 @@
-.DEFAULT_GOAL := install
+.DEFAULT_GOAL := all
 
-all: install clean
+all: install clean test
 
 move_models_out:
 	mv _models ../
@@ -30,6 +30,9 @@ install:
 	${MAKE} _install
 	${MAKE} clean
 	${MAKE} move_models_in
+
+test:
+	python -m pytest imc/
 
 run:
 	python imcpipeline/runner.py \
