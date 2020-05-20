@@ -12,6 +12,7 @@ leidenalg
 python-louvain
 networkx
 parmap
+joblib
 
 napari
 xarray
