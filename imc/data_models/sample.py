@@ -27,7 +27,6 @@ from imc.operations import (
 )
 from imc.utils import parse_acquisition_metadata
 from imc.graphics import (
-    colorbar_decorator,
     get_grid_dims,
     add_legend,
     share_axes_by
@@ -35,7 +34,6 @@ from imc.graphics import (
 from imc.exceptions import cast  # TODO: replace with typing.cast
 
 FIG_KWS = dict(dpi=300, bbox_inches="tight")
-sns.clustermap = colorbar_decorator(sns.clustermap)
 
 DEFAULT_ROI_NAME_ATTRIBUTE = "roi_name"
 DEFAULT_ROI_NUMBER_ATTRIBUTE = "roi_number"
@@ -219,16 +217,16 @@ class IMCSample:
                 _path = self._get_input_filename(ftype)
                 try:
                     # TODO: logger.info()
-                    __v = pd.read_csv(_path, index_col=0)
+                    v = pd.read_csv(_path, index_col=0)
                 except FileNotFoundError:
                     if permissive:
                         continue
                     raise
                 if set_attribute:
                     # TODO: fix assignemtn to @property
-                    setattr(self, ftype, __v)
+                    setattr(self, ftype, v)
                 else:
-                    res[ftype] = __v
+                    res[ftype] = v
             return res if not set_attribute else None
         return None
 
@@ -238,8 +236,8 @@ class IMCSample:
         """Plot a single channel for all ROIs"""
         rois = rois or self.rois
 
-        __n, __m = get_grid_dims(len(rois))
-        fig, axis = plt.subplots(__n, __m, figsize=(__m * 4, __n * 4), squeeze=False)
+        n, m = get_grid_dims(len(rois))
+        fig, axis = plt.subplots(n, m, figsize=(m * 4, n * 4), squeeze=False)
         axis = axis.flatten()
         i = 0  # just in case there are no ROIs
         for i, roi in enumerate(rois):
@@ -260,11 +258,11 @@ class IMCSample:
     ):
         rois = rois or self.rois
 
-        __n = len(cell_type_combinations or [1])
-        __m = len(rois)
-        fig, axes = plt.subplots(__n, __m, figsize=(3 * __m, 3 * __n), squeeze=False)
+        n = len(cell_type_combinations or [1])
+        m = len(rois)
+        fig, axes = plt.subplots(n, m, figsize=(3 * m, 3 * n), squeeze=False)
         patches: List[Patch] = list()
-        for _ax, roi in zip(np.hsplit(axes, __m), rois):
+        for _ax, roi in zip(np.hsplit(axes, m), rois):
             patches += roi.plot_cell_types(
                 cell_type_combinations=cell_type_combinations,
                 cell_type_assignments=cell_type_assignments,
@@ -275,11 +273,11 @@ class IMCSample:
         return fig
 
     def plot_probabilities_and_segmentation(self, rois: Optional[List["ROI"]] = None) -> Figure:
-        __n = len(rois or self.rois)
+        n = len(rois or self.rois)
         fig, axes = plt.subplots(
-            __n,
+            n,
             5,
-            figsize=(5 * 4, 4 * __n),
+            figsize=(5 * 4, 4 * n),
             gridspec_kw=dict(wspace=0.05),
             sharex="row",
             sharey="row",
@@ -356,20 +354,20 @@ class IMCSample:
         mean_ = adj_matrices.drop("roi", axis=1).groupby(level=0).mean().sort_index(0).sort_index(1)
         adj_matrices = adj_matrices.append(mean_.assign(roi="mean"))
 
-        __m = self.n_rois + 1
+        m = self.n_rois + 1
         nrows = 3
         fig, _ax = plt.subplots(
-            nrows, __m, figsize=(4 * __m, 4 * nrows), sharex=False, sharey=False
+            nrows, m, figsize=(4 * m, 4 * nrows), sharex=False, sharey=False
         )
-        __v = np.nanstd(adj_matrices.drop("roi", axis=1).values)
+        v = np.nanstd(adj_matrices.drop("roi", axis=1).values)
         kws = dict(
             cmap="RdBu_r",
             center=0,
             square=True,
             xticklabels=True,
             yticklabels=True,
-            vmin=-__v,
-            vmax=__v,
+            vmin=-v,
+            vmax=v,
         )
         for i, roi in enumerate(rois):
             _ax[0, i].set_title(roi.name)
