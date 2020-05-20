@@ -21,7 +21,7 @@ variational autoencoders (VAE).
 
 This repo is for now hosting a [pipeline](imcpipeline/pipeline.py), a
 [cross-environment job submitter](imcpipeline/runner.py) for the pipeline,
-[OOP models for IMC data](imc/data_models.py) and other [various utilities](imc/utils.py).
+[OOP models for IMC data](imc/data_models) and other [various utilities](imc/utils.py).
 All is pip installable. The pipeline scripts `imcrunner` and `imcpipeline` will be installed.
 
 Sample and technical (CyTOF panels) metadata are present in the

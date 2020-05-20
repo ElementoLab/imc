@@ -27,12 +27,14 @@ SEQUENCIAL_CMAPS = [
 
 
 def to_color_series(x: pd.Series, cmap: Optional[str] = "Greens") -> pd.Series:
+    """Map a numeric pandas series to a series of RBG values."""
     return pd.Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
 
 
 def to_color_dataframe(
     x: Union[pd.Series, pd.DataFrame], cmaps: Optional[Union[str, List[str]]] = None
 ) -> pd.DataFrame:
+    """Map a numeric pandas DataFrame to RGB values."""
     if isinstance(x, pd.Series):
         x = x.to_frame()
     if cmaps is None:
@@ -47,7 +49,6 @@ def _add_extra_colorbars_to_clustermap(
     datas: Union[pd.Series, pd.DataFrame],
     cmaps: Optional[Union[str, List[str]]] = None,
     location="cols",
-    **kwargs,
 ) -> None:
     def add(data: pd.Series, cmap: str, bbox: List[List[int]], orientation: str) -> None:
         ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
