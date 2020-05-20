@@ -18,12 +18,41 @@ DEFAULT_PIXEL_UNIT_NAME = r"$\mu$m"
 
 
 SEQUENCIAL_CMAPS = [
-    "Purples", "Greens", "Oranges", "Greys", "Reds", "Blues",
-    "YlOrBr", "YlOrRd", "OrRd", "PuRd", "RdPu", "BuPu",
-    "GnBu", "PuBu", "YlGnBu", "PuBuGn", "BuGn", "YlGn",
-    "binary", "gist_yarg", "gist_gray", "gray", "bone", "pink",
-    "spring", "summer", "autumn", "winter", "cool", "Wistia",
-    "hot", "afmhot", "gist_heat", "copper"]
+    "Purples",
+    "Greens",
+    "Oranges",
+    "Greys",
+    "Reds",
+    "Blues",
+    "YlOrBr",
+    "YlOrRd",
+    "OrRd",
+    "PuRd",
+    "RdPu",
+    "BuPu",
+    "GnBu",
+    "PuBu",
+    "YlGnBu",
+    "PuBuGn",
+    "BuGn",
+    "YlGn",
+    "binary",
+    "gist_yarg",
+    "gist_gray",
+    "gray",
+    "bone",
+    "pink",
+    "spring",
+    "summer",
+    "autumn",
+    "winter",
+    "cool",
+    "Wistia",
+    "hot",
+    "afmhot",
+    "gist_heat",
+    "copper",
+]
 
 
 def to_color_series(x: pd.Series, cmap: Optional[str] = "Greens") -> pd.Series:
@@ -32,13 +61,16 @@ def to_color_series(x: pd.Series, cmap: Optional[str] = "Greens") -> pd.Series:
 
 
 def to_color_dataframe(
-    x: Union[pd.Series, pd.DataFrame], cmaps: Optional[Union[str, List[str]]] = None
+    x: Union[pd.Series, pd.DataFrame],
+    cmaps: Optional[Union[str, List[str]]] = None,
+    offset: int = 0,
 ) -> pd.DataFrame:
     """Map a numeric pandas DataFrame to RGB values."""
     if isinstance(x, pd.Series):
         x = x.to_frame()
     if cmaps is None:
-        cmaps = [plt.get_cmap(cmap) for cmap in SEQUENCIAL_CMAPS[: x.shape[1]]]
+        # the offset is in order to get different colors for rows and columns by default
+        cmaps = [plt.get_cmap(cmap) for cmap in SEQUENCIAL_CMAPS[offset:]]
     if isinstance(cmaps, str):
         cmaps = [cmaps]
     return pd.concat([to_color_series(x[col], cmap) for col, cmap in zip(x, cmaps)], axis=1)
@@ -129,7 +161,7 @@ def colorbar_decorator(f):
                 if isinstance(kwargs[arg + "_colors"], (pd.DataFrame, pd.Series)):
                     _kwargs[arg + "s"] = kwargs[arg + "_colors"]
                     kwargs[arg + "_colors"] = to_color_dataframe(
-                        kwargs[arg + "_colors"], cmaps[arg]
+                        x=kwargs[arg + "_colors"], cmaps=cmaps[arg], offset=1 if arg == "row" else 0
                     )
         grid = f(*args, **kwargs)
         _add_colorbars(grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"])
@@ -239,8 +271,8 @@ def get_transparent_cmaps(n: int = 3, from_palette: Optional[str] = "colorblind"
 def cell_labels_to_mask(mask: Array, labels: Union[Series, Dict]) -> Array:
     """Replaces integers in `mask` with values from the mapping in `labels`."""
     res = np.zeros(mask.shape, dtype=int)
-    for __k, __v in labels.items():
-        res[mask == __k] = __v
+    for k, v in labels.items():
+        res[mask == k] = v
     return res
 
 
