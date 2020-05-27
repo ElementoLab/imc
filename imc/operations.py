@@ -8,7 +8,7 @@ from __future__ import annotations  # fix the type annotatiton of not yet undefi
 from collections import Counter
 import os
 import re
-from typing import Tuple, List, Optional, Dict
+from typing import Tuple, List, Optional, Dict, Union
 
 from ordered_set import OrderedSet
 import numpy as np
@@ -310,8 +310,8 @@ def measure_channel_background(
         for channel in means.index:
             lab = "left" if np.random.rand() > 0.5 else "right"
             axes[0, i].text(mean.loc[channel], std.loc[channel], channel, ha=lab, fontsize=4)
-        __v = max(mean.max().max(), std.max().max())
-        axes[0, i].plot((0, __v), (0, __v), linestyle="--", color="grey")
+        v = max(mean.max().max(), std.max().max())
+        axes[0, i].plot((0, v), (0, v), linestyle="--", color="grey")
         axes[0, i].loglog()
 
         # plot mean vs qv2
@@ -679,11 +679,11 @@ def derive_reference_cell_type_labels(
     mean_expr_z = double_z_score(_mean_expr)
 
     # use a simple STD threshold for "positiveness"
-    __v = mean_expr_z.values.flatten()
+    v = mean_expr_z.values.flatten()
     if std_threshold is None:
-        __v1 = get_threshold_from_gaussian_mixture(__v)
+        v1 = get_threshold_from_gaussian_mixture(v)
     else:
-        _v1 = __v.std() * std_threshold
+        v1 = v.std() * std_threshold
 
     # label each cluster on positiveness for each marker
     labels = {x: "" for x in mean_expr_z.columns}
@@ -691,7 +691,7 @@ def derive_reference_cell_type_labels(
         __s = mean_expr_z[clust].squeeze().sort_values(ascending=False)
         # _sz = (__s - __s.mean()) / __s.std()
         _sz = __s.loc[cell_type_channels]
-        for i in _sz[_sz >= _v1].index:
+        for i in _sz[_sz >= v1].index:
             labels[clust] += i + ", "
 
     # convert from marker positive to named cell types
@@ -721,14 +721,14 @@ def derive_reference_cell_type_labels(
 
     fig, axs = plt.subplots(1, 1, figsize=(3, 3))
     axs.set_title("Distribution of mean expressions")
-    sns.distplot(__v, ax=axs)
-    axs.axvline(__v.mean(), linestyle="--", color="grey")
-    axs.axvline(_v1, linestyle="--", color="red")
+    sns.distplot(v, ax=axs)
+    axs.axvline(v.mean(), linestyle="--", color="grey")
+    axs.axvline(v1, linestyle="--", color="red")
     fig.savefig(output_prefix + "mean_expression_per_cluster.both_z.threshold_position.svg")
 
     cmeans = mean_expr.mean(1).rename("Channel mean")
 
-    __t = mean_expr_z >= _v1
+    t = mean_expr_z >= v1
     kwargs = dict(
         metric="correlation",
         robust=True,
@@ -745,7 +745,7 @@ def derive_reference_cell_type_labels(
             dict(center=0, cmap="RdBu_r", cbar_kws=dict(label="Mean expression (Z-score)")),
         ),
         (
-            __t.loc[__t.any(1), __t.any(0)],
+            t.loc[t.any(1), t.any(0)],
             "both_z.thresholded",
             dict(cmap="binary", linewidths=1, cbar_kws=dict(label="Mean expression (Z-score)")),
         ),
@@ -757,7 +757,7 @@ def derive_reference_cell_type_labels(
     # replot now with labels
     figsize = grid.fig.get_size_inches()
     figsize[1] *= 1.2
-    __t = mean_expr_z_l >= _v1
+    t = mean_expr_z_l >= v1
     kwargs = dict(
         metric="correlation",
         robust=True,
@@ -771,7 +771,7 @@ def derive_reference_cell_type_labels(
     )
     opts = [
         (mean_expr_z_l, "labeled.both_z", dict()),
-        (__t.loc[__t.any(1), __t.any(0)], "labeled.both_z.thresholded", dict()),
+        (t.loc[t.any(1), t.any(0)], "labeled.both_z.thresholded", dict()),
     ]
     for df, label, kwargs2 in opts:
         grid = sns.clustermap(df, **kwargs, **kwargs2)
@@ -1314,3 +1314,36 @@ def cluster_communities(
     #     .reset_index()
     #     .pivot_table(columns=['sample', 'roi'], index='supercommunity', values='count', aggfunc=sum, fill_value=0))
     # rs = rs / rs.sum()
+
+
+def fit_gaussian_mixture(
+    x: Union[Series, DataFrame], n_mixtures: Union[int, List[int]] = 2
+) -> DataFrame:
+    # TODO: paralelize
+    from sklearn.mixture import GaussianMixture
+
+    if isinstance(x, pd.Series):
+        x = x.to_frame()
+    if isinstance(n_mixtures, int):
+        n_mixtures = [n_mixtures] * x.shape[1]
+    expr_thresh = x.astype(int)
+
+    def get_means(num, pred):
+        return num.groupby(pred).mean().sort_values()
+
+    def replace_pred(x, y):
+        means = get_means(x, y)
+        repl = dict(zip(range(len(means)), means.index))
+        y2 = y.replace(repl)
+        new_means = get_means(x, y2)
+        assert all(new_means.index == range(len(new_means)))
+        return y2
+
+    for i, ch in enumerate(x.columns):
+        mix = GaussianMixture(n_mixtures[i])
+        _x = x.loc[:, ch]
+        x2 = _x.values.reshape((-1, 1))
+        mix.fit(x2)
+        y = pd.Series(mix.predict(x2), index=x.index, name="class")
+        expr_thresh[ch] = replace_pred(_x, y)
+    return expr_thresh

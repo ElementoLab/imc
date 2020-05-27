@@ -3,18 +3,14 @@
 """
 """
 
-from collections import Counter
 import os
 import re
-import warnings
 from typing import Union, Tuple, List, Any, Optional, Dict, Sequence
 
-import parmap
 import numpy as np
 import pandas as pd
 import scipy
 from scipy.cluster.hierarchy import fcluster
-import scipy.ndimage
 import scipy.ndimage as ndi
 from scipy.stats import pearsonr
 
@@ -27,7 +23,6 @@ import networkx as nx
 import h5py
 from anndata import AnnData
 import scanpy as sc
-import community
 
 import skimage
 from skimage import exposure
@@ -41,8 +36,7 @@ from tqdm import tqdm
 
 import imctools.io.mcdparser
 
-from imc.exceptions import cast
-from imc.types import Axis, Patch, DataFrame, Series, Array, ColorMap, Figure, Path, GenericType
+from imc.types import DataFrame, Series, Array, Path, GenericType
 
 
 matplotlib.rcParams["svg.fonttype"] = "none"
@@ -56,6 +50,7 @@ DEFAULT_SUPERCOMMUNITY_RESOLUTION = 0.5
 
 
 def cleanup_channel_names(series: Series) -> Series:
+    """Standardize channel naming using a set of defined rules."""
     to_replace = [
         ("-", ""),
         ("_", ""),
@@ -145,15 +140,21 @@ def metal_order_to_channel_labels(
     )
 
 
-def get_threshold_from_gaussian_mixture(x: Array, n_components: int = 2) -> int:
-    from sklearn.mixture import GaussianMixture
+def get_threshold_from_gaussian_mixture(
+    x: Series, y: Optional[Series] = None, n_components: int = 2
+) -> int:
+    x = x.abs().sort_values()
 
-    mix = GaussianMixture(n_components=n_components)
-    x = pd.Series(x.flatten()).abs().sort_values()
-    xx = x.values.reshape((-1, 1))
-    mix.fit(xx)
-    y = mix.predict(xx)
-    return x[(y[:-1] < y[1::]).tolist() + [False]].squeeze()
+    if y is None:
+        from sklearn.mixture import GaussianMixture  # type: ignore
+
+        mix = GaussianMixture(n_components=n_components)
+        xx = x.values.reshape((-1, 1))
+        mix.fit(xx)
+        y = mix.predict(xx)
+    else:
+        y = y.reindex(x.index).values
+    return x.loc[((y[:-1] < y[1::])).tolist() + [False]].squeeze()
 
 
 def sorted_nicely(iterable: Sequence[GenericType]) -> Sequence[GenericType]:

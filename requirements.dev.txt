@@ -6,3 +6,7 @@ mypy
 PyQt5
 pytest
 rich
+
+sphinx
+sphinx-issues
+sphinx-rtd-theme

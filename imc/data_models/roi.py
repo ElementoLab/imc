@@ -470,6 +470,18 @@ class ROI:
             arr = minmax_scale(eq(arr))
         return label, arr
 
+    def _get_channels(self, channels: List[Union[int, str]], **kwargs) -> Tuple[str, Array]:
+        """
+        Convinience function to get signal from various channels.
+        """
+        labels = list()
+        arrays = list()
+        for channel in channels:
+            lab, arr = self._get_channel(channel, **kwargs)
+            labels.append(lab.replace(", ", "-"))
+            arrays.append(arr.squeeze())
+        return (", ".join(labels), np.asarray(arrays))
+
     def get_mean_all_channels(self) -> Array:
         """Get an array with mean of all channels"""
         return eq(self.stack.mean(axis=0))
@@ -725,7 +737,7 @@ class ROI:
 
     def set_clusters(self, clusters: Optional[Series] = None) -> None:
         if clusters is None:
-            cast(self.sample).set_clusters(clusters=clusters, rois=[self])
+            self.sample.set_clusters(clusters=clusters, rois=[self])
         else:
             assert not isinstance(clusters.index, pd.MultiIndex)
             assert clusters.index.name == "obj_id"

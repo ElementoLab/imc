@@ -5,12 +5,16 @@ import sys
 import logging
 
 from joblib import Memory
+import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as _sns
 
 from imc.graphics import colorbar_decorator
 
 plt.rcParams["svg.fonttype"] = "none"
+plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["font.sans-serif"] = ["Arial"]
+plt.rcParams["text.usetex"] = False
 
 
 def setup_logger(level=logging.INFO):

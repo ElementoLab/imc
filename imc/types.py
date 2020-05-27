@@ -41,7 +41,7 @@ class Path(pathlib.Path):
     def endswith(self, string: str) -> bool:
         return str(self).endswith(string)
 
-    def replace_(self, patt: str, repl: str) -> Path:
+    def replace_(self, patt: str, repl: str) -> "Path":
         return Path(str(self).replace(patt, repl))
 
 

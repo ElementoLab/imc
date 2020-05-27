@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from typing import Dict, Tuple, List, Union, Optional, Any
+from typing import Dict, Tuple, List, Union, Optional, Any, Callable, Literal
 import warnings
 from functools import wraps
 
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 
-from imc.types import Series, Array, Figure, Axis, Patch, ColorMap
+from imc.types import DataFrame, Series, Array, Figure, Axis, Patch, ColorMap
 from imc.utils import minmax_scale
 
 DEFAULT_PIXEL_UNIT_NAME = r"$\mu$m"
@@ -55,16 +55,14 @@ SEQUENCIAL_CMAPS = [
 ]
 
 
-def to_color_series(x: pd.Series, cmap: Optional[str] = "Greens") -> pd.Series:
+def to_color_series(x: Series, cmap: Optional[str] = "Greens") -> Series:
     """Map a numeric pandas series to a series of RBG values."""
-    return pd.Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
+    return Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
 
 
 def to_color_dataframe(
-    x: Union[pd.Series, pd.DataFrame],
-    cmaps: Optional[Union[str, List[str]]] = None,
-    offset: int = 0,
-) -> pd.DataFrame:
+    x: Union[Series, DataFrame], cmaps: Optional[Union[str, List[str]]] = None, offset: int = 0,
+) -> DataFrame:
     """Map a numeric pandas DataFrame to RGB values."""
     if isinstance(x, pd.Series):
         x = x.to_frame()
@@ -78,21 +76,25 @@ def to_color_dataframe(
 
 def _add_extra_colorbars_to_clustermap(
     grid: sns.matrix.ClusterGrid,
-    datas: Union[pd.Series, pd.DataFrame],
+    datas: Union[Series, DataFrame],
     cmaps: Optional[Union[str, List[str]]] = None,
-    location="cols",
+    location: str = Union[Literal["col"], Literal["row"]],
 ) -> None:
-    def add(data: pd.Series, cmap: str, bbox: List[List[int]], orientation: str) -> None:
+    """Add either a row or column colorbar to a seaborn Grid."""
+
+    def add(data: Series, cmap: str, bbox: List[List[int]], orientation: str) -> None:
         ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
         norm = matplotlib.colors.Normalize(vmin=data.min(), vmax=data.max())
         cb1 = matplotlib.colorbar.ColorbarBase(
             ax, cmap=plt.get_cmap(cmap), norm=norm, orientation=orientation, label=data.name
         )
 
+    offset = 1 if location == "row" else 0
+
     if isinstance(datas, pd.Series):
         datas = datas.to_frame()
     if cmaps is None:
-        cmaps = SEQUENCIAL_CMAPS[: datas.shape[1]]
+        cmaps = SEQUENCIAL_CMAPS[offset:]
     if isinstance(cmaps, str):
         cmaps = [cmaps]
 
@@ -101,7 +103,7 @@ def _add_extra_colorbars_to_clustermap(
     heat = grid.ax_heatmap.get_position()
     cbar_spacing = 0.05
     cbar_size = 0.025
-    if location in ["col", "cols", "columns"]:
+    if location == "col":
         orientation = "vertical"
         dend = grid.ax_col_dendrogram.get_position()
         y0 = dend.y0
@@ -130,20 +132,25 @@ def _add_extra_colorbars_to_clustermap(
 
 
 def _add_colorbars(
-    grid,
-    rows: pd.DataFrame = None,
-    cols: pd.DataFrame = None,
+    grid: sns.matrix.ClusterGrid,
+    rows: DataFrame = None,
+    cols: DataFrame = None,
     row_cmaps: Optional[List[str]] = None,
     col_cmaps: Optional[List[str]] = None,
 ) -> None:
+    """Add row and column colorbars to a seaborn Grid."""
     if rows is not None:
         _add_extra_colorbars_to_clustermap(grid, rows, location="row", cmaps=row_cmaps)
     if cols is not None:
-        _add_extra_colorbars_to_clustermap(grid, cols, location="cols", cmaps=col_cmaps)
+        _add_extra_colorbars_to_clustermap(grid, cols, location="col", cmaps=col_cmaps)
 
 
-def colorbar_decorator(f):
-    """The actual decorator of seaborn.clustermap"""
+def colorbar_decorator(f: Callable) -> Callable:
+    """
+    Decorate seaborn.clustermap in order to have numeric values passed to the
+    ``row_colors`` and ``col_colors`` arguments translated into row and column
+    annotations and in addition colorbars for the restpective values.
+    """
     # TODO: edit original seaborn.clustermap docstring to document {row,col}_colors_cmaps arguments.
     @wraps(f)
     def clustermap(*args, **kwargs):
@@ -170,9 +177,14 @@ def colorbar_decorator(f):
     return clustermap
 
 
-def add_scale(_ax: Optional[Axis] = None, width: int = 100, unit: str = DEFAULT_PIXEL_UNIT_NAME):
-    """Should be called after plotting"""
-    # these values are scaled from a 1000 x 1000 reference figure
+def add_scale(
+    _ax: Optional[Axis] = None, width: int = 100, unit: str = DEFAULT_PIXEL_UNIT_NAME
+) -> None:
+    """
+    Add a scale bar to a figure.
+    Should be called after plotting (usually with matplotlib.pyplot.imshow).
+    """
+    # these values were optimized with a 1000 x 1000 reference figure
     if _ax is None:
         _ax = plt.gca()
     height = 1 / 40
@@ -196,6 +208,7 @@ def add_scale(_ax: Optional[Axis] = None, width: int = 100, unit: str = DEFAULT_
 
 
 def add_legend(patches: List[Patch], ax: Optional[Axis] = None, **kwargs) -> None:
+    """Add a legend to an existing axis."""
     if ax is None:
         ax = plt.gca()
     _patches = np.asarray(patches)
@@ -210,7 +223,7 @@ def add_legend(patches: List[Patch], ax: Optional[Axis] = None, **kwargs) -> Non
     ax.legend(handles=_patches.tolist(), **defaults)
 
 
-def saturize(arr):
+def saturize(arr: Array):
     for i in range(arr.shape[-1]):
         arr[:, :, i] = minmax_scale(arr[:, :, i])
     return arr
@@ -242,9 +255,8 @@ def rgb_to(arr, to=Tuple[Any, Any, Any]):
 
 def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
-    return tuple(
-        [matplotlib.colors.LinearSegmentedColormap.from_list("", p * r) for p in np.eye(3)]
-    )
+    r = [matplotlib.colors.LinearSegmentedColormap.from_list("", p * r) for p in np.eye(3)]
+    return tuple(r)  # type: ignore
 
 
 def get_dark_cmaps(n: int = 3, from_palette: str = "colorblind") -> List[ColorMap]:
@@ -290,7 +302,7 @@ def numbers_to_rgb_colors(
     if n_colors > len(sns.color_palette(from_palette)):
         warnings.warn("Chosen palette has less than the requested number of colors." "Will reuse!")
 
-    colors = pd.Series(sns.color_palette(from_palette, ident.max())).reindex(ident - 1)
+    colors = Series(sns.color_palette(from_palette, ident.max())).reindex(ident - 1)
     res = np.zeros((mask.shape) + (3,))
     for c, i in zip(colors, ident):
         x, y = np.nonzero(np.isin(mask, i))
@@ -299,9 +311,11 @@ def numbers_to_rgb_colors(
 
 
 def get_grid_dims(dims: int, nstart: Optional[int] = None) -> Tuple[int, int]:
-    """Given a number of `dims` subplots,
-    choose optimal x/y dimentions of plotting grid maximizing in order
-    to be as square as posible and if not with more columns than rows."""
+    """
+    Given a number of `dims` subplots, choose optimal x/y dimentions of plotting
+    grid maximizing in order to be as square as posible and if not with more
+    columns than rows.
+    """
     if nstart is None:
         n = min(dims, 1 + int(np.ceil(np.sqrt(dims))))
     else:
@@ -309,7 +323,7 @@ def get_grid_dims(dims: int, nstart: Optional[int] = None) -> Tuple[int, int]:
     if (n * n) == dims:
         m = n
     else:
-        a = pd.Series(n * np.arange(1, n + 1)) / dims
+        a = Series(n * np.arange(1, n + 1)) / dims
         m = a[a >= 1].index[0] + 1
     assert n * m >= dims
 
