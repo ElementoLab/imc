@@ -31,6 +31,13 @@ install:
 	${MAKE} clean
 	${MAKE} move_models_in
 
+clean_docs:
+	rm -rf docs/build/*
+
+docs:
+	${MAKE} -C docs html
+	xdg-open docs/build/html/index.html
+
 test:
 	python -m pytest imc/
 
@@ -66,4 +73,4 @@ succ: checksuccess
 
 
 .PHONY : move_models_out move_models_in clean_build clean_dist clean_eggs \
-clean _install install run run_locally checkfailure fail checksuccess succ
+clean _install install clean_docs docs run run_locally checkfailure fail checksuccess succ

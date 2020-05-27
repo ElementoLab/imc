@@ -22,15 +22,9 @@ from imc.data_models.roi import ROI
 from imc.types import Path, Figure, Patch, DataFrame, Series, MultiIndexSeries
 
 # from imc import LOGGER
-from imc.operations import (
-    predict_cell_types_from_reference,
-)
+from imc.operations import predict_cell_types_from_reference
 from imc.utils import parse_acquisition_metadata
-from imc.graphics import (
-    get_grid_dims,
-    add_legend,
-    share_axes_by
-)
+from imc.graphics import get_grid_dims, add_legend, share_axes_by
 from imc.exceptions import cast  # TODO: replace with typing.cast
 
 FIG_KWS = dict(dpi=300, bbox_inches="tight")
@@ -95,7 +89,7 @@ class IMCSample:
         self.rois: List["ROI"] = list()
 
         self.anndata: Optional[AnnData] = None
-        self._clusters: Optional[Series] = None
+        self._clusters: Optional[MultiIndexSeries] = None
 
         # Add kwargs as attributes
         self.__dict__.update(kwargs)
@@ -275,12 +269,7 @@ class IMCSample:
     def plot_probabilities_and_segmentation(self, rois: Optional[List["ROI"]] = None) -> Figure:
         n = len(rois or self.rois)
         fig, axes = plt.subplots(
-            n,
-            5,
-            figsize=(5 * 4, 4 * n),
-            gridspec_kw=dict(wspace=0.05),
-            sharex="row",
-            sharey="row",
+            n, 5, figsize=(5 * 4, 4 * n), gridspec_kw=dict(wspace=0.05), sharex="row", sharey="row",
         )
         fig.suptitle(self.name)
         for i, roi in enumerate(self.rois):
@@ -318,7 +307,7 @@ class IMCSample:
     ) -> None:
         id_cols = ["roi", "obj_id"]
         if clusters is None:
-            cast(self.prj).set_clusters(samples=[self])
+            self.prj.set_clusters(samples=[self])
         else:
             assert isinstance(clusters.index, pd.MultiIndex)
             assert clusters.index.names == id_cols
@@ -356,9 +345,7 @@ class IMCSample:
 
         m = self.n_rois + 1
         nrows = 3
-        fig, _ax = plt.subplots(
-            nrows, m, figsize=(4 * m, 4 * nrows), sharex=False, sharey=False
-        )
+        fig, _ax = plt.subplots(nrows, m, figsize=(4 * m, 4 * nrows), sharex=False, sharey=False)
         v = np.nanstd(adj_matrices.drop("roi", axis=1).values)
         kws = dict(
             cmap="RdBu_r",
@@ -389,4 +376,3 @@ class IMCSample:
         _ax[2, -1].axis("off")
         share_axes_by(_ax[1:], "both")
         fig.savefig(output_prefix + "roi_over_mean_rois.image_clustermap.svg", **FIG_KWS)
-
