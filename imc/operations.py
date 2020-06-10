@@ -442,8 +442,8 @@ def single_cell_analysis(
     ann.obs["log_counts"] = np.log10(ann.obs["n_counts"])
 
     # normalize
-    sc.pp.log1p(ann)
     sc.pp.normalize_per_cell(ann, counts_per_cell_after=1e4)
+    sc.pp.log1p(ann)
 
     # Create temporary Anndata for cell type discovery
     ann_ct = ann.copy()
@@ -456,7 +456,7 @@ def single_cell_analysis(
         sc.pp.combat(ann_ct, "sample")
 
     # dim res
-    sc.pp.scale(ann_ct)
+    sc.pp.scale(ann_ct, max_value=10)
     sc.pp.pca(ann_ct)
     sc.pp.neighbors(ann_ct, n_neighbors=8, use_rep="X")
     sc.tl.umap(ann_ct)
