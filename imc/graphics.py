@@ -198,12 +198,12 @@ def add_scale(
         mpatches.Rectangle((xposition, yposition), width, height, color="black", clip_on=False)
     )
     _ax.text(
-        xposition + (width / 2),
+        xposition + width + 10,
         yposition + height + text_separation,
         s=f"{width}{unit}",
-        color="white",
-        ha="center",
-        fontsize=4 * (__h / 1000),
+        color="black",
+        ha="left",
+        fontsize=4,
     )
 
 
