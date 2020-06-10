@@ -6,7 +6,7 @@ Installer script for the ``imc`` library and the ``imcpipeline`` pipeline.
 Install with ``pip install .``.
 """
 
-import sys
+from setuptools import setup, find_packages
 
 
 def parse_requirements(req_file):
@@ -19,22 +19,6 @@ def parse_requirements(req_file):
 REQUIREMENTS_FILE = "requirements.txt"
 DEV_REQUIREMENTS_FILE = "requirements.dev.txt"
 README_FILE = "README.md"
-
-
-# take care of extra required modules depending on Python version
-extra = {}
-try:
-    from setuptools import setup, find_packages
-
-    if sys.version_info < (2, 7):
-        extra["install_requires"] = ["argparse"]
-    if sys.version_info >= (3,):
-        extra["use_2to3"] = True
-except ImportError:
-    from distutils.core import setup
-
-    if sys.version_info < (2, 7):
-        extra["dependencies"] = ["argparse"]
 
 # Requirements
 requirements = parse_requirements(REQUIREMENTS_FILE)
@@ -97,5 +81,4 @@ setup(
         REQUIREMENTS_FILE,
         # "requirements/requirements.test.txt",
     ],
-    **extra
 )

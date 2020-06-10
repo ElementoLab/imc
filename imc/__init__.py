@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+from __future__ import annotations  # fix the type annotatiton of not yet undefined classes
 import os
 import sys
 import logging
