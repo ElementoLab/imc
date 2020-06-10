@@ -4,9 +4,7 @@
 A class to model a imaging mass cytometry project.
 """
 
-from __future__ import annotations  # fix the type annotatiton of not yet undefined classes
 import os
-
 from typing import Tuple, List, Optional, Union  # , cast
 
 import numpy as np  # type: ignore
@@ -40,6 +38,7 @@ DEFAULT_SAMPLE_NAME_ATTRIBUTE = "sample_name"
 DEFAULT_SAMPLE_GROUPING_ATTRIBUTEs = [DEFAULT_SAMPLE_NAME_ATTRIBUTE]
 DEFAULT_TOGGLE_ATTRIBUTE = "toggle"
 DEFAULT_PROCESSED_DIR_NAME = Path("processed")
+DEFAULT_RESULTS_DIR_NAME = Path("results")
 DEFAULT_PRJ_SINGLE_CELL_DIR = Path("single_cell")
 
 DEFAULT_ROI_NAME_ATTRIBUTE = "roi_name"
@@ -83,13 +82,6 @@ class Project:
         List of IMC sample objects.
     """
 
-    # name: str
-    # processed_dir: str
-    # sample_name_attribute: str
-    # toggle: bool
-    # csv_metadata: Optional[str]
-    # samples: List["IMCSample"]
-    # rois: List["ROI"]  # @property
     def __init__(
         self,
         name: str = DEFAULT_PROJECT_NAME,
@@ -100,6 +92,7 @@ class Project:
         channel_labels: Optional[Union[Path, Series]] = None,
         toggle: bool = True,
         processed_dir: Path = DEFAULT_PROCESSED_DIR_NAME,
+        results_dir: Path = DEFAULT_RESULTS_DIR_NAME,
         **kwargs,
     ):
         # Initialize
@@ -126,6 +119,7 @@ class Project:
 
         self.toggle = toggle
         self.processed_dir = Path(processed_dir).absolute()
+        self.results_dir = Path(results_dir).absolute()
         self.quantification: Optional[DataFrame] = None
         self._clusters: Optional[MultiIndexSeries] = None  # MultiIndex: ['sample', 'roi', 'obj_id']
 
@@ -133,6 +127,9 @@ class Project:
             self.samples = list()
         if self.sample_metadata is not None:
             self._initialize_project_from_annotation(**kwargs)
+
+        if self.channel_labels is None:
+            self.set_channel_labels()
 
     def __repr__(self):
         return f"Project '{self.name}' with {len(self.samples)} samples"
@@ -193,7 +190,7 @@ class Project:
             ),
         }
         dir_, suffix = to_read[input_type]
-        return self.processed_dir / dir_ / (self.name + suffix)
+        return self.results_dir / dir_ / (self.name + suffix)
 
     @property
     def rois(self) -> List["ROI"]:
@@ -202,6 +199,13 @@ class Project:
         """
         return [roi for sample in self.samples for roi in sample.rois]
 
+    @property
+    def n_samples(self):
+        return len(self.samples)
+
+    @property
+    def n_rois(self):
+        return len(self.rois)
     def plot_channels(
         self,
         channels: List[str] = ["mean"],
@@ -246,7 +250,7 @@ class Project:
         samples = samples or self.samples
         for sample in samples:
             sample.read_all_inputs(only_these_keys=["probabilities", "cell_mask", "nuclei_mask"])
-        output_dir = Path(output_dir or self.processed_dir / "qc")
+        output_dir = Path(output_dir or self.results_dir / "qc")
         os.makedirs(output_dir, exist_ok=True)
         if not jointly:
             for sample in samples:
@@ -342,8 +346,7 @@ class Project:
             # TODO: add {row,col}_colors colorbar to heatmap
             for kws, label, cbar_label in [({}, "", ""), (def_kwargs, ".z_score", " (Z-score)")]:
                 plot_file = (
-                    self.processed_dir / "qc" / self.name
-                    + f".mean_per_channel.clustermap{label}.svg"
+                    self.results_dir / "qc" / self.name + f".mean_per_channel.clustermap{label}.svg"
                 )
                 grid = sns.clustermap(
                     res,
@@ -411,7 +414,9 @@ class Project:
             cbar_kws=dict(label="Pearson correlation"),
         )
         grid.ax_col_dendrogram.set_title("Pairwise channel correlation\n(pixel level)")
-        grid.savefig(self.processed_dir / "qc" / "channel_pairwise_correlation.svg", **FIG_KWS)
+        grid.savefig(
+            self.results_dir / "qc" / self.name + ".channel_pairwise_correlation.svg", **FIG_KWS
+        )
         grid.fig.grid = grid
         return grid.fig
 
@@ -504,7 +509,7 @@ class Project:
         """
         Derive clusters of single cells based on their channel intensity.
         """
-        output_prefix = Path(output_prefix or self.processed_dir / "single_cell" / self.name)
+        output_prefix = Path(output_prefix or self.results_dir / "single_cell" / self.name)
 
         quantification = None
         if "quantification" in kwargs:
@@ -587,7 +592,7 @@ class Project:
         Derive labels for each identified cluster
         based on its most abundant markers.
         """
-        prefix = self.processed_dir / "single_cell" / self.name
+        prefix = self.results_dir / "single_cell" / self.name
         h5ad_file = Path(h5ad_file or prefix + ".single_cell.processed.h5ad")
         output_prefix = Path(output_prefix or prefix + ".cell_type_reference")
         new_labels = derive_reference_cell_type_labels(h5ad_file, output_prefix, **kwargs)
@@ -616,7 +621,7 @@ class Project:
         sample_attributes = sample_attributes or ["name"]
         samples = samples or self.samples
         rois = [roi for sample in samples for roi in sample.rois]
-        output_prefix = output_prefix or self.processed_dir / "single_cell" / self.name + "."
+        output_prefix = output_prefix or self.results_dir / "single_cell" / self.name + "."
         output_prefix.parent.mkdir(exist_ok=True)
 
         # group samples by desired attributes
@@ -918,7 +923,7 @@ class Project:
         """
         Derive cell adjacency graphs for each ROI.
         """
-        output_prefix = output_prefix or self.processed_dir / "single_cell" / self.name + "."
+        output_prefix = output_prefix or self.results_dir / "single_cell" / self.name + "."
         rois = [r for sample in (samples or self.samples) for r in sample.rois]
         gs = parmap.map(get_adjacency_graph, rois, pm_pbar=True)
         for roi, g in zip(rois, gs):

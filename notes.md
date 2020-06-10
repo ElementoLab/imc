@@ -1,13 +1,13 @@
 ---
 title: Hyperion CyTOF@EIPM
-created: '2020-03-13T20:49:04.079Z'
-modified: '2020-04-24T22:50:25.007Z'
+created: '2020-03-13'
+modified: '2020-05-27'
 ---
 
 # Hyperion CyTOF@EIPM
 
-## Tasks
 
+## Tasks
 
 1. Pipeline
   - Replace second CP call with custom numpy code
@@ -32,19 +32,5 @@ modified: '2020-04-24T22:50:25.007Z'
 0. VAE or similar for unsupervised object detection/tracking
 
 ### Bonus
+
 1. Unify data from various regions of interest (ROI) on same slide
-
-## Ask
- - Panorama?
- - Is CD45 just that or CD45RA? Ie. sometimes there's no signal in clearly immune cells
- - ROI 9: uneven staining, what's the practical thing to do?
-
-## Backburner:
- - get more data
- - re-train model:
-    - 20191212: add crops to train data, make sure uncertainty is uniform
-    - 20191025: ROI 3: very small dense nuclei; remaining ROIS; retrain to make sure nuclei are not too big/clumped
-
-## Info
-
-## Requirements
