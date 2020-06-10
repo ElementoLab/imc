@@ -25,7 +25,7 @@ from anndata import AnnData
 import scanpy as sc
 
 import skimage
-from skimage import exposure
+from skimage.exposure import equalize_hist as eq
 from skimage.future import graph
 import skimage.io
 import skimage.measure
@@ -203,7 +203,7 @@ def read_image_from_file(file: Path, equalize: bool = False) -> Array:
         if min(arr.shape) == arr.shape[-1]:
             arr = np.moveaxis(arr, -1, 0)
     if equalize:
-        arr = exposure.equalize_hist(arr)
+        arr = eq(arr)
     return arr
 
 
@@ -213,7 +213,7 @@ def write_image_to_file(
     if len(arr.shape) != 3:
         skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, arr)
     else:
-        __s = np.multiply(exposure.equalize_hist(arr.mean(axis=0)), 256).astype(np.uint8)
+        __s = np.multiply(eq(arr.mean(axis=0)), 256).astype(np.uint8)
         skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, __s)
         for channel, label in tqdm(enumerate(channel_labels), total=arr.shape[0]):
             skimage.io.imsave(
@@ -318,8 +318,15 @@ def mcd_to_dir(
     mcd_file: Path,
     panel_csv: Path,
     output_dir: Path = None,
+    sample_name: str = None,
     partition_panels: bool = False,
     filter_full: bool = True,
+    keep_original_roi_names: bool = False,
+    allow_empty_rois: bool = True,
+    only_crops: bool = False,
+    n_crops: int = 5,
+    crop_width: int = 500,
+    crop_height: int = 500,
 ) -> None:
     def get_dataframe_from_channels(mcd):
         return pd.DataFrame(
@@ -368,6 +375,10 @@ def mcd_to_dir(
     "typeFlags": 1,\n      "resolution": 0,\n
     "description": ""\n    }\n  ]\n}"""
 
+    panel = pd.read_csv(panel_csv, index_col=0)
+    ilastik_channels = panel.query("ilastik == 1").index
+    mcd = imctools.io.mcdparser.McdParser(mcd_file)
+
     if output_dir is None:
         output_dir = mcd_file.parent / "imc_dir"
     os.makedirs(output_dir, exist_ok=True)
@@ -375,16 +386,24 @@ def mcd_to_dir(
     for d in dirs:
         os.makedirs(output_dir / d, exist_ok=True)
 
-    panel = pd.read_csv(panel_csv, index_col=0)
-    ilastik_channels = panel.query("ilastik == 1").index
-    CROP_WIDTH = CROP_HEIGHT = 500
-    N_RANDOM_CROPS = 5
+    if sample_name is None:
+        sample_name = mcd.meta.metaname
 
-    mcd = imctools.io.mcdparser.McdParser(mcd_file)
-
-    for ac_id in mcd.acquisition_ids:
+    for i, ac_id in enumerate(mcd.acquisition_ids):
         print(ac_id)
-        ac = mcd.get_imc_acquisition(ac_id)
+        try:
+            ac = mcd.get_imc_acquisition(ac_id)
+        except imctools.io.abstractparserbase.AcquisitionError as e:
+            if allow_empty_rois:
+                print(e)
+                continue
+            raise e
+
+        # Get output prefix
+        if keep_original_roi_names:
+            prefix = output_dir / "tiffs" / (ac.image_description.replace(" ", "_") + "_ac")
+        else:
+            prefix = output_dir / "tiffs" / (sample_name + "-" + str(i + 1).zfill(2))
 
         # Filter channels
         channel_labels = build_channel_name(ac)
@@ -401,11 +420,8 @@ def mcd_to_dir(
                 ~(channel_labels.str.contains(r"^\d") | channel_labels.str.contains("<EMPTY>"))
             ].reset_index(drop=True)
 
-        # Save full image as TIFF
-        prefix = output_dir / "tiffs" / (ac.image_description.replace(" ", "_") + "_ac")
-        p = prefix + "_full."
-        ac.save_image(p + "tiff", metals=channel_labels.str.extract(r"\((.*)\)")[0])
-        channel_labels.to_csv(p + "csv")
+        # Filter hot pixels
+        ac._data = np.asarray([clip_hot_pixels(x) for x in ac.data])
 
         # Make input for ilastik training
         to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
@@ -417,11 +433,10 @@ def mcd_to_dir(
         )
         # assert to_exp_ind == to_exp.index.tolist()
 
-        # # clip hot pixels and zoom
+        # # zoom 2x
         s = tuple(x * 2 for x in ac.shape[:-1])
-        full = np.moveaxis(
-            np.asarray([resize(clip_hot_pixels(x), s) for x in ac.data[to_exp_ind]]), 0, -1
-        )
+        full = np.moveaxis(np.asarray([resize(x, s) for x in ac.data[to_exp_ind]]), 0, -1)
+
         # Save input for ilastik prediction
         with h5py.File(prefix + "_ilastik_s2.h5", mode="w") as handle:
             d = handle.create_dataset("stacked_channels", data=full)
@@ -429,16 +444,24 @@ def mcd_to_dir(
 
         # # random crops
         iprefix = output_dir / "ilastik" / (ac.image_description.replace(" ", "_") + "_ac")
-        for i in range(N_RANDOM_CROPS):
-            x = np.random.choice(range(s[0] - CROP_WIDTH))
-            y = np.random.choice(range(s[1] - CROP_HEIGHT))
-            crop = full[x : (x + CROP_WIDTH), y : (y + CROP_HEIGHT), :]
-            assert crop.shape == (CROP_WIDTH, CROP_HEIGHT, len(to_exp))
+        for _ in range(n_crops):
+            x = np.random.choice(range(s[0] - crop_width))
+            y = np.random.choice(range(s[1] - crop_height))
+            crop = full[x : (x + crop_width), y : (y + crop_height), :]
+            assert crop.shape == (crop_width, crop_height, len(to_exp))
             with h5py.File(
-                iprefix + f"_ilastik_x{x}_y{y}_w{CROP_WIDTH}_h{CROP_HEIGHT}.h5", mode="w"
+                iprefix + f"_ilastik_x{x}_y{y}_w{crop_width}_h{crop_height}.h5", mode="w"
             ) as handle:
                 d = handle.create_dataset("stacked_channels", data=crop)
                 d.attrs["axistags"] = H5_YXC_AXISTAG
+        if only_crops:
+            continue
+
+        # Save full image as TIFF
+        p = prefix + "_full."
+        ac.save_image(p + "tiff", metals=channel_labels.str.extract(r"\((.*)\)")[0])
+        channel_labels.to_csv(p + "csv")
+
     mcd.close()
 
     # all_channels_equal(mcd)
@@ -521,7 +544,7 @@ def filter_hot_pixels(img, n_bins=1000):
 #     nuclei, cyto, backgd = arr
 
 #     # make cyto
-#     nuc_cyto = exposure.equalize_hist(nuclei + cyto)
+#     nuc_cyto = eq(nuclei + cyto)
 
 #     # smooth nuclei
 
@@ -537,7 +560,7 @@ def filter_hot_pixels(img, n_bins=1000):
 #     # # local thresholding
 #     from centrosome.threshold import get_threshold
 
-#     nuc = exposure.equalize_hist(nuclei)
+#     nuc = eq(nuclei)
 #     # # #
 #     size_range = (5, 30)
 #     # # # threshold smoothing scale 0
