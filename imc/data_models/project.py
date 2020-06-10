@@ -216,25 +216,34 @@ class Project:
             self.channel_labels = c.iloc[:, 0].rename(self.name)
         else:
             print("Different channels per sample/ROI, not setting `channel_labels`.")
+
     def plot_channels(
         self,
         channels: List[str] = ["mean"],
         samples: Optional[List["IMCSample"]] = None,
         per_sample: bool = False,
+        save: bool = False,
         output_dir: Optional[Path] = None,
+        **kwargs,
     ) -> Figure:
         """
         Plot a list of channels for all Samples/ROIs.
         """
-        output_dir = Path(output_dir or self.processed_dir / "qc")
-        os.makedirs(output_dir, exist_ok=True)
+        if isinstance(channels, str):
+            channels = [channels]
+        output_dir = Path(output_dir or self.results_dir / "qc")
+        if save:
+            os.makedirs(output_dir, exist_ok=True)
+            channels_str = ",".join(channels)
+            fig_file = output_dir / ".".join([self.name, f"all_rois.{channels_str}.pdf"])
         if per_sample:
             for sample in samples or self.samples:
-                fig = sample.plot_channels(channels)
-                # fig.savefig(
-                #     output_dir / ".".join([self.name, sample.name, "all_rois.channel_mean.svg"]),
-                #     **FIG_KWS,
-                # )
+                fig = sample.plot_channels(channels, **kwargs)
+                if save:
+                    fig_file = output_dir / ".".join(
+                        [self.name, sample.name, f"all_rois.{channels_str}.pdf"]
+                    )
+                    fig.savefig(fig_file, **FIG_KWS)
         else:
             rois = [roi for sample in samples or self.samples for roi in getattr(sample, "rois")]
             n, m = get_grid_dims(len(rois))
@@ -243,11 +252,12 @@ class Project:
             i = 0
             j = len(channels)
             for roi in rois:
-                roi.plot_channels(channels, axes=axes[i : i + j])
+                roi.plot_channels(channels, axes=axes[i : i + j], **kwargs)
                 i += 1
             for _ax in axes[i:]:
                 _ax.axis("off")
-            # fig.savefig(output_dir / ".".join([self.name, "all_rois.channel_mean.svg"]), **FIG_KWS)
+            if save:
+                fig.savefig(fig_file, **FIG_KWS)
         return fig
 
     # TODO: write decorator to get/set default outputdir and handle dir creation
@@ -257,9 +267,10 @@ class Project:
         jointly: bool = False,
         output_dir: Optional[Path] = None,
     ):
+        # TODO: adapt to detect whether to plot nuclei mask
         samples = samples or self.samples
-        for sample in samples:
-            sample.read_all_inputs(only_these_keys=["probabilities", "cell_mask", "nuclei_mask"])
+        # for sample in samples:
+        #     sample.read_all_inputs(only_these_keys=["probabilities", "cell_mask", "nuclei_mask"])
         output_dir = Path(output_dir or self.results_dir / "qc")
         os.makedirs(output_dir, exist_ok=True)
         if not jointly:
@@ -314,11 +325,10 @@ class Project:
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
         red_func: str = "mean",
-        channel_blacklist: Optional[List[str]] = None,
+        channel_exclude: Optional[List[str]] = None,
         plot: bool = True,
         **kwargs,
     ) -> Union[DataFrame, Tuple[DataFrame, Figure]]:
-        _res = dict()
         # for sample, _func in zip(samples or self.samples, red_func):
         samples = samples or self.samples
         rois = [
@@ -327,14 +337,21 @@ class Project:
             for r in sample.rois
             if r in (rois or sample.rois)
         ]
+
+        _res = dict()
         for roi in rois:
             _res[roi.name] = pd.Series(
                 getattr(roi.stack, red_func)(axis=(1, 2)), index=roi.channel_labels
             )
         res = pd.DataFrame(_res)
         # filter channels out if requested
-        if channel_blacklist:
-            res = res.loc[res.index[~res.index.str.contains("|".join(channel_blacklist))]]
+        if channel_exclude is not None:
+            # to accomodate strings with especial characters like a parenthesis
+            # (as existing in the metal), exclude exact matches OR containing strings
+            exc = res.index.isin(channel_exclude) | res.index.str.contains(
+                "|".join(channel_exclude)
+            )
+            res = res.loc[res.index[~exc]]
         res = res / res.mean()
 
         if plot:
@@ -368,7 +385,7 @@ class Project:
                     yticklabels=True,
                     **kws,
                 )
-                grid.fig.suptitle("Mean channel intensities")
+                grid.fig.suptitle("Mean channel intensities", y=1.05)
                 grid.savefig(plot_file, dpi=300, bbox_inches="tight")
             grid.fig.grid = grid
             return (res, grid.fig)
@@ -397,7 +414,10 @@ class Project:
         morphos = pd.DataFrame([densities * 1e4, lacunarities, fractal_dimensions]).T
 
     def channel_correlation(
-        self, samples: Optional[List["IMCSample"]] = None, rois: Optional[List["ROI"]] = None
+        self,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
+        channel_exclude: Optional[List[str]] = None,
     ) -> Figure:
         """
         Observe the pairwise correlation of channels across ROIs.
@@ -414,13 +434,17 @@ class Project:
 
         labels = rois[0].channel_labels
         xcorr = pd.DataFrame(np.asarray(res).mean(0), index=labels, columns=labels)
+        if channel_exclude is not None:
+            exc = labels.isin(channel_exclude) | labels.str.contains("|".join(channel_exclude))
+            xcorr = xcorr.loc[labels[~exc], labels[~exc]]
 
         grid = sns.clustermap(
             xcorr,
             cmap="RdBu_r",
             center=0,
             robust=True,
-            metric="correlation",
+            xticklabels=True,
+            yticklabels=True,
             cbar_kws=dict(label="Pearson correlation"),
         )
         grid.ax_col_dendrogram.set_title("Pairwise channel correlation\n(pixel level)")
@@ -462,7 +486,7 @@ class Project:
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
         **kwargs,
-    ):
+    ) -> DataFrame:
         """
         Measure the intensity of each channel in each single cell.
         """
@@ -487,7 +511,7 @@ class Project:
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
         **kwargs,
-    ):
+    ) -> DataFrame:
         """
         Measure the shape parameters of each single cell.
         """
