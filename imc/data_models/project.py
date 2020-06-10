@@ -206,6 +206,16 @@ class Project:
     @property
     def n_rois(self):
         return len(self.rois)
+
+    def set_channel_labels(self) -> None:
+        if not self.samples:
+            print("Project has no samples.")
+            return
+        c = pd.concat([s.channel_labels for s in self.samples], axis=1)
+        if c.T.apply(pd.Series.nunique).all():
+            self.channel_labels = c.iloc[:, 0].rename(self.name)
+        else:
+            print("Different channels per sample/ROI, not setting `channel_labels`.")
     def plot_channels(
         self,
         channels: List[str] = ["mean"],
