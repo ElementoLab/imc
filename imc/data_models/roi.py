@@ -4,9 +4,7 @@
 A class to model a imaging mass cytometry acquired region of interest (ROI).
 """
 
-from __future__ import annotations  # fix the type annotatiton of not yet undefined classes
 import re
-
 from typing import Dict, Tuple, List, Sequence, Optional, Union, Any  # , cast
 
 import numpy as np  # type: ignore
@@ -699,9 +697,17 @@ class ROI:
 
         dna_label, dna = self._get_channel("DNA", dont_warn=True)
 
+        nuclei = self._get_input_filename("nuclei_mask").exists()
+        ncols = 5 if nuclei else 4
+
         if axes is None:
             fig, _axes = plt.subplots(
-                1, 5, figsize=(5 * 4, 4), gridspec_kw=dict(wspace=0.05), sharex=True, sharey=True
+                1,
+                ncols,
+                figsize=(ncols * 4, 4),
+                gridspec_kw=dict(wspace=0.05),
+                sharex=True,
+                sharey=True,
             )
         else:
             _axes = axes
@@ -712,10 +718,13 @@ class ROI:
         _axes[1].imshow(eq(dna))
         _axes[2].set_title("Probabilities")
         _axes[2].imshow(probabilities)
-        _axes[3].set_title("Nuclei")
-        _axes[3].imshow(self.nuclei_mask > 0, cmap="binary")
-        _axes[4].set_title("Cells")
-        _axes[4].imshow(self.cell_mask > 0, cmap="binary")
+        i = 0
+        if nuclei:
+            _axes[3 + i].set_title("Nuclei")
+            _axes[3 + i].imshow(self.nuclei_mask > 0, cmap="binary")
+            i += 1
+        _axes[3 + i].set_title("Cells")
+        _axes[3 + i].imshow(self.cell_mask > 0, cmap="binary")
         # To plot jointly
         # _axes[5].imshow(probabilities)
         # _axes[5].contour(self.cell_mask, cmap="Blues")
