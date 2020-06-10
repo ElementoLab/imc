@@ -4,8 +4,6 @@
 A class to model a imaging mass cytometry sample.
 """
 
-from __future__ import annotations  # fix the type annotatiton of not yet undefined classes
-
 from typing import Dict, Tuple, List, Optional, Union
 
 import numpy as np  # type: ignore
