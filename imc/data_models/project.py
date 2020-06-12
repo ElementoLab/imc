@@ -110,12 +110,12 @@ class Project:
             if isinstance(panel_metadata, (str, Path))
             else panel_metadata
         )
-        # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
-        self.channel_labels: Optional[Series] = (
-            pd.read_csv(channel_labels, index_col=0, squeeze=True)
-            if isinstance(channel_labels, (str, Path))
-            else channel_labels
-        )
+        # # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
+        # self.channel_labels: Optional[Series] = (
+        #     pd.read_csv(channel_labels, index_col=0, squeeze=True)
+        #     if isinstance(channel_labels, (str, Path))
+        #     else channel_labels
+        # )
 
         self.toggle = toggle
         self.processed_dir = Path(processed_dir).absolute()
@@ -128,8 +128,8 @@ class Project:
         if self.sample_metadata is not None:
             self._initialize_project_from_annotation(**kwargs)
 
-        if self.channel_labels is None:
-            self.set_channel_labels()
+        # if self.channel_labels is None:
+        #     self.set_channel_labels()
 
     def __repr__(self):
         return f"Project '{self.name}' with {len(self.samples)} samples"
@@ -173,7 +173,7 @@ class Project:
             for roi in sample.rois:
                 roi.prj = self
                 # If channel labels are given, add them to all ROIs
-                roi._channel_labels = self.channel_labels
+                # roi._channel_labels = self.channel_labels
             self.samples.append(sample)
 
     def _get_input_filename(self, input_type: str) -> Path:
@@ -200,22 +200,24 @@ class Project:
         return [roi for sample in self.samples for roi in sample.rois]
 
     @property
-    def n_samples(self):
+    def n_samples(self) -> int:
         return len(self.samples)
 
     @property
-    def n_rois(self):
+    def n_rois(self) -> int:
         return len(self.rois)
 
-    def set_channel_labels(self) -> None:
-        if not self.samples:
-            print("Project has no samples.")
-            return
-        c = pd.concat([s.channel_labels for s in self.samples], axis=1)
-        if c.T.apply(pd.Series.nunique).all():
-            self.channel_labels = c.iloc[:, 0].rename(self.name)
-        else:
-            print("Different channels per sample/ROI, not setting `channel_labels`.")
+    @property
+    def channel_labels(self) -> Union[Series, DataFrame]:
+        return pd.concat([sample.channel_labels for sample in self.samples], axis=1)
+
+    @property
+    def channel_names(self) -> Union[Series, DataFrame]:
+        return pd.concat([sample.channel_names for sample in self.samples], axis=1)
+
+    @property
+    def channel_metals(self) -> Union[Series, DataFrame]:
+        return pd.concat([sample.channel_metals for sample in self.samples], axis=1)
 
     def plot_channels(
         self,

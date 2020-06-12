@@ -170,6 +170,14 @@ class ROI:
         return self._channel_labels
 
     @property
+    def channel_names(self) -> Series:
+        return self.channel_labels.str.extract(r"^(.*)\(")[0]
+
+    @property
+    def channel_metals(self) -> Series:
+        return self.channel_labels.str.extract(r"^.*\((.*)\)$")[0]
+
+    @property
     def stack(self) -> Array:
         """An ndarray representing the image channel stack."""
         if self._stack is not None:
