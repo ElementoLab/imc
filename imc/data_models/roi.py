@@ -542,6 +542,16 @@ class ROI:
             cell_type_assignments = cell_type_assignments.query(f"roi == {self.roi_number}")
         return cell_type_assignments["cluster"]
 
+    def plot_cell_type(self, cluster) -> Figure:
+        fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+        m = self.clusters == cluster
+        if m.sum() == 0:
+            raise ValueError(f"Cound not find cluster '{cluster}'.")
+        ax.imshow(cell_labels_to_mask(self.cell_mask, m))
+        ax.set_title(cluster)
+        ax.axis("off")
+        return fig
+
     def plot_cell_types(
         self,
         cell_type_assignments: Series = None,
@@ -579,6 +589,7 @@ class ROI:
             ns = pd.Series(range(len(labels)))
 
         # simply plot all cell types jointly
+        # TODO: fix use of cell_type_combinations
         if cell_type_combinations in [None, "all"]:
             combs = [tuple(sorted(clusters.unique()))]
         else:
@@ -689,7 +700,7 @@ class ROI:
         return fig
 
     def plot_probabilities_and_segmentation(
-        self, axes: Optional[Sequence[Axis]] = None
+        self, axes: Optional[Sequence[Axis]] = None, add_scale: bool = True
     ) -> Optional[Figure]:
         """
         Visualize channel mean, DNA channel, segmentation probabilities
@@ -733,6 +744,8 @@ class ROI:
             i += 1
         _axes[3 + i].set_title("Cells")
         _axes[3 + i].imshow(self.cell_mask > 0, cmap="binary")
+        if add_scale:
+            _add_scale(_axes[3 + i])
         # To plot jointly
         # _axes[5].imshow(probabilities)
         # _axes[5].contour(self.cell_mask, cmap="Blues")
@@ -742,8 +755,14 @@ class ROI:
 
         return fig if axes is None else None
 
-    def quantify_cell_intensity(self, **kwargs) -> DataFrame:
+    def quantify_cell_intensity(
+        self, channel_include: List[str] = None, channel_exclude: List[str] = None, **kwargs
+    ) -> DataFrame:
         """Quantify intensity of each cell in each channel."""
+        if channel_include is not None:
+            kwargs["channel_include"] = self.channel_labels.str.contains(channel_include).values
+        if channel_exclude is not None:
+            kwargs["channel_exclude"] = self.channel_labels.str.contains(channel_exclude).values
         return quantify_cells(
             self._get_input_filename("stack"), self._get_input_filename("cell_mask"), **kwargs
         ).rename(columns=self.channel_labels)

@@ -29,6 +29,7 @@ from imc.graphics import (
     get_grid_dims,
     add_legend,
 )
+from imc.utils import align_channels_by_name
 from imc.exceptions import cast  # TODO: replace with typing.cast
 
 FIG_KWS = dict(dpi=300, bbox_inches="tight")
@@ -235,7 +236,7 @@ class Project:
             channels = [channels]
         output_dir = Path(output_dir or self.results_dir / "qc")
         if save:
-            os.makedirs(output_dir, exist_ok=True)
+            output_dir.mkdir(exist_ok=True)
             channels_str = ",".join(channels)
             fig_file = output_dir / ".".join([self.name, f"all_rois.{channels_str}.pdf"])
         if per_sample:
@@ -346,6 +347,10 @@ class Project:
                 getattr(roi.stack, red_func)(axis=(1, 2)), index=roi.channel_labels
             )
         res = pd.DataFrame(_res)
+
+        if res.isnull().any().any():
+            res = align_channels_by_name(res)
+
         # filter channels out if requested
         if channel_exclude is not None:
             # to accomodate strings with especial characters like a parenthesis
@@ -391,6 +396,7 @@ class Project:
                 grid.savefig(plot_file, dpi=300, bbox_inches="tight")
             grid.fig.grid = grid
             return (res, grid.fig)
+        res.index.name = "channel"
         return res
 
     def image_summary(self, samples: Optional[List["IMCSample"]] = None, rois: List["ROI"] = None):
@@ -432,10 +438,13 @@ class Project:
             for r in sample.rois
             if r in (rois or sample.rois)
         ]
-        res = parmap.map(_correlate_channels__roi, rois, pm_pbar=True)
+        _res = parmap.map(_correlate_channels__roi, rois, pm_pbar=True)
 
-        labels = rois[0].channel_labels
-        xcorr = pd.DataFrame(np.asarray(res).mean(0), index=labels, columns=labels)
+        # handling differnet pannels based on channel name
+        # that then makes that concatenating dfs with duplicated names in indeces
+        res = pd.concat([x.groupby(level=0).mean().T.groupby(level=0).mean().T for x in _res])
+        xcorr = res.groupby(level=0).mean().fillna(0)
+        labels = xcorr.index
         if channel_exclude is not None:
             exc = labels.isin(channel_exclude) | labels.str.contains("|".join(channel_exclude))
             xcorr = xcorr.loc[labels[~exc], labels[~exc]]
@@ -574,11 +583,11 @@ class Project:
         if not set_attribute:
             return clusters
 
-        # set clusters for project and propagate for Samples and ROIs
+        # Set clusters for project and propagate for Samples and ROIs.
         # in principle there was no need to pass clusters here as it will be read
-        # however, the CSV serialization might give problems in edge cases, for
+        # however, the CSV roundtrip might give problems in edge cases, for
         # example when the sample name is only integers
-        self.set_clusters(clusters)
+        self.set_clusters(clusters.astype(str))
         return None
 
     @property
@@ -648,6 +657,7 @@ class Project:
         sample_attributes: Optional[List[str]] = None,
         output_prefix: Optional[Path] = None,
         cell_type_percentage_threshold: float = 1.0,
+        channel_exclude: List[str] = None,
     ):
         # TODO: revamp/separate into smaller functions
         import itertools
@@ -676,7 +686,8 @@ class Project:
         )
 
         # Whole channel means
-        channel_means: DataFrame = self.channel_summary(plot=False)
+        channel_means: DataFrame = self.channel_summary(plot=False, channel_exclude=channel_exclude)
+        channel_means.index.name = "channel"
         channel_means = (
             channel_means.reset_index()
             .melt(id_vars="channel", var_name="roi")

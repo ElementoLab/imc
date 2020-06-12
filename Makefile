@@ -71,6 +71,9 @@ checksuccess:
 
 succ: checksuccess
 
+sync:
+	rsync --copy-links --progress -r \
+	. afr4001@pascal.med.cornell.edu:projects/imc
 
 .PHONY : move_models_out move_models_in clean_build clean_dist clean_eggs \
-clean _install install clean_docs docs run run_locally checkfailure fail checksuccess succ
+clean _install install clean_docs docs run run_locally checkfailure fail checksuccess succ sync
