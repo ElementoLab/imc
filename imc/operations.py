@@ -61,11 +61,11 @@ def quantify_cells(
     segmentation_file: Path,
     red_func: str = "mean",
     border_objs: bool = False,
-    channel_include: Optional[Array] = None,  # boolean array for whether to include each channel
+    channel_include: Optional[Array] = None,  # boolean array for channels to include
+    channel_exclude: Optional[Array] = None,  # boolean array for channels to exclude
 ) -> DataFrame:
     """Measure the intensity of each channel in each cell"""
     stack = read_image_from_file(image_file)
-    n_channels = stack.shape[0]
     segmentation = read_image_from_file(segmentation_file)
     if not border_objs:
         segmentation = clear_border(segmentation)
@@ -73,9 +73,16 @@ def quantify_cells(
     cells = np.unique(segmentation)
     # the minus one here is to skip the background "0" label which is also
     # ignored by `skimage.measure.regionprops`.
-    res = np.zeros((len(cells) - 1, n_channels), dtype=int if red_func == "sum" else float)
-    channel_include = np.array([True] * n_channels) if channel_include is None else channel_include
-    for channel in np.arange(stack.shape[0])[channel_include]:
+    n_cells = len(cells) - 1
+    n_channels = stack.shape[0]
+
+    if channel_include is None:
+        channel_include = np.asarray([True] * n_channels)
+    if channel_exclude is None:
+        channel_exclude = np.asarray([False] * n_channels)
+
+    res = np.zeros((n_cells, n_channels), dtype=int if red_func == "sum" else float)
+    for channel in np.arange(stack.shape[0])[channel_include & ~channel_exclude]:
         res[:, channel] = [
             getattr(x.intensity_image, red_func)()
             for x in skimage.measure.regionprops(segmentation, stack[channel])
@@ -97,10 +104,11 @@ def _quantify_cell_morphology__roi(roi: "ROI", **kwargs) -> DataFrame:
     return roi.quantify_cell_morphology(**kwargs).assign(**assignment)
 
 
-def _correlate_channels__roi(roi: "ROI") -> Array:
+def _correlate_channels__roi(roi: "ROI", labels: str = "channel_names") -> DataFrame:
     xcorr = np.corrcoef(roi.stack.reshape((roi.channel_number, -1)))
     np.fill_diagonal(xcorr, 0)
-    return xcorr
+    labs = getattr(roi, labels)
+    return pd.DataFrame(xcorr, index=labs, columns=labs)
 
 
 def measure_cell_attributes(
@@ -289,6 +297,8 @@ def measure_channel_background(
         return metrics_std.mean(1)
 
     output_prefix = cast(output_prefix)
+    if not output_prefix.endswith("."):
+        output_prefix += "."
 
     metrics.to_csv(output_prefix + "channel_background_noise_measurements.csv")
     metrics_std.to_csv(output_prefix + "channel_background_noise_measurements.standardized.csv")
@@ -323,6 +333,8 @@ def measure_channel_background(
             axes[1, i].text(mean.loc[channel], qv2.loc[channel], channel, ha=lab, fontsize=4)
         axes[1, i].axhline(1, linestyle="--", color="grey")
         axes[1, i].set_xscale("log")
+        if qv2.min() > 0.01:
+            axes[1, i].set_yscale("log")
     fig.savefig(output_prefix + "channel_mean_variation_noise.svg", **FIG_KWS)
 
     fig, axes = plt.subplots(1, 2, figsize=(2 * 4, 4))
@@ -338,7 +350,7 @@ def measure_channel_background(
     axes[1].axhline(0, linestyle="--", color="grey")
     fig.savefig(output_prefix + "channel_foreground_background_diff.rankplot.svg", **FIG_KWS)
 
-    grid = sns.clustermap(metrics_std)
+    grid = sns.clustermap(metrics_std, xticklabels=True, yticklabels=True)
     grid.fig.savefig(output_prefix + "channel_mean_variation_noise.clustermap.svg", **FIG_KWS)
     return metrics_std.mean(1)
 
@@ -366,6 +378,7 @@ def single_cell_analysis(
     channel_exclude: List[str] = ["DNA", "<EMPTY>"],
     cluster_min_percentage: float = 1.0,
     leiden_clustering_resolution: float = DEFAULT_SINGLE_CELL_RESOLUTION,
+    plot_only_channels: List[str] = None,
 ) -> MultiIndexSeries:
     """
 
@@ -608,9 +621,8 @@ def single_cell_analysis(
             # **FIG_KWS)
 
     # these take really long to be saved
-    sc_kwargs = dict(
-        color=variables + ann_ct.var.index.tolist(), show=False, return_fig=True, use_raw=True
-    )
+    markers = ann_ct.var.index.tolist() if plot_only_channels is None else plot_only_channels
+    sc_kwargs = dict(color=variables + markers, show=False, return_fig=True, use_raw=True)
     fig = sc.pl.pca(ann, **sc_kwargs)
     rasterize_scanpy(fig)
     fig.savefig(output_prefix + "cell.pca.all_channels.pdf", **FIG_KWS)
@@ -909,9 +921,9 @@ def get_adjacency_graph(
         output_prefix += "."
     os.makedirs(output_prefix.parent, exist_ok=True)
 
-    if not hasattr(roi, "clusters"):
-        # LOGGER.info("Reading cluster assignments from disk.")
-        roi.set_clusters()
+    # if not hasattr(roi, "clusters"):
+    #     # LOGGER.info("Reading cluster assignments from disk.")
+    #     roi.set_clusters()
 
     mask = roi.cell_mask
 

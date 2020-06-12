@@ -401,12 +401,17 @@ def plot_overlayied_channels(
 
 
 def rasterize_scanpy(fig: Figure) -> None:
-    clss = (matplotlib.text.Text, matplotlib.axis.XAxis, matplotlib.axis.YAxis)
-    for axs in fig.axes:
-        for __c in axs.get_children():
-            if not isinstance(__c, clss):
-                if not __c.get_children():
-                    __c.set_rasterized(True)
-                for _cc in __c.get_children():
-                    if not isinstance(__c, clss):
-                        _cc.set_rasterized(True)
+    # TODO: avoid rasterization of matplotlib.offsetbox.VPacker at least
+    import warnings
+
+    with warnings.catch_warnings(record=False) as w:
+        warnings.simplefilter("always")
+        clss = (matplotlib.text.Text, matplotlib.axis.XAxis, matplotlib.axis.YAxis)
+        for axs in fig.axes:
+            for __c in axs.get_children():
+                if not isinstance(__c, clss):
+                    if not __c.get_children():
+                        __c.set_rasterized(True)
+                    for _cc in __c.get_children():
+                        if not isinstance(__c, clss):
+                            _cc.set_rasterized(True)
