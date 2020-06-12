@@ -713,7 +713,11 @@ class Project:
                     am = a.mean()
                     bm = b.mean()
                     means = [am, bm, np.log2(a.mean() / b.mean())]
-                    _res.append([attribute, channel, group1, group2, *means, *mannwhitneyu(a, b)])
+                    try:
+                        mu = mannwhitneyu(a, b)
+                    except ValueError:
+                        mu = (np.nan, np.nan)
+                    _res.append([attribute, channel, group1, group2, *means, *mu])
         cols = [
             "attribute",
             "channel",
@@ -763,7 +767,11 @@ class Project:
                     am = a.mean()
                     bm = b.mean()
                     means = [am, bm, np.log2(a.mean() / b.mean())]
-                    _res.append([attribute, cluster, group1, group2, *means, *mannwhitneyu(a, b)])
+                    try:
+                        mu = mannwhitneyu(a, b)
+                    except ValueError:
+                        mu = (np.nan, np.nan)
+                    _res.append([attribute, cluster, group1, group2, *means, *mu])
         cols = [
             "attribute",
             "cluster",
@@ -852,7 +860,7 @@ class Project:
             .max()
         )
         fig, axes = plt.subplots(
-            n, m, figsize=(m * 5, n * 5), squeeze=False, sharex="row", sharey="row"
+            n, m, figsize=(m * 5, n * 5), squeeze=False,  # sharex="row", sharey="row"
         )
         fig.suptitle("Changes in mean channel intensity")
         for i, attribute in enumerate(sample_attributes):
@@ -893,7 +901,7 @@ class Project:
             .max()
         )
         fig, axes = plt.subplots(
-            n, m, figsize=(m * 5, n * 5), squeeze=False, sharex="row", sharey="row"
+            n, m, figsize=(m * 5, n * 5), squeeze=False,  # sharex="row", sharey="row"
         )
         fig.suptitle("Changes in cell type composition\nfor each cell type")
         for i, attribute in enumerate(sample_attributes):
@@ -938,6 +946,9 @@ class Project:
             cluster_densities,
             metric="correlation",
             cbar_kws=dict(label="Cells per area unit (x1e4)"),
+            robust=True,
+            xticklabels=True,
+            yticklabels=True,
         )
         grid.savefig(output_prefix + f"cell_type_abundance.by_area.svg", **FIG_KWS)
 
@@ -948,6 +959,9 @@ class Project:
             cmap="RdBu_r",
             center=0,
             cbar_kws=dict(label="Cells per area unit (Z-score)"),
+            robust=True,
+            xticklabels=True,
+            yticklabels=True,
         )
         grid.savefig(output_prefix + f"cell_type_abundance.by_area.zscore.svg", **FIG_KWS)
 
