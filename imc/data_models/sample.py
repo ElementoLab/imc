@@ -238,8 +238,46 @@ class IMCSample:
             _ax.axis("off")
         return fig
 
-    def plot_channels(self, channels, rois: Optional[List["ROI"]] = None):
-        raise NotImplementedError
+    def plot_channels(
+        self,
+        channels: List[str] = ["mean"],
+        rois: Optional[List["ROI"]] = None,
+        per_roi: bool = False,
+        save: bool = False,
+        output_dir: Optional[Path] = None,
+        **kwargs,
+    ) -> Figure:
+        """
+        Plot a list of channels for all ROIs.
+        """
+        rois = rois or self.rois
+        if isinstance(channels, str):
+            channels = [channels]
+        if save:
+            output_dir = Path(output_dir or self.prj.results_dir / "qc")
+            output_dir.mkdir(exist_ok=True)
+            channels_str = ",".join(channels)
+            fig_file = output_dir / ".".join([self.name, f"all_rois.{channels_str}.pdf"])
+        if per_roi:
+            for roi in rois:
+                fig = roi.plot_channels(channels, **kwargs)
+                if save:
+                    fig_file = output_dir / ".".join([self.name, roi.name, channels_str, "pdf"])
+                    fig.savefig(fig_file, **FIG_KWS)
+        else:
+            i = 0
+            j = len(channels)
+            n, m = get_grid_dims(len(rois) * j)
+            fig, axes = plt.subplots(n, m, figsize=(4 * m, 4 * n))
+            axes = axes.flatten()
+            for roi in rois:
+                roi.plot_channels(channels, axes=axes[i : i + j], **kwargs)
+                i += j
+            for _ax in axes[i:]:
+                _ax.axis("off")
+            if save:
+                fig.savefig(fig_file, **FIG_KWS)
+        return fig
 
     def plot_cell_types(
         self,
@@ -247,7 +285,7 @@ class IMCSample:
         cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
         cell_type_assignments: Optional[DataFrame] = None,
         palette: Optional[str] = "tab20",
-    ):
+    ) -> Figure:
         rois = rois or self.rois
 
         n = len(cell_type_combinations or [1])
@@ -264,18 +302,20 @@ class IMCSample:
         add_legend(patches, axes[0, -1])
         return fig
 
-    def plot_probabilities_and_segmentation(self, rois: Optional[List["ROI"]] = None) -> Figure:
+    def plot_probabilities_and_segmentation(
+        self, rois: Optional[List["ROI"]] = None, add_scale: bool = True
+    ) -> Figure:
         n = len(rois or self.rois)
         fig, axes = plt.subplots(
-            n, 5, figsize=(5 * 4, 4 * n), gridspec_kw=dict(wspace=0.05), sharex="row", sharey="row",
+            n, 5, figsize=(5 * 4, n * 4), gridspec_kw=dict(wspace=0.05), sharex="row", sharey="row",
         )
         fig.suptitle(self.name)
         for i, roi in enumerate(self.rois):
-            roi.plot_probabilities_and_segmentation(axes=axes[i])
+            roi.plot_probabilities_and_segmentation(axes=axes[i], add_scale=add_scale)
         return fig
 
-    def cell_to_anndata(self, red_func="mean", set_attribute: bool = False):
-        _df = self.quantify_cell_intensity(func=red_func)
+    def cell_to_anndata(self, red_func="mean", set_attribute: bool = False, **kwargs):
+        _df = self.quantify_cell_intensity(func=red_func, **kwargs)
         _an = AnnData(_df.drop("roi", axis=1).sort_index(axis=1))
         _an.obs["roi"] = pd.Categorical(_df["roi"].values)
         _an.raw = _an
