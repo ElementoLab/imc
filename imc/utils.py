@@ -140,6 +140,40 @@ def metal_order_to_channel_labels(
     )
 
 
+def align_channels_by_name(res: DataFrame, channel_axis=0) -> DataFrame:
+    if channel_axis not in [0, 1]:
+        raise ValueError("Axis must be one of 0 or 1.")
+    if res.isnull().any().any():
+        print("Matrix contains NaN values, likely various pannels.")
+        if channel_axis == 0:
+            miss = res.index[res.isnull().any(axis=1)]
+        else:
+            miss = res.columns[res.isnull().any(axis=0)]
+        # if there's an even number of channels with NaNs
+        if len(miss) % 2 == 0:
+            ex = miss.str.extract(r"^(.*)\(")[0]
+            # if all channel *names* come in pairs
+            if (ex.value_counts() == 2).all():
+                print("Found matching channel names in different metals, will align.")
+                # try to match channel swaps
+                for ch in ex.unique():
+                    original = miss[miss.str.startswith(ch)]
+                    chs = "-".join(original.str.extract(r"^.*\((.*)\)")[0].tolist())
+                    new_ch_name = ch + "(" + chs + ")"
+                    # add joined values
+                    if channel_axis == 0:
+                        res.loc[new_ch_name] = (
+                            res.loc[original].T.stack().reset_index(level=1, drop=True)
+                        )
+                    else:
+                        res.loc[:, new_ch_name] = (
+                            res.loc[:, original].T.stack().reset_index(level=1, drop=True)
+                        )
+                    # drop original rows
+                    res = res.drop(original, axis=channel_axis)
+    return res
+
+
 def get_threshold_from_gaussian_mixture(
     x: Series, y: Optional[Series] = None, n_components: int = 2
 ) -> int:
