@@ -99,6 +99,9 @@ class IMCSample:
     def __repr__(self):
         return f"Sample '{self.name}' with {len(self.rois)} ROIs"
 
+    def __getitem__(self, item: int) -> "ROI":
+        return self.rois[item]
+
     def _initialize_sample_from_annotation(self, toggle: Optional[bool] = None) -> None:
         metadata = pd.DataFrame(self.metadata)  # this makes the type explicit
         if toggle:
