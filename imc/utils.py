@@ -49,6 +49,13 @@ DEFAULT_SUPERCOMMUNITY_RESOLUTION = 0.5
 # DEFAULT_SUPER_COMMUNITY_NUMBER = 12
 
 
+def filter_kwargs_by_callable(kwargs: Dict, callabl: Callable, exclude: List[str] = None):
+    from inspect import signature
+
+    args = signature(callabl).parameters.keys()
+    return {k: v for k, v in kwargs.items() if (k in args) and k not in (exclude or [])}
+
+
 def cleanup_channel_names(series: Series) -> Series:
     """Standardize channel naming using a set of defined rules."""
     to_replace = [
