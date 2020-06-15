@@ -135,6 +135,9 @@ class Project:
     def __repr__(self):
         return f"Project '{self.name}' with {len(self.samples)} samples"
 
+    def __getitem__(self, item: int) -> "IMCSample":
+        return self.samples[item]
+
     def _initialize_project_from_annotation(
         self,
         toggle: Optional[bool] = None,
