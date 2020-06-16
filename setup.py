@@ -36,12 +36,12 @@ setup(
         "write_to": "imc/_version.py",
         "write_to_template": '__version__ = "{version}"\n',
     },
-    entry_points={
-        "console_scripts": [
-            "imcrunner = imcpipeline.runner:main",
-            "imcpipeline = imcpipeline.pipeline:main",
-        ]
-    },
+    # entry_points={
+    #     "console_scripts": [
+    #         "imcrunner = imcpipeline.runner:main",
+    #         "imcpipeline = imcpipeline.pipeline:main",
+    #     ]
+    # },
     description="A pipeline and utils for IMC data analysis.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -58,16 +58,17 @@ setup(
         [
             "computational biology",
             "bioinformatics",
+            "imaging mass cytometry",
             "imaging",
             "mass cytometry",
             "mass spectrometry",
         ]
     ),
-    url="https://github.com/elementolab/hyperion-cytof",
+    url="https://github.com/elementolab/imc",
     project_urls={
-        "Bug Tracker": "https://github.com/elementolab/hyperion-cytof/issues",
+        "Bug Tracker": "https://github.com/elementolab/imc/issues",
         # "Documentation": "https://imc.readthedocs.io",
-        "Source Code": "https://github.com/elementolab/hyperion-cytof",
+        "Source Code": "https://github.com/elementolab/imc",
     },
     author=u"Andre Rendeiro",
     author_email="andre.rendeiro@pm.me",
