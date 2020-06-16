@@ -42,7 +42,7 @@ class TestProjectInitialization:
         r = ROI()
         assert r.name == DEFAULT_ROI_NAME
 
-    def test_creation_without_rois():
+    def test_creation_without_rois(self):
         p = generate_project(return_object=True)
         p2 = Project(p.metadata[["sample_name"]].drop_duplicates(), processed_dir=p.processed_dir)
         assert len(p2.samples) == 3

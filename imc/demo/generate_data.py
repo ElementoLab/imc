@@ -121,10 +121,10 @@ def visualize_roi(mask: Array, stack: Array) -> Figure:
 def generate_project(
     name: str = None,
     n_samples: int = 3,
-    n_rois_per_sample: int = 3,
+    rois_per_sample: int = 3,
     root_dir: Path = None,
     sample_names: List[str] = None,
-    return_object: bool = False,
+    return_object: bool = True,
     visualize: bool = False,
     **kwargs,
 ) -> Union[Project, Path]:
@@ -146,7 +146,7 @@ def generate_project(
     for sample in sample_names:
         tiffs_dir = processed_dir / sample / "tiffs"
         tiffs_dir.mkdir(exist_ok=True, parents=True)
-        for roi in range(1, n_rois_per_sample + 1):
+        for roi in range(1, rois_per_sample + 1):
             roi_name = f"{sample}-{str(roi).zfill(2)}"
             output_prefix = tiffs_dir / roi_name
             mask = generate_mask(**filter_kws(kwargs, generate_mask))
@@ -164,7 +164,7 @@ def generate_project(
         Project(
             metadata=meta_dir / "samples.csv",
             processed_dir=processed_dir,
-            results_dir=processed_dir / ".." / "results",
+            results_dir=processed_dir.parent / "results",
         )
         if return_object
         else root_dir
