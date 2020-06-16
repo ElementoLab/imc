@@ -27,6 +27,7 @@ from imc.exceptions import cast  # TODO: replace with typing.cast
 
 FIG_KWS = dict(dpi=300, bbox_inches="tight")
 
+DEFAULT_SAMPLE_NAME = "sample"
 DEFAULT_ROI_NAME_ATTRIBUTE = "roi_name"
 DEFAULT_ROI_NUMBER_ATTRIBUTE = "roi_number"
 
@@ -54,8 +55,8 @@ class IMCSample:
 
     def __init__(
         self,
-        sample_name: str,
-        root_dir: Path,
+        sample_name: str = DEFAULT_SAMPLE_NAME,
+        root_dir: Optional[Path] = None,
         csv_metadata: Optional[Union[Path, DataFrame]] = None,
         roi_name_atribute: str = DEFAULT_ROI_NAME_ATTRIBUTE,
         roi_number_atribute: str = DEFAULT_ROI_NUMBER_ATTRIBUTE,
@@ -66,9 +67,9 @@ class IMCSample:
     ):
         self.name: str = str(sample_name)
         self.sample_name: str = sample_name
-        self.root_dir = Path(root_dir).absolute()
+        self.root_dir = Path(root_dir).absolute() if root_dir is not None else None
         self.metadata: Optional[DataFrame] = (
-            pd.read_csv(csv_metadata) if isinstance(csv_metadata, str) else csv_metadata
+            pd.read_csv(csv_metadata) if isinstance(csv_metadata, (str, Path)) else csv_metadata
         )
         self.roi_name_atribute = roi_name_atribute
         self.roi_number_atribute = roi_number_atribute
@@ -93,8 +94,7 @@ class IMCSample:
         self.__dict__.update(kwargs)
 
         # initialize
-        if self.metadata is not None:
-            self._initialize_sample_from_annotation()
+        self._initialize_sample_from_annotation()
 
     def __repr__(self):
         return f"Sample '{self.name}' with {len(self.rois)} ROIs"
@@ -102,8 +102,26 @@ class IMCSample:
     def __getitem__(self, item: int) -> "ROI":
         return self.rois[item]
 
+    def _detect_rois(self) -> DataFrame:
+        if self.root_dir is None:
+            print(f"Sample does not have `root_dir`. Cannot find ROIs for sample '{self.name}'.")
+            return pd.DataFrame()
+        d = self.root_dir / "tiffs"
+        df = pd.Series(d.glob("*_full.tiff")).to_frame()
+        if df.empty:
+            print(f"Could not find ROIs for sample '{self.name}'.")
+            return df
+        df["name"] = df[0].apply(lambda x: x.name.replace("_full.tiff", ""))
+        df["number"] = df["name"].str.extract(r"-(\d+)")[0].astype(int)
+        df = df.sort_values("number", ignore_index=True)[["name", "number"]]
+        df.columns = [DEFAULT_ROI_NAME_ATTRIBUTE, DEFAULT_ROI_NUMBER_ATTRIBUTE]
+        return df
+
     def _initialize_sample_from_annotation(self, toggle: Optional[bool] = None) -> None:
-        metadata = pd.DataFrame(self.metadata)  # this makes the type explicit
+        if self.metadata is None:
+            metadata = self._detect_rois()
+        else:
+            metadata = pd.DataFrame(self.metadata)  # this makes the type explicit
         if toggle:
             metadata = metadata[metadata[DEFAULT_TOGGLE_ATTRIBUTE]]
 
@@ -116,7 +134,9 @@ class IMCSample:
                 root_dir=self.root_dir,
                 sample=self,
                 prj=self.prj,
-                **row.drop(["roi_name", "roi_number"], errors="ignore").to_dict(),
+                **row.drop(
+                    [DEFAULT_ROI_NAME_ATTRIBUTE, DEFAULT_ROI_NUMBER_ATTRIBUTE], errors="ignore"
+                ).to_dict(),
             )
             self.rois.append(roi)
 

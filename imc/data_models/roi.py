@@ -40,6 +40,7 @@ FIG_KWS = dict(dpi=300, bbox_inches="tight")
 
 # processed directory structure
 SUBFOLDERS_PER_SAMPLE = True
+DEFAULT_ROI_NAME = "roi"
 ROI_STACKS_DIR = Path("tiffs")
 ROI_MASKS_DIR = Path("tiffs")
 ROI_UNCERTAINTY_DIR = Path("uncertainty")
@@ -84,11 +85,11 @@ class ROI:
 
     def __init__(
         self,
-        name: str,
-        roi_number: int,
+        name: str = DEFAULT_ROI_NAME,
+        roi_number: Optional[int] = None,
         channel_labels: Optional[Union[Path, Series]] = None,
         root_dir: Optional[Path] = None,
-        stacks_dir: Optional[Path] = ROI_STACKS_DIR,
+        stacks_dir: Optional[Path] = ROI_STACKS_DIR,  # TODO: make these relative to the root_dir
         masks_dir: Optional[Path] = ROI_MASKS_DIR,
         single_cell_dir: Optional[Path] = ROI_SINGLE_CELL_DIR,
         sample: Optional["IMCSample"] = None,
@@ -129,8 +130,10 @@ class ROI:
         self.__dict__.update(kwargs)
 
     def __repr__(self):
-        return f"Region '{self.roi_number}'" + (
-            f" of sample '{self.sample.name}'" if self.sample is not None else ""
+        return (
+            f"Region"
+            + (str(self.roi_number) if self.roi_number is not None else "")
+            + (f" of sample '{self.sample.name}'" if self.sample is not None else "")
         )
 
     @property

@@ -85,12 +85,11 @@ class Project:
 
     def __init__(
         self,
+        metadata: Optional[Union[Path, DataFrame]] = None,
         name: str = DEFAULT_PROJECT_NAME,
-        sample_metadata: Optional[Union[Path, DataFrame]] = None,
         sample_name_attribute: str = DEFAULT_SAMPLE_NAME_ATTRIBUTE,
-        sample_grouping_attributes: Optional[List[str]] = DEFAULT_SAMPLE_GROUPING_ATTRIBUTEs,
+        sample_grouping_attributes: Optional[List[str]] = None,
         panel_metadata: Optional[Union[Path, DataFrame]] = None,
-        channel_labels: Optional[Union[Path, Series]] = None,
         toggle: bool = True,
         processed_dir: Path = DEFAULT_PROCESSED_DIR_NAME,
         results_dir: Path = DEFAULT_RESULTS_DIR_NAME,
@@ -98,14 +97,12 @@ class Project:
     ):
         # Initialize
         self.name = name
-        self.sample_metadata = (
-            pd.read_csv(sample_metadata)
-            if isinstance(sample_metadata, (str, Path))
-            else sample_metadata
-        )
+        self.metadata = pd.read_csv(metadata) if isinstance(metadata, (str, Path)) else metadata
         self.samples: List["IMCSample"] = list()
         self.sample_name_attribute = sample_name_attribute
-        self.sample_grouping_attributes = sample_grouping_attributes
+        self.sample_grouping_attributes = (
+            sample_grouping_attributes or DEFAULT_SAMPLE_GROUPING_ATTRIBUTEs
+        )
         self.panel_metadata: Optional[DataFrame] = (
             pd.read_csv(panel_metadata, index_col=0)
             if isinstance(panel_metadata, (str, Path))
@@ -126,8 +123,14 @@ class Project:
 
         if not hasattr(self, "samples"):
             self.samples = list()
-        if self.sample_metadata is not None:
+        if self.metadata is not None:
             self._initialize_project_from_annotation(**kwargs)
+        if not self.rois:
+            print(
+                "Could not find ROIs for any of the samples. "
+                "Either pass metadata with one row per ROI, "
+                "or set `processed_dir` in order for ROIs to be discovered."
+            )
 
         # if self.channel_labels is None:
         #     self.set_channel_labels()
@@ -144,32 +147,29 @@ class Project:
         sample_grouping_attributes: Optional[List[str]] = None,
         **kwargs,
     ):
-        def cols_with_unique_values(dfs) -> set:
+        def cols_with_unique_values(dfs: DataFrame) -> set:
             return {col for col in dfs if len(dfs[col].unique()) == 1}
 
-        if (toggle or self.toggle) and ("toggle" in self.sample_metadata.columns):
+        if (toggle or self.toggle) and ("toggle" in self.metadata.columns):
             # TODO: logger.info("Removing samples without toggle active")
-            self.sample_metadata = self.sample_metadata[
-                self.sample_metadata[DEFAULT_TOGGLE_ATTRIBUTE]
-            ]
+            self.metadata = self.metadata[self.metadata[DEFAULT_TOGGLE_ATTRIBUTE]]
 
         sample_grouping_attributes = (
             sample_grouping_attributes
             or self.sample_grouping_attributes
-            or self.sample_metadata.columns.tolist()
+            or self.metadata.columns.tolist()
         )
-
-        for _, idx in self.sample_metadata.groupby(sample_grouping_attributes).groups.items():
-            rows = self.sample_metadata.loc[idx]
+        for _, idx in self.metadata.groupby(sample_grouping_attributes).groups.items():
+            rows = self.metadata.loc[idx]
             const_cols = cols_with_unique_values(rows)
-            row = rows[const_cols].drop_duplicates().squeeze()
+            row = rows[const_cols].drop_duplicates().squeeze(axis=0)
 
             sample = IMCSample(
                 sample_name=row[self.sample_name_attribute],
                 root_dir=(self.processed_dir / str(row[self.sample_name_attribute]))
                 if SUBFOLDERS_PER_SAMPLE
                 else self.processed_dir,
-                csv_metadata=rows,
+                csv_metadata=rows if rows.shape[0] > 1 else None,
                 **kwargs,
                 **row.drop("sample_name", errors="ignore").to_dict(),
             )

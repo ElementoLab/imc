@@ -57,8 +57,7 @@ def generate_stack(
     assert sum([len(x) for x in ct_cells.values()]) == n_cells
 
     # assign intensity values
-    stack = np.zeros((n_channels,) + mask.shape)
-    intercept = 50
+    stack = np.zeros((n_channels,) + mask.shape, dtype=float)
     std_sd = 0.1
     if channel_coeffs is None:
         channel_coeffs = np.random.choice(np.linspace(-5, 5), n_channels)
@@ -68,9 +67,12 @@ def generate_stack(
         cell_type_coeffs = np.random.choice(np.linspace(-5, 5), n_cell_types)
     if cell_type_std is None:
         cell_type_std = np.abs(cell_type_coeffs) * std_sd
-    means = intercept + np.dot(
+    # means = intercept + np.dot(
+    means = np.dot(
         channel_coeffs.reshape((-1, n_channels)).T, cell_type_coeffs.reshape((-1, n_cell_types))
     )
+    intercept = np.abs(means.min()) * 2
+    means += intercept
     stds = channel_std.reshape((-1, n_channels)).T + cell_type_std.reshape((-1, n_cell_types))
 
     for cell_type in range(n_cell_types):
@@ -80,8 +82,10 @@ def generate_stack(
                 means[channel, cell_type], stds[channel, cell_type], n
             )
 
-    # make sure array is non-zero
-    stack += abs(stack.min())
+    # make sure array is non-negative
+    if stack.min() < 0:
+        stack[stack == 0] = stack.min()
+        stack += abs(stack.min())
     return stack
 
 
@@ -158,7 +162,7 @@ def generate_project(
     meta.to_csv(meta_dir / "samples.csv")
     return (
         Project(
-            sample_metadata=meta_dir / "samples.csv",
+            metadata=meta_dir / "samples.csv",
             processed_dir=processed_dir,
             results_dir=processed_dir / ".." / "results",
         )

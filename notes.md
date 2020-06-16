@@ -4,13 +4,48 @@ created: '2020-03-13'
 modified: '2020-05-27'
 ---
 
-# Hyperion CyTOF@EIPM
+# `imc` package
+
+
+1. Tests:
+ - make sure every object is serializable e.g. parmap compatible
+
+1. Add a sense of total intensity to roi.plot_channel. Maybe make `_get_channel` return also the max value and add that to a corner?
+1. Make plot_channels accept Series
+2. Implement Sample.plot_channels
+1. Decorator to enforce type str -> Path in functions
+3. Reveamp ROI.plot_cell_types
+2. Function rgb_to:
+```python
+# x = roi._get_channels(['CD11b', 'CD31', 'Mast'])[1]
+x = roi._get_channels([0, 1, 2])[1]
+x = np.log1p(x)
+for i in range(x.shape[0]):
+    x[i] = (x[i] - x[i].min()) / (x[i].max() - x[i].min())
+
+# now convert to any color
+fig, axes = plt.subplots(1, 1, figsize=(4, 4))
+axes.imshow(np.moveaxis(x, 0, -1), rasterized=True)
+axes.axis("off")
+```
+
+2. For GMM fit several `k` choose optimal e.g. https://scikit-learn.org/stable/auto_examples/mixture/plot_gmm_selection.html
 
 
 ## Tasks
 
 1. Pipeline
   - Replace second CP call with custom numpy code
+
+
+1. Data storage in object
+  - xarray, zarr
+
+1. Extract manual labels from ilastik models
+  - extract positions
+  - relate to original large image, not crop
+  - use for validation of VAE or whatever  
+
 0. Quantification
   - Filter small cells?
   - Add shape/eccentricity to quantification step by default?
