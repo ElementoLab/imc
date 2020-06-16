@@ -33,34 +33,38 @@ python -m pytest --pyargs imc
 
 ## Quick start
 
-
 ### Demo data
 ```python
 >>> from imc.demo import generate_project
 >>> prj = generate_project(n_samples=2, n_rois_per_sample=3, dims=(8, 8))
 >>> prj
 Project 'project' with 2 samples and 6 ROIs in total.
->>> prj.samples
+
+>>> prj.samples  # type: List[IMCSample]
 [Sample 'test_sample_01' with 3 ROIs,
  Sample 'test_sample_02' with 3 ROIs]
->>> prj.rois
+
+>>> prj.rois  # type: List[ROI]
 [Region1 of sample 'test_sample_01',
  Region2 of sample 'test_sample_01',
  Region3 of sample 'test_sample_01',
  Region1 of sample 'test_sample_02',
  Region2 of sample 'test_sample_02',
  Region3 of sample 'test_sample_02']
->>> prj.samples[0].rois
+
+>>> prj.samples[0].rois  # type: List[ROI]
 [Region1 of sample 'test_sample_01',
  Region2 of sample 'test_sample_01',
  Region3 of sample 'test_sample_01']
+
 >>> roi = prj.rois[0]  # Let's assign one ROI to explore it
->>> roi.channel_labels  # pandas.Series, `channel_names`, `channel_metals` also available
+>>> roi.channel_labels  # type: pandas.Series; `channel_names`, `channel_metals` also available
 0    Ch01(Ch01)
 1    Ch02(Ch02)
 2    Ch03(Ch03)
 Name: channel, dtype: object
->>> roi.mask  # numpy.ndarray
+
+>>> roi.mask  # type: numpy.ndarray
 array([[0, 0, 0, 0, 0, 0, 0, 0],
        [0, 0, 0, 0, 0, 0, 0, 0],
        [0, 0, 0, 0, 0, 0, 1, 0],
@@ -69,16 +73,19 @@ array([[0, 0, 0, 0, 0, 0, 0, 0],
        [0, 0, 0, 0, 0, 0, 0, 0],
        [0, 0, 4, 0, 0, 0, 0, 0],
        [0, 0, 0, 0, 0, 0, 0, 0]], dtype=int32)
->>> roi.stack.shape  # roi.stack -> numpy.ndarray
+
+>>> roi.stack.shape  # roi.stack -> type: numpy.ndarray
 (3, 8, 8)
+
 >>> # QC
 >>> prj.channel_correlation()
 >>> prj.channel_summary()
+
 >>> # Cell type discovery
 >>> prj.cluster_cells()
 >>> prj.find_communities()
-```
 
+```
 
 ### Your own data
 

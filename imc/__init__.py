@@ -4,6 +4,8 @@ from __future__ import annotations  # fix the type annotatiton of not yet undefi
 import os
 import sys
 import logging
+from functools import partialmethod
+from pathlib import Path as _Path
 
 from joblib import Memory
 import matplotlib
@@ -18,8 +20,8 @@ plt.rcParams["font.sans-serif"] = ["Arial"]
 plt.rcParams["text.usetex"] = False
 
 
-def setup_logger(name="imc", level=logging.INFO):
-    logger = logging.getLogger(name)
+def setup_logger(level=logging.INFO):
+    logger = logging.getLogger("imc")
     logger.setLevel(level)
 
     handler = logging.StreamHandler(sys.stdout)
@@ -38,6 +40,9 @@ MEMORY = Memory(location=JOBLIB_CACHE_DIR, verbose=0)
 
 # Decorate seaborn clustermap
 _sns.clustermap = colorbar_decorator(_sns.clustermap)
+
+
+_Path.mkdir = partialmethod(_Path.mkdir, exist_ok=True, parents=True)
 
 
 from imc.data_models.project import Project
