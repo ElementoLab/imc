@@ -136,7 +136,10 @@ class Project:
         #     self.set_channel_labels()
 
     def __repr__(self):
-        return f"Project '{self.name}' with {len(self.samples)} samples"
+        return (
+            f"Project '{self.name}' with {len(self.samples)} samples "
+            f"and {len(self.rois)} ROIs in total."
+        )
 
     def __getitem__(self, item: int) -> "IMCSample":
         return self.samples[item]
