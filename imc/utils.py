@@ -357,7 +357,8 @@ def get_canny_edge_image(image: Array, mask: Optional[Array], radius=30, sigma=0
 
 def mcd_to_dir(
     mcd_file: Path,
-    panel_csv: Path,
+    pannel_csv: Path = None,
+    ilastik_channels: List[str] = None,
     output_dir: Path = None,
     sample_name: str = None,
     partition_panels: bool = False,
@@ -409,6 +410,9 @@ def mcd_to_dir(
         img[hp_mask] = max_img[hp_mask]
         return img
 
+    if pannel_csv is None and ilastik_channels is None:
+        raise ValueError("One of `pannel_csv` or `ilastik_channels` must be given!")
+
     H5_YXC_AXISTAG = """{\n  "axes": [\n    {\n      "key": "y",\n      "typeFlags": 2,\n
     "resolution": 0,\n      "description": ""\n    },\n    {\n
     "key": "x",\n      "typeFlags": 2,\n      "resolution": 0,\n
@@ -416,7 +420,7 @@ def mcd_to_dir(
     "typeFlags": 1,\n      "resolution": 0,\n
     "description": ""\n    }\n  ]\n}"""
 
-    panel = pd.read_csv(panel_csv, index_col=0)
+    panel = pd.read_csv(pannel_csv, index_col=0)
     ilastik_channels = panel.query("ilastik == 1").index
     mcd = imctools.io.mcdparser.McdParser(mcd_file)
 
