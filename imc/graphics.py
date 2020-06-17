@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
-from typing import Dict, Tuple, List, Union, Optional, Any, Callable, Literal
+from typing import Dict, Tuple, List, Union, Optional, Callable  # , Literal
 import warnings
 from functools import wraps
+
 
 import numpy as np
 import pandas as pd
@@ -78,7 +79,8 @@ def _add_extra_colorbars_to_clustermap(
     grid: sns.matrix.ClusterGrid,
     datas: Union[Series, DataFrame],
     cmaps: Optional[Union[str, List[str]]] = None,
-    location: str = Union[Literal["col"], Literal["row"]],
+    # location: Union[Literal["col"], Literal["row"]] = "row",
+    location: str = "row",
 ) -> None:
     """Add either a row or column colorbar to a seaborn Grid."""
 
