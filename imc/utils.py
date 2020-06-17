@@ -5,7 +5,7 @@
 
 import os
 import re
-from typing import Union, Tuple, List, Any, Optional, Dict, Sequence
+from typing import Union, List, Optional, Dict, Sequence, Callable
 
 import numpy as np
 import pandas as pd
