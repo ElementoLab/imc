@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 
+# from skimage.exposure import equalize_hist as eq
+
 from imc.types import DataFrame, Series, Array, Figure, Axis, Patch, ColorMap
 from imc.utils import minmax_scale
 
@@ -225,34 +227,51 @@ def add_legend(patches: List[Patch], ax: Optional[Axis] = None, **kwargs) -> Non
     ax.legend(handles=_patches.tolist(), **defaults)
 
 
-def saturize(arr: Array):
-    for i in range(arr.shape[-1]):
-        arr[:, :, i] = minmax_scale(arr[:, :, i])
+def saturize(arr: Array) -> Array:
+    """Saturize an image by channel, by minmax scalling each."""
+    if np.argmin(arr.shape) == 0:
+        for i in range(arr.shape[0]):
+            arr[i, :, :] = minmax_scale(arr[i, :, :])
+    elif np.argmin(arr.shape) == 2:
+        for i in range(arr.shape[2]):
+            arr[:, :, i] = minmax_scale(arr[:, :, i])
     return arr
 
 
-def rgb_to(arr, to=Tuple[Any, Any, Any]):
+def to_merged_colors(
+    arr: Array, to_colors: Optional[List[str]] = None, return_colors: bool = False
+) -> Union[Array, Tuple[Array, List[Tuple[float, float, float]]]]:
     """
     Assumes [0, 1] float array.
     to is a tuple of 3 colors.
     """
-    # TODO: replace PIL with own implementation
-    import PIL
+    defaults = [
+        "red",
+        "green",
+        "blue",
+        "orange",
+        "purple",
+        "brown",
+        "pink",
+        "olive",
+        "cyan",
+        "gray",
+    ]
+    # defaults = list(matplotlib.colors.TABLEAU_COLORS.values())
+    n_channels = arr.shape[0]
+    if to_colors is None:
+        target_colors = [matplotlib.colors.to_rgb(col) for col in defaults[:n_channels]]
+    elif isinstance(to_colors, list):
+        assert len(to_colors) == n_channels
+        target_colors = [matplotlib.colors.to_rgb(col) for col in to_colors]
 
-    if arr.shape[2] != 3:
-        arr = np.moveaxis(arr, 0, -1)
-    img = PIL.Image.fromarray(np.uint8(arr * 255))
-    x = (
-        np.asarray(
-            [
-                np.asarray(PIL.ImageOps.colorize(x, "black", to[i]))
-                for i, x in enumerate(img.split())
-            ]
-        )
-        .squeeze()
-        .sum(0)
-    )
-    return x / x.max(0)
+    if arr.min() >= 0 and arr.max() <= 1:
+        arr *= 256  # done in int space to avoid float underflow
+    res = np.zeros(arr.shape[1:] + (3,))
+    for i in range(n_channels):
+        for j in range(3):
+            res[:, :, j] = res[:, :, j] + arr[i] * target_colors[i][j]
+    return saturize(res) if not return_colors else (saturize(res), target_colors)
 
 
 def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
