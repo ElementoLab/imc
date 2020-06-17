@@ -20,8 +20,9 @@ plt.rcParams["font.sans-serif"] = ["Arial"]
 plt.rcParams["text.usetex"] = False
 
 
-def setup_logger(level=logging.INFO):
-    logger = logging.getLogger("imc")
+def setup_logger(name: str = "imc", level: int = logging.INFO) -> logging.Logger:
+    """Setup the logger for the package."""
+    logger = logging.getLogger(name)
     logger.setLevel(level)
 
     handler = logging.StreamHandler(sys.stdout)
