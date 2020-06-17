@@ -5,6 +5,7 @@
 
 import os
 import re
+import json
 from typing import Union, List, Optional, Dict, Sequence, Callable
 
 import numpy as np
@@ -360,6 +361,7 @@ def mcd_to_dir(
     pannel_csv: Path = None,
     ilastik_channels: List[str] = None,
     output_dir: Path = None,
+    overwrite: bool = False,
     sample_name: str = None,
     partition_panels: bool = False,
     filter_full: bool = True,
@@ -410,18 +412,26 @@ def mcd_to_dir(
         img[hp_mask] = max_img[hp_mask]
         return img
 
+    if partition_panels:
+        raise NotImplementedError("Partitioning sample per panel is not implemented yet.")
+
     if pannel_csv is None and ilastik_channels is None:
         raise ValueError("One of `pannel_csv` or `ilastik_channels` must be given!")
+    if ilastik_channels is None and pannel_csv is not None:
+        panel = pd.read_csv(pannel_csv, index_col=0)
+        ilastik_channels = panel.query("ilastik == 1").index.tolist()
 
-    H5_YXC_AXISTAG = """{\n  "axes": [\n    {\n      "key": "y",\n      "typeFlags": 2,\n
-    "resolution": 0,\n      "description": ""\n    },\n    {\n
-    "key": "x",\n      "typeFlags": 2,\n      "resolution": 0,\n
-    "description": ""\n    },\n    {\n      "key": "c",\n
-    "typeFlags": 1,\n      "resolution": 0,\n
-    "description": ""\n    }\n  ]\n}"""
+    H5_YXC_AXISTAG = json.dumps(
+        {
+            "axes": [
+                {"key": "y", "typeFlags": 2, "resolution": 0, "description": ""},
+                {"key": "x", "typeFlags": 2, "resolution": 0, "description": ""},
+                {"key": "c", "typeFlags": 1, "resolution": 0, "description": ""},
+            ]
+        }
+    )
 
-    panel = pd.read_csv(pannel_csv, index_col=0)
-    ilastik_channels = panel.query("ilastik == 1").index
+    # Parse MCD
     mcd = imctools.io.mcdparser.McdParser(mcd_file)
 
     if output_dir is None:
@@ -449,6 +459,11 @@ def mcd_to_dir(
             prefix = output_dir / "tiffs" / (ac.image_description.replace(" ", "_") + "_ac")
         else:
             prefix = output_dir / "tiffs" / (sample_name + "-" + str(i + 1).zfill(2))
+
+        # Skip if not overwrite
+        if (prefix + "_full.tiff").exists() and not overwrite:
+            print("TIFF images exist and overwrite is set to `False`. Continuing.")
+            continue
 
         # Filter channels
         channel_labels = build_channel_name(ac)
