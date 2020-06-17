@@ -17,7 +17,14 @@ clean_dist:
 clean_eggs:
 	rm -rf *.egg-info
 
-clean: clean_dist clean_eggs clean_build
+clean_mypy:
+	rm -rf .mypy_cache/
+
+clean_docs:
+	cd docs
+	$(make) clean
+
+clean: clean_dist clean_eggs clean_build clean_mypy clean_docs
 
 _install:
 	python setup.py sdist
