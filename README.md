@@ -145,7 +145,8 @@ prj = Project()  # will search current directory for Samples/ROIs
 
 prj = Project(processed_dir="processed")  # will search `processed` for Samples/ROIs
 
-prj = Project("path/to/sample/annotation.csv", processed_dir="processed")  # will use metadata from CSV and use the files in `processed`.
+prj = Project("path/to/sample/annotation.csv", processed_dir="processed")
+# ^^ will use metadata from CSV and use the files in `processed`.
 ```
 
 However, if one is not given, `Project` will search the current directory or the
