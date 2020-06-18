@@ -230,7 +230,7 @@ def read_image_from_file(file: Path, equalize: bool = False) -> Array:
     If `equalize` is :obj:`True`, convert to float type bounded at [0, 1].
     """
     if not file.exists():
-        raise FileNotFoundError(f"Cound not find file: '{file}")
+        raise FileNotFoundError(f"Could not find file: '{file}")
     # if str(file).endswith("_mask.tiff"):
     # arr = tifffile.imread(file) > 0
     if file.endswith(".ome.tiff"):
