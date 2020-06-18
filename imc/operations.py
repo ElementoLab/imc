@@ -40,7 +40,7 @@ import community
 from imc import MEMORY
 from imc.exceptions import cast
 from imc.types import DataFrame, Series, Array, Path, MultiIndexSeries
-from imc.utils import read_image_from_file, estimate_noise, double_z_score
+from imc.utils import read_image_from_file, estimate_noise, double_z_score, minmax_scale
 from imc.graphics import get_grid_dims, rasterize_scanpy, add_legend
 
 
@@ -109,6 +109,11 @@ def _correlate_channels__roi(roi: "ROI", labels: str = "channel_names") -> DataF
     np.fill_diagonal(xcorr, 0)
     labs = getattr(roi, labels)
     return pd.DataFrame(xcorr, index=labs, columns=labs)
+
+
+def _get_adjacency_graph__roi(roi: "ROI", **kwargs) -> DataFrame:
+    output_prefix = roi.sample.root_dir / "single_cell" / roi.name
+    return get_adjacency_graph(roi.stack, roi.mask, roi.clusters, output_prefix, **kwargs)
 
 
 def measure_cell_attributes(
@@ -375,7 +380,7 @@ def single_cell_analysis(
     cell_type_channels: Optional[List[str]] = None,
     channel_filtering_threshold: float = 0.1,  # 0.12
     channel_include: Optional[List[str]] = None,
-    channel_exclude: List[str] = ["DNA", "<EMPTY>"],
+    channel_exclude: List[str] = ["<EMPTY>", "EMPTY", "Ar80", "Ru9", "Ru10"],  # r"Ru\d+", "DNA"
     cluster_min_percentage: float = 1.0,
     leiden_clustering_resolution: float = DEFAULT_SINGLE_CELL_RESOLUTION,
     plot_only_channels: List[str] = None,
@@ -413,21 +418,14 @@ def single_cell_analysis(
 
     if quantification is None:
         print("Quantifying single cell intensity.")
-        intensity = pd.concat(
-            parmap.map(
-                _quantify_cell_intensity__roi,
-                [r for r in rois],
-                channel_include=channel_threshold,
-                pm_pbar=True,
-            )
-        )
+        # technically here I should pass `channels_include` as kwarg,
+        # but as that is a series, it is not well serializable
+        intensity = pd.concat(parmap.map(_quantify_cell_intensity__roi, rois, pm_pbar=True))
         _morphology = None
         if morphology:
             print("Quantifying single cell morphology.")
             intensity = intensity.drop(["sample", "roi"], axis=1)
-            _morphology = pd.concat(
-                parmap.map(_quantify_cell_morphology__roi, [r for r in rois], pm_pbar=True)
-            )
+            _morphology = pd.concat(parmap.map(_quantify_cell_morphology__roi, rois, pm_pbar=True))
         print("Joining quantifications.")
         quantification = pd.concat([intensity, _morphology], axis=1)
         quantification = quantification[filtered_channels + ["sample", "roi"]]
@@ -563,7 +561,7 @@ def single_cell_analysis(
         .pivot_table(index="cluster", columns=cats, fill_value=0)
     )
 
-    fig, axes = plt.subplots(1, 3, figsize=(4 * 3, 4))
+    fig, axes = plt.subplots(1, 3, figsize=(4 * 3, 4), sharey=True)
     for ax, log in zip(axes, [False, True]):
         sns.heatmap(
             cluster_counts_per_roi if not log else np.log10(1 + cluster_counts_per_roi),
@@ -946,7 +944,8 @@ def get_adjacency_graph(
 
     g = graph.rag_mean_color(image_mean, mask, mode="distance")
     # remove background node (unfortunately it can't be masked beforehand)
-    g.remove_node(0)
+    if 0 in g.nodes:
+        g.remove_node(0)
 
     fig, ax = plt.subplots(1, 1)
     lc = graph.show_rag(
