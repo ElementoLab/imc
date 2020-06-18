@@ -382,7 +382,8 @@ class ROI:
     ) -> Optional[Figure]:
         """If axes is given it must be length channels"""
         # TODO: optimize this by avoiding reading stack for every channel
-        channels = cast(channels or self.channel_labels.index)
+        if channels is None:
+            channels = self.channel_labels.index
 
         if axes is None:
             m, n = get_grid_dims(len(channels))
