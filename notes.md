@@ -10,7 +10,6 @@ modified: '2020-05-27'
 1. Tests:
  - make sure every object is serializable e.g. parmap compatible
 1. Add method to plot channels overlayed in ROI.
-1. Make plot_channels accept Series
 2. Implement Sample.plot_channels
 1. Decorator to enforce type str -> Path in functions
 3. Reveamp ROI.plot_cell_types
