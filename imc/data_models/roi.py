@@ -725,7 +725,7 @@ class ROI:
         probabilities = np.moveaxis(probabilities, 0, -1)
         probabilities = probabilities / probabilities.max()
 
-        dna_label, dna = self._get_channel("DNA", dont_warn=True)
+        dna_label, dna, minmax = self._get_channel("DNA", dont_warn=True)
 
         nuclei = self._get_input_filename("nuclei_mask").exists()
         ncols = 5 if nuclei else 4

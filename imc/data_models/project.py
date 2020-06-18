@@ -42,9 +42,6 @@ DEFAULT_PROCESSED_DIR_NAME = Path("processed")
 DEFAULT_RESULTS_DIR_NAME = Path("results")
 DEFAULT_PRJ_SINGLE_CELL_DIR = Path("single_cell")
 
-DEFAULT_ROI_NAME_ATTRIBUTE = "roi_name"
-DEFAULT_ROI_NUMBER_ATTRIBUTE = "roi_number"
-
 # processed directory structure
 SUBFOLDERS_PER_SAMPLE = True
 ROI_STACKS_DIR = Path("tiffs")
@@ -85,12 +82,13 @@ class Project:
 
     def __init__(
         self,
-        metadata: Optional[Union[Path, DataFrame]] = None,
+        metadata: Optional[Union[str, Path, DataFrame]] = None,
         name: str = DEFAULT_PROJECT_NAME,
         sample_name_attribute: str = DEFAULT_SAMPLE_NAME_ATTRIBUTE,
         sample_grouping_attributes: Optional[List[str]] = None,
         panel_metadata: Optional[Union[Path, DataFrame]] = None,
         toggle: bool = True,
+        subfolder_per_sample: bool = SUBFOLDERS_PER_SAMPLE,
         processed_dir: Path = DEFAULT_PROCESSED_DIR_NAME,
         results_dir: Path = DEFAULT_RESULTS_DIR_NAME,
         **kwargs,
@@ -116,20 +114,24 @@ class Project:
         # )
 
         self.toggle = toggle
+        self.subfolder_per_sample = subfolder_per_sample
         self.processed_dir = Path(processed_dir).absolute()
         self.results_dir = Path(results_dir).absolute()
+        self.results_dir.mkdir()
         self.quantification: Optional[DataFrame] = None
         self._clusters: Optional[MultiIndexSeries] = None  # MultiIndex: ['sample', 'roi', 'obj_id']
 
         if not hasattr(self, "samples"):
             self.samples = list()
-        if self.metadata is not None:
-            self._initialize_project_from_annotation(**kwargs)
+
+        self._initialize_project_from_annotation(**kwargs)
+
         if not self.rois:
             print(
                 "Could not find ROIs for any of the samples. "
                 "Either pass metadata with one row per ROI, "
-                "or set `processed_dir` in order for ROIs to be discovered."
+                "or set `processed_dir` in order for ROIs to be discovered, "
+                "and make sure select the right project stucture with `subfolder_per_sample`."
             )
 
         # if self.channel_labels is None:
@@ -144,26 +146,48 @@ class Project:
     def __getitem__(self, item: int) -> "IMCSample":
         return self.samples[item]
 
+    def _detect_samples(self) -> DataFrame:
+        if self.processed_dir is None:
+            print("Project does not have `processed_dir`. Cannot find Samples.")
+            return pd.DataFrame()
+
+        content = (
+            [x for x in self.processed_dir.iterdir() if x.is_dir()]
+            if self.subfolder_per_sample
+            else self.processed_dir.glob("*_full.tiff")
+        )
+        df = pd.Series(content).to_frame()
+        if df.empty:
+            print(f"Could not find any Samples in '{self.processed_dir}'.")
+            return df
+        df[DEFAULT_SAMPLE_NAME_ATTRIBUTE] = df[0].apply(lambda x: x.name.replace("_full.tiff", ""))
+        return df.drop(0, axis=1).sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
+
     def _initialize_project_from_annotation(
         self,
         toggle: Optional[bool] = None,
         sample_grouping_attributes: Optional[List[str]] = None,
         **kwargs,
-    ):
+    ) -> None:
         def cols_with_unique_values(dfs: DataFrame) -> set:
             return {col for col in dfs if len(dfs[col].unique()) == 1}
 
-        if (toggle or self.toggle) and ("toggle" in self.metadata.columns):
+        metadata = self.metadata if self.metadata is not None else self._detect_samples()
+
+        if metadata.empty:
+            return
+
+        if (toggle or self.toggle) and ("toggle" in metadata.columns):
             # TODO: logger.info("Removing samples without toggle active")
-            self.metadata = self.metadata[self.metadata[DEFAULT_TOGGLE_ATTRIBUTE]]
+            metadata = metadata[metadata[DEFAULT_TOGGLE_ATTRIBUTE]]
 
         sample_grouping_attributes = (
             sample_grouping_attributes
             or self.sample_grouping_attributes
-            or self.metadata.columns.tolist()
+            or metadata.columns.tolist()
         )
-        for _, idx in self.metadata.groupby(sample_grouping_attributes).groups.items():
-            rows = self.metadata.loc[idx]
+        for _, idx in metadata.groupby(sample_grouping_attributes).groups.items():
+            rows = metadata.loc[idx]
             const_cols = cols_with_unique_values(rows)
             row = rows[const_cols].drop_duplicates().squeeze(axis=0)
 
@@ -173,10 +197,11 @@ class Project:
                 if SUBFOLDERS_PER_SAMPLE
                 else self.processed_dir,
                 csv_metadata=rows if rows.shape[0] > 1 else None,
+                panel_metadata=self.panel_metadata,
+                prj=self,
                 **kwargs,
                 **row.drop("sample_name", errors="ignore").to_dict(),
             )
-            sample.prj = self
             for roi in sample.rois:
                 roi.prj = self
                 # If channel labels are given, add them to all ROIs
