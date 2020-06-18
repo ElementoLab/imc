@@ -255,8 +255,8 @@ def saturize(arr: Array) -> Array:
     return arr
 
 
-def to_merged_colors(
-    arr: Array, to_colors: Optional[List[str]] = None, return_colors: bool = False
+def merge_channels(
+    arr: Array, output_colors: Optional[List[str]] = None, return_colors: bool = False
 ) -> Union[Array, Tuple[Array, List[Tuple[float, float, float]]]]:
     """
     Assumes [0, 1] float array.
@@ -276,11 +276,11 @@ def to_merged_colors(
     ]
     # defaults = list(matplotlib.colors.TABLEAU_COLORS.values())
     n_channels = arr.shape[0]
-    if to_colors is None:
+    if output_colors is None:
         target_colors = [matplotlib.colors.to_rgb(col) for col in defaults[:n_channels]]
-    elif isinstance(to_colors, list):
-        assert len(to_colors) == n_channels
-        target_colors = [matplotlib.colors.to_rgb(col) for col in to_colors]
+    elif isinstance(output_colors, list):
+        assert len(output_colors) == n_channels
+        target_colors = [matplotlib.colors.to_rgb(col) for col in output_colors]
 
     if arr.min() >= 0 and arr.max() <= 1:
         arr *= 256  # done in int space to avoid float underflow
