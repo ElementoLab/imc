@@ -20,7 +20,7 @@ from imc.data_models.roi import ROI
 from imc.types import Path, Figure, Patch, DataFrame, Series, MultiIndexSeries
 
 # from imc import LOGGER
-from imc.operations import predict_cell_types_from_reference
+from imc.operations import single_cell_analysis, predict_cell_types_from_reference
 from imc.utils import parse_acquisition_metadata
 from imc.graphics import get_grid_dims, add_legend, share_axes_by
 from imc.exceptions import cast  # TODO: replace with typing.cast
@@ -393,6 +393,61 @@ class IMCSample:
                 for roi in rois or self.rois
             ]
         )
+
+    def cluster_cells(
+        self,
+        rois: Optional[List["ROI"]] = None,
+        output_prefix: Optional[Path] = None,
+        plot: bool = True,
+        set_attribute: bool = True,
+        **kwargs,
+    ) -> Optional[Series]:
+        """
+        Derive clusters of single cells based on their channel intensity.
+        """
+        output_prefix = Path(output_prefix or self.root_dir / "single_cell" / self.name)
+
+        quantification = None
+        if "quantification" in kwargs:
+            quantification = kwargs["quantification"]
+            del kwargs["quantification"]
+        cell_type_channels = None
+        if "cell_type_channels" in kwargs:
+            cell_type_channels = kwargs["cell_type_channels"]
+            del kwargs["cell_type_channels"]
+        else:
+            try:
+                if self.panel_metadata is not None:
+                    if "cell_type" in self.panel_metadata.columns:
+                        cell_type_channels = self.panel_metadata.query(
+                            "cell_type == 1"
+                        ).index.tolist()
+            except FileNotFoundError:
+                print(
+                    "`panel_metadata` is not set and "
+                    "`cell_type_channels` was not given, will use all channels "
+                    "for cell type clustering."
+                )
+
+        clusters = single_cell_analysis(
+            output_prefix=output_prefix,
+            rois=[r for r in rois or self.rois],
+            quantification=quantification,
+            cell_type_channels=cell_type_channels,
+            plot=plot,
+            **kwargs,
+        )
+        # save clusters as CSV in default file
+        clusters.reset_index().to_csv(output_prefix + "cell_cluster_assignments", index=False)
+        if not set_attribute:
+            return clusters
+
+        # Set clusters for project and propagate for ROIs.
+        # in principle there was no need to pass clusters here as it will be read
+        # however, the CSV roundtrip might give problems in edge cases, for
+        # example when the sample name is only integers
+        self.set_clusters(clusters.astype(str))
+        return None
 
     def set_clusters(
         self, clusters: Optional[MultiIndexSeries] = None, rois: Optional[List["ROI"]] = None,
