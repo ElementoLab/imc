@@ -17,12 +17,12 @@ from imc.utils import filter_kwargs_by_callable as filter_kws
 
 
 def generate_mask(
-    dims: Tuple[int, int] = (8, 8),
+    shape: Tuple[int, int] = (8, 8),
     seeding_density: float = 0.1,
     # widths: int = None,
     # connectivity: float = None
 ) -> Array:
-    mask = np.zeros(dims, dtype=bool)
+    mask = np.zeros(shape, dtype=bool)
     # Cells are placed in an effective mask area which is not touching borders
     eff_mask = mask[1:-1, 1:-1]
     centroids = np.random.choice(

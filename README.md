@@ -36,7 +36,7 @@ python -m pytest --pyargs imc
 ### Demo data
 ```python
 >>> from imc.demo import generate_project
->>> prj = generate_project(n_samples=2, n_rois_per_sample=3, dims=(8, 8))
+>>> prj = generate_project(n_samples=2, n_rois_per_sample=3, shape=(8, 8))
 >>> prj
 Project 'project' with 2 samples and 6 ROIs in total.
 
@@ -45,17 +45,17 @@ Project 'project' with 2 samples and 6 ROIs in total.
  Sample 'test_sample_02' with 3 ROIs]
 
 >>> prj.rois  # type: List[ROI]
-[Region1 of sample 'test_sample_01',
- Region2 of sample 'test_sample_01',
- Region3 of sample 'test_sample_01',
- Region1 of sample 'test_sample_02',
- Region2 of sample 'test_sample_02',
- Region3 of sample 'test_sample_02']
+[Region 1 of sample 'test_sample_01',
+ Region 2 of sample 'test_sample_01',
+ Region 3 of sample 'test_sample_01',
+ Region 1 of sample 'test_sample_02',
+ Region 2 of sample 'test_sample_02',
+ Region 3 of sample 'test_sample_02']
 
 >>> prj.samples[0].rois  # type: List[ROI]
-[Region1 of sample 'test_sample_01',
- Region2 of sample 'test_sample_01',
- Region3 of sample 'test_sample_01']
+[Region 1 of sample 'test_sample_01',
+ Region 2 of sample 'test_sample_01',
+ Region 3 of sample 'test_sample_01']
 
 >>> roi = prj.rois[0]  # Let's assign one ROI to explore it
 >>> roi.channel_labels  # type: pandas.Series; `channel_names`, `channel_metals` also available
