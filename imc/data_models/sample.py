@@ -106,15 +106,25 @@ class IMCSample:
         if self.root_dir is None:
             print(f"Sample does not have `root_dir`. Cannot find ROIs for sample '{self.name}'.")
             return pd.DataFrame()
+
         d = self.root_dir / "tiffs"
-        df = pd.Series(d.glob("*_full.tiff")).to_frame()
+        content = (
+            self.root_dir.parent.glob(self.name + "*_full.tiff")
+            if not self.prj.subfolder_per_sample
+            else d.glob("*_full.tiff")
+        )
+        df = pd.Series(content).to_frame()
         if df.empty:
             print(f"Could not find ROIs for sample '{self.name}'.")
             return df
-        df["name"] = df[0].apply(lambda x: x.name.replace("_full.tiff", ""))
-        df["number"] = df["name"].str.extract(r"-(\d+)")[0].astype(int)
-        df = df.sort_values("number", ignore_index=True)[["name", "number"]]
-        df.columns = [DEFAULT_ROI_NAME_ATTRIBUTE, DEFAULT_ROI_NUMBER_ATTRIBUTE]
+        df[DEFAULT_ROI_NAME_ATTRIBUTE] = df[0].apply(lambda x: x.name.replace("_full.tiff", ""))
+        try:
+            df[DEFAULT_ROI_NUMBER_ATTRIBUTE] = (
+                df[DEFAULT_ROI_NAME_ATTRIBUTE].str.extract(r"-(\d+)")[0].astype(int)
+            )
+        except ValueError:
+            pass
+        df = df.sort_values(df.columns.tolist(), ignore_index=True).drop(0, axis=1)
         return df
 
     def _initialize_sample_from_annotation(self, toggle: Optional[bool] = None) -> None:
