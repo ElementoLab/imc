@@ -593,23 +593,17 @@ class Project:
         """
         output_prefix = Path(output_prefix or self.results_dir / "single_cell" / self.name)
 
-        quantification = None
-        if "quantification" in kwargs:
-            quantification = kwargs["quantification"]
-            del kwargs["quantification"]
-        cell_type_channels = None
-        if "cell_type_channels" in kwargs:
-            cell_type_channels = kwargs["cell_type_channels"]
-            del kwargs["cell_type_channels"]
-        if self.panel_metadata is not None:
+        if "quantification" not in kwargs and self.quantification is not None:
+            kwargs["quantification"] = self.quantification
+        if "cell_type_channels" not in kwargs and self.panel_metadata is not None:
             if "cell_type" in self.panel_metadata.columns:
-                cell_type_channels = self.panel_metadata.query("cell_type == 1").index.tolist()
+                kwargs["cell_type_channels"] = self.panel_metadata.query(
+                    "cell_type == 1"
+                ).index.tolist()
 
         clusters = single_cell_analysis(
             output_prefix=output_prefix,
             rois=[r for r in (rois or self.rois) if r.sample in (samples or self.samples)],
-            quantification=quantification,
-            cell_type_channels=cell_type_channels,
             plot=plot,
             **kwargs,
         )
@@ -648,13 +642,10 @@ class Project:
         :func:`Project._get_input_filename`("cell_cluster_assignments").
         """
         id_cols = ["sample", "roi", "obj_id"]
+        fn = self._get_input_filename("cell_cluster_assignments")
+        fn.parent.mkdir()
         if clusters is None:
-            clusters = (
-                pd.read_csv(
-                    self._get_input_filename("cell_cluster_assignments"),
-                    dtype={"sample": str, "roi": str},
-                ).set_index(id_cols)
-            )[
+            clusters = (pd.read_csv(fn, dtype={"sample": str, "roi": str},).set_index(id_cols))[
                 "cluster"
             ]  # .astype(str)
         assert isinstance(clusters.index, pd.MultiIndex)
@@ -663,9 +654,7 @@ class Project:
         for sample in samples or self.samples:
             sample.set_clusters(clusters=clusters.loc[sample.name])
         if write_to_disk:
-            self._clusters.reset_index().to_csv(
-                self._get_input_filename("cell_cluster_assignments"), index=False
-            )
+            self._clusters.reset_index().to_csv(fn, index=False)
 
     def label_clusters(
         self, h5ad_file: Optional[Path] = None, output_prefix: Optional[Path] = None, **kwargs
@@ -1023,30 +1012,40 @@ class Project:
         """
         output_prefix = output_prefix or self.results_dir / "single_cell" / self.name + "."
         rois = [r for sample in (samples or self.samples) for r in sample.rois]
-        gs = parmap.map(get_adjacency_graph, rois, pm_pbar=True)
-        for roi, g in zip(rois, gs):
-            roi._adjacency_graph = g
+
+        # Get graph for missing ROIs
+        _rois = [r for r in rois if r._adjacency_graph is None]
+        if _rois:
+            gs = parmap.map(get_adjacency_graph, _rois, pm_pbar=True)
+            # gs = [get_adjacency_graph(roi) for roi in _rois]
+            for roi, g in zip(_rois, gs):
+                roi._adjacency_graph = g
 
         # TODO: package the stuff below into a function
 
         # First measure adjacency as odds against background
         freqs = parmap.map(measure_cell_type_adjacency, rois)
+        # freqs = [measure_cell_type_adjacency(roi) for roi in rois]
         # freqs = [
-        #     pd.read_csv(roi.sample.root_dir / "single_cell" / roi.name + ".cluster_adjacency_graph.norm_over_random.csv", index_col=0)
+        #     pd.read_csv(
+        #         roi.sample.root_dir / "single_cell" / roi.name
+        #         + ".cluster_adjacency_graph.norm_over_random.csv",
+        #         index_col=0,
+        #     )
         #     for roi in rois
         # ]
 
         melted = pd.concat(
             [
-                f.reset_index().melt(id_vars="index").assign(roi=roi.name)
+                f.reset_index().melt(id_vars="index").assign(sample=roi.sample.name, roi=roi.name)
                 for roi, f in zip(rois, freqs)
             ]
         )
 
-        mean_f = melted.pivot_table(
-            index="index", columns="variable", values="value", aggfunc=np.mean
-        )
-        sns.clustermap(mean_f, cmap="RdBu_r", center=0, robust=True)
+        # mean_f = melted.pivot_table(
+        #     index="index", columns="variable", values="value", aggfunc=np.mean
+        # )
+        # sns.clustermap(mean_f, cmap="RdBu_r", center=0, robust=True)
 
         v = np.percentile(melted["value"].abs(), 95)
         n, m = get_grid_dims(len(freqs))
