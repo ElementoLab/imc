@@ -143,6 +143,12 @@ class Project:
             f"and {len(self.rois)} ROIs in total."
         )
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        pass
+
     def __getitem__(self, item: int) -> "IMCSample":
         return self.samples[item]
 
