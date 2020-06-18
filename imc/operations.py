@@ -1358,3 +1358,58 @@ def fit_gaussian_mixture(
         y = pd.Series(mix.predict(x2), index=x.index, name="class")
         expr_thresh[ch] = replace_pred(_x, y)
     return expr_thresh
+
+
+def stack_to_probabilities(
+    stack: Array,
+    channel_labels: Series,
+    nuclear_channels: Optional[List[str]] = None,
+    cytoplasm_channels: Optional[List[str]] = None,
+) -> Array:
+    """
+    Very simple way to go from a channel stack to nuclei, cytoplasm and background probabilities.
+    """
+    # nuclear_channels = ["DNA", "Histone", "pCREB", "cKIT", "pSTAT3"]
+    nuclear_channels = nuclear_channels or ["DNA", "Histone"]
+    _nuclear_channels = channel_labels[channel_labels.str.contains("|".join(nuclear_channels))]
+    if cytoplasm_channels is None:
+        _cytoplasm_channels = channel_labels[~channel_labels.isin(_nuclear_channels)]
+    else:
+        _cytoplasm_channels = channel_labels[
+            channel_labels.str.contains("|".join(cytoplasm_channels))
+        ]
+
+    stack = np.log1p(stack)
+
+    # # mean of nuclear signal
+    ns = stack[_nuclear_channels.index].mean(0)
+    # # mean of cytoplasmatic signal
+    cs = stack[_cytoplasm_channels.index].mean(0)
+
+    # # normalize
+    ns = ns / ns.max()
+    cs = cs / cs.max()
+
+    # # convert into probabilities
+    pn = minmax_scale(ns)
+    pb = 1 - minmax_scale((pn + minmax_scale(cs)))
+    pc = minmax_scale(minmax_scale(cs) - (pn + pb))
+
+    # pnf = ndi.gaussian_filter(pn, 1)
+    # pcf = ndi.gaussian_filter(pc, 1)
+    # pbf = ndi.gaussian_filter(pb, 1)
+
+    rgb = np.asarray([pn, pc, pb])
+    for c in range(rgb.shape[0]):
+        rgb[c] = minmax_scale(rgb[c])
+    return rgb / rgb.sum(0)
+
+    # # pp = ndi.zoom(roi.probabilities, (1, 0.5, 0.5))
+    # # pp = pp / pp.max()
+    # p = stack_to_probabilities(roi.stack, roi.channel_labels)
+    # fig, axes = plt.subplots(1, 4, sharex=True, sharey=True)
+    # # axes[0].imshow(np.moveaxis(pp / pp.max(), 0, -1))
+    # axes[1].imshow(np.moveaxis(p, 0, -1))
+    # from skimage.exposure import equalize_hist as eq
+    # axes[2].imshow(minmax_scale(eq(roi._get_channel("mean")[1])))
+    # axes[3].imshow(roi.mask)
