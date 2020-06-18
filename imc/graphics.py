@@ -211,6 +211,23 @@ def add_scale(
     )
 
 
+def add_minmax(minmax: Tuple[float, float], _ax: Optional[Axis] = None) -> None:
+    """
+    Add an annotation of the min and max values of the array.
+    """
+    # these values were optimized with a 1000 x 1000 reference figure
+    if _ax is None:
+        _ax = plt.gca()
+    _ax.text(
+        _ax.get_xlim()[1],
+        -3,
+        s=f"Range: {minmax[0]:.2f} -> {minmax[1]:.2f}",
+        color="black",
+        ha="right",
+        fontsize=4,
+    )
+
+
 def add_legend(patches: List[Patch], ax: Optional[Axis] = None, **kwargs) -> None:
     """Add a legend to an existing axis."""
     if ax is None:

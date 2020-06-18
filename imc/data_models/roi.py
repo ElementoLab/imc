@@ -27,6 +27,7 @@ from imc.operations import quantify_cells, measure_cell_attributes
 from imc.utils import read_image_from_file, sorted_nicely, minmax_scale
 from imc.graphics import (
     add_scale as _add_scale,
+    add_minmax as _add_minmax,
     get_grid_dims,
     get_transparent_cmaps,
     add_legend,
@@ -131,8 +132,8 @@ class ROI:
 
     def __repr__(self):
         return (
-            f"Region"
-            + (str(self.roi_number) if self.roi_number is not None else "")
+            "Region"
+            + (f" {self.roi_number}" if self.roi_number is not None else "")
             + (f" of sample '{self.sample.name}'" if self.sample is not None else "")
         )
 
@@ -405,7 +406,7 @@ class ROI:
         red_func: str = "sum",
         equalize: bool = False,
         dont_warn: bool = False,
-    ) -> Tuple[str, Array]:
+    ) -> Tuple[str, Array, Tuple[float, float]]:
         """
         Get a 2D signal array from a channel name or number.
 
@@ -461,7 +462,7 @@ class ROI:
                             print(
                                 f"Could not find out channel '{channel}' in "
                                 "`sample.channel_labels` "
-                                f"but could find '{names}'. Returning sum of those."
+                                f"but could find '{names}'. Returning {red_func} of those."
                             )
                         order = match.reset_index(drop=True)[match.values].index
                         m = np.empty((match.sum(),) + stack.shape[1:])
@@ -472,24 +473,27 @@ class ROI:
                         label = names
                         arr = getattr(m, red_func)(axis=0)
                 else:
-                    msg = f"Could not find out channel '{channel}' " "in `sample.channel_labels`."
+                    msg = f"Could not find out channel '{channel}' in `sample.channel_labels`."
                     # # LOGGER.error(msg)
                     raise ValueError(msg)
+        minmax = arr.min(), arr.max()
         if equalize:
             arr = minmax_scale(eq(arr))
-        return label, arr
+        return label, arr, minmax
 
-    def _get_channels(self, channels: List[Union[int, str]], **kwargs) -> Tuple[str, Array]:
+    def _get_channels(self, channels: List[Union[int, str]], **kwargs) -> Tuple[str, Array, Array]:
         """
         Convinience function to get signal from various channels.
         """
         labels = list()
         arrays = list()
+        minmaxes = list()
         for channel in channels:
-            lab, arr = self._get_channel(channel, **kwargs)
+            lab, arr, minmax = self._get_channel(channel, **kwargs)
             labels.append(lab.replace(", ", "-"))
             arrays.append(arr.squeeze())
-        return (", ".join(labels), np.asarray(arrays))
+            minmaxes.append(minmax)
+        return ", ".join(labels), np.asarray(arrays), np.asarray(minmaxes)
 
     def get_mean_all_channels(self) -> Array:
         """Get an array with mean of all channels"""
@@ -502,6 +506,7 @@ class ROI:
         equalize: bool = True,
         log: bool = False,
         add_scale: bool = True,
+        add_minmax: bool = True,
         **kwargs,
     ) -> Axis:
         """
@@ -514,7 +519,7 @@ class ROI:
         Keyword arguments are passed to :func:`~matplotlib.pyplot.imshow`
         """
         _ax = ax
-        channel, p = self._get_channel(channel, equalize=equalize)
+        channel, p, minmax = self._get_channel(channel, equalize=equalize)
         if log:
             p += abs(p.min())
             p = np.log1p(p)
@@ -524,6 +529,8 @@ class ROI:
         _ax.imshow(p.squeeze(), rasterized=True, **kwargs)
         if add_scale:
             _add_scale(_ax)
+        if add_minmax:
+            _add_minmax(minmax, _ax)
         _ax.axis("off")
         _ax.set_title(f"{self.name}\n{channel}")
         # TODO: add scale bar
