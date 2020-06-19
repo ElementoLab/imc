@@ -13,16 +13,6 @@ from imc.data_models.sample import DEFAULT_SAMPLE_NAME
 from imc.data_models.roi import DEFAULT_ROI_NAME
 
 
-@pytest.fixture
-def project():
-    return generate_project(return_object=True)
-
-
-@pytest.fixture
-def metadata(project):
-    return project.sample_metadata
-
-
 class TestProjectInitialization:
     def test_empty_project(self):
         p = Project()
@@ -42,8 +32,8 @@ class TestProjectInitialization:
         r = ROI()
         assert r.name == DEFAULT_ROI_NAME
 
-    def test_creation_without_rois(self):
-        p = generate_project(return_object=True)
+    def test_creation_without_rois(self, tmp_path):
+        p = generate_project(root_dir=tmp_path)
         p2 = Project(p.metadata[["sample_name"]].drop_duplicates(), processed_dir=p.processed_dir)
         assert len(p2.samples) == 3
         assert len(p2.rois) == 9

@@ -1,7 +1,13 @@
+import pytest
+
+
 class TestHighOrderFunctions:
+    @pytest.mark.slow
+    @pytest.mark.xfail
     def test_cluster_cells(self, project):
         project.cluster_cells()
 
+    @pytest.mark.slow
     def test_measure_adjacency(self, project_with_clusters):
         files = [
             "cluster_adjacency_graph.frequencies.csv",

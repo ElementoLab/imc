@@ -4,13 +4,18 @@ from imc.demo import generate_project
 
 
 @pytest.fixture
-def project():
-    return generate_project()
+def project(tmp_path):
+    return generate_project(root_dir=tmp_path)
 
 
 @pytest.fixture
-def project_with_clusters():
-    p = generate_project()
+def metadata(project):
+    return project.sample_metadata
+
+
+@pytest.fixture
+def project_with_clusters(tmp_path):
+    p = generate_project(root_dir=tmp_path)
     p.quantify_cells()
     c = (
         p.quantification.set_index(["sample", "roi"], append=True)
