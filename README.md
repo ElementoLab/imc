@@ -1,3 +1,5 @@
+![imc logo](https://raw.githubusercontent.com/elementolab/imc/master/logo.png)
+
 # Imaging mass cytometry
 
 This is a package for the analysis of imaging mass cytometry (IMC) data.
