@@ -1,39 +1,35 @@
 import pickle
-import tempfile
+from typing import Any
 
 import parmap
 import pandas as pd
 
 from imc import Project, IMCSample, ROI
-from imc.demo import generate_project
 from imc.operations import _quantify_cell_intensity__roi
+from imc.types import Path
+
+
+def roundtrip(obj: Any, _dir: Path) -> Any:
+    pickle.dump(obj, open(_dir / "file.pkl", "wb"))
+    return pickle.load(open(_dir / "file.pkl", "rb"))
 
 
 class TestSimpleSerialization:
-    def test_empty_project(self):
+    def test_empty_project(self, tmp_path):
         p = Project(name="test_empty_project")
-        f = tempfile.NamedTemporaryFile()
-        pickle.dump(p, open(f.name, "wb"))
-        q = pickle.load(open(f.name, "rb"))
-
+        q = roundtrip(p, tmp_path)
         assert q.name == "test_empty_project"
         # assert p is q
 
-    def test_empty_sample(self):
+    def test_empty_sample(self, tmp_path):
         s = IMCSample(sample_name="test_empty_sample", root_dir=".")
-        f = tempfile.NamedTemporaryFile()
-        pickle.dump(s, open(f.name, "wb"))
-        r = pickle.load(open(f.name, "rb"))
-
+        r = roundtrip(s, tmp_path)
         assert r.name == "test_empty_sample"
         # assert s is r
 
-    def test_empty_roi(self):
+    def test_empty_roi(self, tmp_path):
         r = ROI(name="test_empty_roi", roi_number=1)
-        f = tempfile.NamedTemporaryFile()
-        pickle.dump(r, open(f.name, "wb"))
-        s = pickle.load(open(f.name, "rb"))
-
+        s = roundtrip(r, tmp_path)
         assert s.name == "test_empty_roi"
         # assert r is s
 

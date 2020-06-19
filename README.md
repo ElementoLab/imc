@@ -9,8 +9,9 @@ intenstity and morphology, cell type discovery through clustering, automated
 cell type labeling, community and super-community finding and differential
 comparisons between sample groups, in addition to many handy visualization tools.
 
-Above all, it is a tool for the use of IMC data at scale. To do that, it
-implements out-of-memory handling of image stacks and masks.
+Above all, it is a tool for the use of IMC data at scale.
+To do that, it implements out-of-memory handling of image stacks and masks.
+Other backends to handle multiplexed images are under development.
 
 
 ## Requirements and installation
@@ -24,14 +25,6 @@ pip install git+ssh://git@github.com/elementolab/imc.git
 While the repository is private, the `git+ssh` protocol requires proper git
 configuration.
 
-
-## Testing
-
-Tests are still very limited, but you can run tests this way:
-
-```bash
-python -m pytest --pyargs imc
-```
 
 ## Quick start
 
@@ -99,10 +92,10 @@ array([[0, 0, 0, 0, 0, 0, 0, 0],
 Project 'jackson_2019_short' with 4 samples and 4 ROIs in total.
 
 >>> prj.samples  # type: List[IMCSample]
-[Sample 'BaselTMA_SP41_15.475kx12.665ky_10000x8500_5_20170905_90_88_X11Y5_242_a0' with 1 ROIs,
- Sample 'BaselTMA_SP41_25.475kx12.665ky_8000x8500_3_20170905_90_88_X11Y5_235_a0' with 1 ROIs,
- Sample 'BaselTMA_SP41_33.475kx12.66ky_8500x8500_2_20170905_24_61_X3Y4_207_a0' with 1 ROIs,
- Sample 'BaselTMA_SP41_33.475kx12.66ky_8500x8500_2_20170905_33_61_X4Y4_215_a0' with 1 ROIs]
+[Sample 'BaselTMA_SP41_15.475kx12.665ky_10000x8500_5_20170905_90_88_X11Y5_242_a0' with 1 ROI,
+ Sample 'BaselTMA_SP41_25.475kx12.665ky_8000x8500_3_20170905_90_88_X11Y5_235_a0' with 1 ROI,
+ Sample 'BaselTMA_SP41_33.475kx12.66ky_8500x8500_2_20170905_24_61_X3Y4_207_a0' with 1 ROI,
+ Sample 'BaselTMA_SP41_33.475kx12.66ky_8500x8500_2_20170905_33_61_X4Y4_215_a0' with 1 ROI]
 
 >>> prj.samples[0].channel_labels  # type: pandas.Series
 chanel
@@ -179,4 +172,13 @@ Documentation is for now mostly a skeleton but will be enlarged soon:
 
 ```bash
 make docs
+```
+
+
+## Testing
+
+Tests are still very limited, but you can run tests this way:
+
+```bash
+python -m pytest --pyargs imc
 ```

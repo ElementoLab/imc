@@ -44,6 +44,11 @@ class Path(pathlib.Path):
     def replace_(self, patt: str, repl: str) -> "Path":
         return Path(str(self).replace(patt, repl))
 
+    def iterdir(self):
+        if self.exists():
+            return pathlib.Path(str(self)).iterdir()
+        return iter([])
+
 
 GenericType = TypeVar("GenericType")
 

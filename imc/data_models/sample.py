@@ -58,6 +58,7 @@ class IMCSample:
         sample_name: str = DEFAULT_SAMPLE_NAME,
         root_dir: Optional[Path] = None,
         csv_metadata: Optional[Union[Path, DataFrame]] = None,
+        subfolder_per_sample: bool = True,
         roi_name_atribute: str = DEFAULT_ROI_NAME_ATTRIBUTE,
         roi_number_atribute: str = DEFAULT_ROI_NUMBER_ATTRIBUTE,
         panel_metadata: Optional[Union[Path, DataFrame]] = None,
@@ -71,6 +72,7 @@ class IMCSample:
         self.metadata: Optional[DataFrame] = (
             pd.read_csv(csv_metadata) if isinstance(csv_metadata, (str, Path)) else csv_metadata
         )
+        self.subfolder_per_sample = subfolder_per_sample
         self.roi_name_atribute = roi_name_atribute
         self.roi_number_atribute = roi_number_atribute
         self._panel_metadata: Optional[DataFrame] = (
@@ -97,7 +99,8 @@ class IMCSample:
         self._initialize_sample_from_annotation()
 
     def __repr__(self):
-        return f"Sample '{self.name}' with {len(self.rois)} ROIs"
+        r = len(self.rois)
+        return f"Sample '{self.name}' with {r} ROI" + ("" if r == 1 else "s")
 
     def __getitem__(self, item: int) -> "ROI":
         return self.rois[item]
@@ -110,7 +113,7 @@ class IMCSample:
         d = self.root_dir / "tiffs"
         content = (
             self.root_dir.parent.glob(self.name + "*_full.tiff")
-            if not self.prj.subfolder_per_sample
+            if not self.subfolder_per_sample
             else d.glob("*_full.tiff")
         )
         df = pd.Series(content).to_frame()

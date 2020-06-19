@@ -138,9 +138,13 @@ class Project:
         #     self.set_channel_labels()
 
     def __repr__(self):
+        s = len(self.samples)
+        r = len(self.rois)
         return (
-            f"Project '{self.name}' with {len(self.samples)} samples "
-            f"and {len(self.rois)} ROIs in total."
+            f"Project '{self.name}' with {s} sample"
+            + (" " if s == 1 else "s ")
+            + f"and {r} ROI"(" " if r == 1 else "s ")
+            + "in total."
         )
 
     def __enter__(self):
@@ -162,7 +166,7 @@ class Project:
             if self.subfolder_per_sample
             else self.processed_dir.glob("*_full.tiff")
         )
-        df = pd.Series(content).to_frame()
+        df = pd.Series(content, dtype="object").to_frame()
         if df.empty:
             print(f"Could not find any Samples in '{self.processed_dir}'.")
             return df
@@ -200,9 +204,10 @@ class Project:
             sample = IMCSample(
                 sample_name=row[self.sample_name_attribute],
                 root_dir=(self.processed_dir / str(row[self.sample_name_attribute]))
-                if SUBFOLDERS_PER_SAMPLE
+                if self.subfolder_per_sample
                 else self.processed_dir,
-                csv_metadata=rows if rows.shape[0] > 1 else None,
+                subfolder_per_sample=self.subfolder_per_sample,
+                metadata=rows if rows.shape[0] > 1 else None,
                 panel_metadata=self.panel_metadata,
                 prj=self,
                 **kwargs,

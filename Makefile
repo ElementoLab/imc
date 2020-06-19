@@ -1,12 +1,6 @@
 .DEFAULT_GOAL := all
 
-all: install clean test
-
-move_models_out:
-	mv _models ../
-
-move_models_in:
-	mv ../_models ./
+all: install test
 
 clean_build:
 	rm -rf build/
@@ -21,66 +15,34 @@ clean_mypy:
 	rm -rf .mypy_cache/
 
 clean_docs:
-	cd docs
-	$(make) clean
+	rm -rf docs/build/*
+
+clean_tests:
+	rm -rf /tmp/pytest*
 
 clean: clean_dist clean_eggs clean_build clean_mypy clean_docs
 
 _install:
-	python setup.py sdist
-	python -m pip wheel --no-index --no-deps --wheel-dir dist dist/*.tar.gz
-	python -m pip install dist/*-py3-none-any.whl --user --upgrade
+	# python setup.py sdist
+	# python -m pip wheel --no-index --no-deps --wheel-dir dist dist/*.tar.gz
+	# python -m pip install dist/*-py3-none-any.whl --user --upgrade
+	pip install .
 
 install:
-	${MAKE} move_models_out
 	${MAKE} clean
 	${MAKE} _install
 	${MAKE} clean
-	${MAKE} move_models_in
-
-clean_docs:
-	rm -rf docs/build/*
 
 docs:
 	${MAKE} -C docs html
 	xdg-open docs/build/html/index.html
 
 test:
-	python -m pytest imc/
-
-run:
-	python imcpipeline/runner.py \
-		--divvy slurm \
-		metadata/annotation.csv \
-			--ilastik-model _models/lymphoma/lymphoma.ilp \
-			--csv-pannel metadata/panel_markers.csv \
-			--cellprofiler-exec \
-				"source ~/.miniconda2/bin/activate && conda activate cellprofiler && cellprofiler"
-
-run_locally:
-	python imcpipeline/runner.py \
-		--divvy local \
-		metadata/annotation.csv \
-			--ilastik-model _models/lymphoma/lymphoma.ilp \
-			--csv-pannel metadata/panel_data.csv \
-			--container docker
-
-checkfailure:
-	grep -H "Killed" submission/*.log && \
-	grep -H "Error" submission/*.log && \
-	grep -H "CANCELLED" submission/*.log && \
-	grep -H "exceeded" submission/*.log
-
-fail: checkfailure
-
-checksuccess:
-	ls -hl processed/*/cpout/cell.csv
-
-succ: checksuccess
+	python -m pytest imc/ -m "not slow"
 
 sync:
 	rsync --copy-links --progress -r \
 	. afr4001@pascal.med.cornell.edu:projects/imc
 
-.PHONY : move_models_out move_models_in clean_build clean_dist clean_eggs \
-clean _install install clean_docs docs run run_locally checkfailure fail checksuccess succ sync
+.PHONY : clean_build clean_dist clean_eggs clean_mypy clean_docs clean_tests \
+clean _install install clean_docs docs test sync
