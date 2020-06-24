@@ -1360,9 +1360,90 @@ def cluster_communities(
     # rs = rs / rs.sum()
 
 
+def get_best_mixture_number(
+    x: Series,
+    min_mix: int = 2,
+    max_mix: int = 6,
+    subsample_if_needed: bool = True,
+    n_iters: int = 3,
+    metrics: List[str] = ["silhouette_score", "calinski_harabasz_score", "davies_bouldin_score"],
+    red_func="mean",
+    return_prediction: bool = False,
+) -> Union[int, Tuple[int, Array]]:
+    from sklearn.mixture import GaussianMixture
+    import sklearn.metrics
+
+    def get_means(num: Series, pred: Union[Series, Array]) -> Series:
+        return num.groupby(pred).mean().sort_values()
+
+    def replace_pred(x: Series, y: Union[Series, Array]) -> Series:
+        means = get_means(x, y)
+        repl = dict(zip(means.index, range(len(means))))
+        y2 = pd.Series(y, index=x.index).replace(repl)
+        new_means = get_means(x, y2.values)
+        assert all(new_means.index == range(len(new_means)))
+        return y2
+
+    xx = x.sample(n=10_000) if subsample_if_needed and x.shape[0] > 10_000 else x
+
+    if isinstance(xx, pd.Series):
+        xx = xx.values.reshape((-1, 1))
+
+    mi = range(min_mix, max_mix)
+    mixes = pd.DataFrame(index=metrics, columns=mi)
+    for i in tqdm(mi):
+        mix = GaussianMixture(i)
+        # mix.fit_predict(x)
+        for f in metrics:
+            func = getattr(sklearn.metrics, "davies_bouldin_score")
+            mixes.loc[f, i] = np.mean([func(xx, mix.fit_predict(xx)) for _ in range(n_iters)])
+        # mixes[i] = np.mean([silhouette_score(x, mix.fit_predict(x)) for _ in range(iters)])
+    mixes.loc["davies_bouldin_score"] = 1 / mixes.loc["davies_bouldin_score"]
+
+    # return best
+    # return np.argmax(mixes.values()) + min_mix  # type: ignore
+    best = mixes.columns[int(getattr(np, red_func)(mixes.apply(np.argmax, 1)))]
+    if not return_prediction:
+        return best  # type: ignore
+
+    # now train with full data
+    mix = GaussianMixture(best)
+    return (best, replace_pred(x, mix.fit_predict(x.values.reshape((-1, 1)))))
+
+
+def get_threshold_from_gaussian_mixture(
+    x: Series, y: Optional[Series] = None, n_components: int = 2
+) -> Array:
+    def get_means(num: Series, pred: Union[Series, Array]) -> Series:
+        return num.groupby(pred).mean().sort_values()
+
+    def replace_pred(x: Series, y: Union[Series, Array]) -> Series:
+        means = get_means(x, y)
+        repl = dict(zip(means.index, range(len(means))))
+        y2 = pd.Series(y, index=x.index).replace(repl)
+        new_means = get_means(x, y2.values)
+        assert all(new_means.index == range(len(new_means)))
+        return y2
+
+    x = x.sort_values()
+
+    if y is None:
+        from sklearn.mixture import GaussianMixture  # type: ignore
+
+        mix = GaussianMixture(n_components=n_components)
+        xx = x.values.reshape((-1, 1))
+        y = mix.fit_predict(xx)
+    else:
+        y = y.reindex(x.index).values
+    y = replace_pred(x, y).values
+    thresh = x.loc[((y[:-1] < y[1::])).tolist() + [False]].reset_index(drop=True)
+    assert len(thresh) == (n_components - 1)
+    return thresh
+
+
 def fit_gaussian_mixture(
-    x: Union[Series, DataFrame], n_mixtures: Union[int, List[int]] = 2
-) -> DataFrame:
+    x: Union[Series, DataFrame], n_mixtures: Union[int, List[int]] = None
+) -> Union[Series, DataFrame]:
     # TODO: paralelize
     from sklearn.mixture import GaussianMixture
 
@@ -1384,13 +1465,16 @@ def fit_gaussian_mixture(
         return y2
 
     for i, ch in enumerate(x.columns):
-        mix = GaussianMixture(n_mixtures[i])
+        if n_mixtures is None:
+            mix = get_best_mixture_number(x)
+        else:
+            mix = GaussianMixture(n_mixtures[i])
         _x = x.loc[:, ch]
         x2 = _x.values.reshape((-1, 1))
         mix.fit(x2)
         y = pd.Series(mix.predict(x2), index=x.index, name="class")
         expr_thresh[ch] = replace_pred(_x, y)
-    return expr_thresh
+    return expr_thresh.squeeze()
 
 
 def stack_to_probabilities(

@@ -182,23 +182,6 @@ def align_channels_by_name(res: DataFrame, channel_axis=0) -> DataFrame:
     return res
 
 
-def get_threshold_from_gaussian_mixture(
-    x: Series, y: Optional[Series] = None, n_components: int = 2
-) -> int:
-    x = x.abs().sort_values()
-
-    if y is None:
-        from sklearn.mixture import GaussianMixture  # type: ignore
-
-        mix = GaussianMixture(n_components=n_components)
-        xx = x.values.reshape((-1, 1))
-        mix.fit(xx)
-        y = mix.predict(xx)
-    else:
-        y = y.reindex(x.index).values
-    return x.loc[((y[:-1] < y[1::])).tolist() + [False]].squeeze()
-
-
 def sorted_nicely(iterable: Sequence[GenericType]) -> Sequence[GenericType]:
     """
     Sort an iterable in the way that humans expect.
