@@ -510,26 +510,18 @@ class Project:
 
     def quantify_cells(
         self,
+        intensity: bool = True,
+        morphology: bool = True,
+        set_attribute: bool = True,
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
-        morphology: bool = False,
-        set_attribute: bool = True,
     ) -> Optional[DataFrame]:
         """
         Measure the intensity of each channel in each single cell.
         """
-        if morphology:
-            quantification = pd.concat(
-                [
-                    self.quantify_cell_intensity(samples=samples, rois=rois).drop(
-                        ["sample", "roi"], axis=1
-                    ),
-                    self.quantify_cell_morphology(samples=samples, rois=rois),
-                ],
-                axis=1,
-            )
-        else:
-            quantification = self.quantify_cell_intensity(samples=samples, rois=rois)
+        from imc.operations import quantify_cells_rois
+
+        quantification = quantify_cells_rois(self._get_rois(samples, rois), intensity, morphology)
         if not set_attribute:
             return quantification
         self.quantification = quantification
@@ -544,21 +536,9 @@ class Project:
         """
         Measure the intensity of each channel in each single cell.
         """
-        from imc.operations import _quantify_cell_intensity__roi
+        from imc.operations import quantify_cell_intensity_rois
 
-        return pd.concat(
-            parmap.map(
-                _quantify_cell_intensity__roi,
-                [
-                    r
-                    for sample in (samples or self.samples)
-                    for r in sample.rois
-                    if r in (rois or sample.rois)
-                ],
-                pm_pbar=True,
-                **kwargs,
-            )
-        )
+        return quantify_cell_intensity_rois(self._get_rois(samples, rois), **kwargs)
 
     def quantify_cell_morphology(
         self,
@@ -569,29 +549,17 @@ class Project:
         """
         Measure the shape parameters of each single cell.
         """
-        from imc.operations import _quantify_cell_morphology__roi
+        from imc.operations import quantify_cell_morphology_rois
 
-        return pd.concat(
-            parmap.map(
-                _quantify_cell_morphology__roi,
-                [
-                    r
-                    for sample in (samples or self.samples)
-                    for r in sample.rois
-                    if r in (rois or sample.rois)
-                ],
-                pm_pbar=True,
-                **kwargs,
-            )
-        )
+        return quantify_cell_morphology_rois(self._get_rois(samples, rois), **kwargs)
 
     def cluster_cells(
         self,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
         output_prefix: Optional[Path] = None,
         plot: bool = True,
         set_attribute: bool = True,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
         **kwargs,
     ) -> Optional[Series]:
         """

@@ -98,6 +98,8 @@ class IMCSample:
         # initialize
         self._initialize_sample_from_annotation()
 
+        self.quantification = None
+
     def __repr__(self):
         r = len(self.rois)
         return f"Sample '{self.name}' with {r} ROI" + ("" if r == 1 else "s")
@@ -381,21 +383,40 @@ class IMCSample:
             self.anndata = _an
         return _an
 
-    def quantify_cell_intensity(self, rois: Optional[List["ROI"]] = None, **kwargs) -> DataFrame:
-        return pd.concat(
-            [
-                roi.quantify_cell_intensity(**kwargs).assign(roi=roi.name)
-                for roi in rois or self.rois
-            ]
-        )
+    def quantify_cells(
+        self,
+        intensity: bool = True,
+        morphology: bool = True,
+        set_attribute: bool = True,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
+    ) -> Optional[DataFrame]:
+        """
+        Measure the intensity of each channel in each single cell.
+        """
+        from imc.operations import quantify_cells_rois
 
-    def quantify_cell_morphology(self, rois: Optional[List["ROI"]] = None, **kwargs) -> DataFrame:
-        return pd.concat(
-            [
-                roi.quantify_cell_morphology(**kwargs).assign(roi=roi.name)
-                for roi in rois or self.rois
-            ]
-        )
+        quantification = quantify_cells_rois(rois or self.rois, intensity, morphology)
+        if not set_attribute:
+            return quantification
+        self.quantification = quantification
+        return None
+
+    def quantify_cell_intensity(self, rois: Optional[List["ROI"]] = None, **kwargs,) -> DataFrame:
+        """
+        Measure the intensity of each channel in each single cell.
+        """
+        from imc.operations import quantify_cell_intensity_rois
+
+        return quantify_cell_intensity_rois(rois or self.rois, **kwargs)
+
+    def quantify_cell_morphology(self, rois: Optional[List["ROI"]] = None, **kwargs,) -> DataFrame:
+        """
+        Measure the shape parameters of each single cell.
+        """
+        from imc.operations import quantify_cell_morphology_rois
+
+        return quantify_cell_morphology_rois(rois or self.rois, **kwargs)
 
     def cluster_cells(
         self,
