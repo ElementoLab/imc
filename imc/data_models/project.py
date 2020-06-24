@@ -143,7 +143,8 @@ class Project:
         return (
             f"Project '{self.name}' with {s} sample"
             + (" " if s == 1 else "s ")
-            + f"and {r} ROI"(" " if r == 1 else "s ")
+            + f"and {r} ROI"
+            + (" " if r == 1 else "s ")
             + "in total."
         )
 
