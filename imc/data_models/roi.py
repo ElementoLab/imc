@@ -23,7 +23,7 @@ from skimage.segmentation import clear_border  # type: ignore
 from imc.types import Path, Figure, Axis, Patch, Array, DataFrame, Series
 
 # from imc import LOGGER
-from imc.operations import quantify_cells, measure_cell_attributes
+from imc.operations import quantify_cell_intensity, quantify_cell_morphology
 from imc.utils import read_image_from_file, sorted_nicely, minmax_scale
 from imc.graphics import (
     add_scale as _add_scale,
@@ -774,13 +774,13 @@ class ROI:
             kwargs["channel_include"] = self.channel_labels.str.contains(channel_include).values
         if channel_exclude is not None:
             kwargs["channel_exclude"] = self.channel_labels.str.contains(channel_exclude).values
-        return quantify_cells(
+        return quantify_cell_intensity(
             self._get_input_filename("stack"), self._get_input_filename("cell_mask"), **kwargs
         ).rename(columns=self.channel_labels)
 
     def quantify_cell_morphology(self, **kwargs) -> DataFrame:
         """QUantify shape attributes of each cell."""
-        return measure_cell_attributes(self._get_input_filename("cell_mask"), **kwargs)
+        return quantify_cell_morphology(self._get_input_filename("cell_mask"), **kwargs)
 
     def set_clusters(self, clusters: Optional[Series] = None) -> None:
         if clusters is None:
