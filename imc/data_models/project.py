@@ -220,22 +220,6 @@ class Project:
                 # roi._channel_labels = self.channel_labels
             self.samples.append(sample)
 
-    def _get_input_filename(self, input_type: str) -> Path:
-        """Get path to file with data for Sample.
-
-        Available `input_type` values are:
-            - "cell_type_assignments": CSV file with cell type assignemts for each cell and each ROI
-        """
-        to_read = {
-            "h5ad": (DEFAULT_PRJ_SINGLE_CELL_DIR, ".single_cell.processed.h5ad"),
-            "cell_cluster_assignments": (
-                DEFAULT_PRJ_SINGLE_CELL_DIR,
-                ".single_cell.cluster_assignments.csv",
-            ),
-        }
-        dir_, suffix = to_read[input_type]
-        return self.results_dir / dir_ / (self.name + suffix)
-
     @property
     def rois(self) -> List["ROI"]:
         """
@@ -263,13 +247,41 @@ class Project:
     def channel_metals(self) -> Union[Series, DataFrame]:
         return pd.concat([sample.channel_metals for sample in self.samples], axis=1)
 
+    def _get_rois(
+        self, samples: Optional[List["IMCSample"]], rois: Optional[List["ROI"]]
+    ) -> List["ROI"]:
+        return [
+            r
+            for sample in (samples or self.samples)
+            for r in sample.rois
+            if r in (rois or sample.rois)
+        ]
+
+    def _get_input_filename(self, input_type: str) -> Path:
+        """Get path to file with data for Sample.
+
+        Available `input_type` values are:
+            - "cell_type_assignments": CSV file with cell type assignemts for each cell and each ROI
+        """
+        to_read = {
+            "h5ad": (DEFAULT_PRJ_SINGLE_CELL_DIR, ".single_cell.processed.h5ad"),
+            "cell_cluster_assignments": (
+                DEFAULT_PRJ_SINGLE_CELL_DIR,
+                ".single_cell.cluster_assignments.csv",
+            ),
+        }
+        dir_, suffix = to_read[input_type]
+        return self.results_dir / dir_ / (self.name + suffix)
+
     def plot_channels(
         self,
         channels: List[str] = ["mean"],
-        samples: Optional[List["IMCSample"]] = None,
         per_sample: bool = False,
+        merged: bool = False,
         save: bool = False,
         output_dir: Optional[Path] = None,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
         **kwargs,
     ) -> Figure:
         """
@@ -291,15 +303,16 @@ class Project:
                     )
                     fig.savefig(fig_file, **FIG_KWS)
         else:
-            rois = [roi for sample in samples or self.samples for roi in getattr(sample, "rois")]
-            n, m = get_grid_dims(len(rois))
+            rois = self._get_rois(samples, rois)
+
+            i = 0
+            j = 1 if merged else len(channels)
+            n, m = get_grid_dims(len(rois)) if merged else get_grid_dims(len(rois) * j)
             fig, axes = plt.subplots(n, m, figsize=(4 * m, 4 * n))
             axes = axes.flatten()
-            i = 0
-            j = len(channels)
             for roi in rois:
-                roi.plot_channels(channels, axes=axes[i : i + j], **kwargs)
-                i += 1
+                roi.plot_channels(channels, axes=axes[i : i + j], merged=merged, **kwargs)
+                i += j
             for _ax in axes[i:]:
                 _ax.axis("off")
             if save:
@@ -309,9 +322,10 @@ class Project:
     # TODO: write decorator to get/set default outputdir and handle dir creation
     def plot_probabilities_and_segmentation(
         self,
-        samples: Optional[List["IMCSample"]] = None,
         jointly: bool = False,
         output_dir: Optional[Path] = None,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
     ):
         # TODO: adapt to detect whether to plot nuclei mask
         samples = samples or self.samples
@@ -327,7 +341,7 @@ class Project:
                 fig = sample.plot_probabilities_and_segmentation()
                 fig.savefig(plot_file, **FIG_KWS)
         else:
-            rois = [roi for sample in samples for roi in sample.rois]
+            rois = self._get_rois(samples, rois)
             n = len(rois)
             fig, axes = plt.subplots(n, 5, figsize=(4 * 5, 4 * n))
             for i, roi in enumerate(rois):
@@ -339,11 +353,11 @@ class Project:
 
     def plot_cell_types(
         self,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
         cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
         cell_type_assignments: Optional[DataFrame] = None,
         palette: Optional[str] = "tab20",
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
     ):
         # TODO: fix compatibility of `cell_type_combinations`.
         samples = samples or self.samples
@@ -368,21 +382,16 @@ class Project:
 
     def channel_summary(
         self,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
         red_func: str = "mean",
         channel_exclude: Optional[List[str]] = None,
         plot: bool = True,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
         **kwargs,
     ) -> Union[DataFrame, Tuple[DataFrame, Figure]]:
         # for sample, _func in zip(samples or self.samples, red_func):
         samples = samples or self.samples
-        rois = [
-            r
-            for sample in (samples or self.samples)
-            for r in sample.rois
-            if r in (rois or sample.rois)
-        ]
+        rois = self._get_rois(samples, rois)
 
         _res = dict()
         for roi in rois:
@@ -446,7 +455,7 @@ class Project:
         raise NotImplementedError
         from imc.utils import lacunarity, fractal_dimension
 
-        rois = [r for r in (rois or self.rois) if r.sample in (samples or self.samples)]
+        rois = self._get_rois(samples, rois)
         roi_names = [r.name for r in rois]
         densities = pd.Series(
             {roi.name: roi.cells_per_area_unit() for roi in rois}, name="cell density"
@@ -466,21 +475,16 @@ class Project:
 
     def channel_correlation(
         self,
+        channel_exclude: Optional[List[str]] = None,
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
-        channel_exclude: Optional[List[str]] = None,
     ) -> Figure:
         """
         Observe the pairwise correlation of channels across ROIs.
         """
         from imc.operations import _correlate_channels__roi
 
-        rois = [
-            r
-            for sample in (samples or self.samples)
-            for r in sample.rois
-            if r in (rois or sample.rois)
-        ]
+        rois = self._get_rois(samples, rois)
         _res = parmap.map(_correlate_channels__roi, rois, pm_pbar=True)
 
         # handling differnet pannels based on channel name
@@ -576,10 +580,7 @@ class Project:
                 ).index.tolist()
 
         clusters = single_cell_analysis(
-            output_prefix=output_prefix,
-            rois=[r for r in (rois or self.rois) if r.sample in (samples or self.samples)],
-            plot=plot,
-            **kwargs,
+            output_prefix=output_prefix, rois=self._get_rois(samples, rois), plot=plot, **kwargs,
         )
         # save clusters as CSV in default file
         clusters.reset_index().to_csv(
@@ -605,8 +606,8 @@ class Project:
     def set_clusters(
         self,
         clusters: Optional[MultiIndexSeries] = None,
-        samples: Optional[List["IMCSample"]] = None,
         write_to_disk: bool = False,
+        samples: Optional[List["IMCSample"]] = None,
     ) -> None:
         """
         Set the `clusters` attribute of the project and
@@ -653,11 +654,12 @@ class Project:
 
     def sample_comparisons(
         self,
-        samples: Optional[List["IMCSample"]] = None,
         sample_attributes: Optional[List[str]] = None,
         output_prefix: Optional[Path] = None,
         cell_type_percentage_threshold: float = 1.0,
         channel_exclude: List[str] = None,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
     ):
         # TODO: revamp/separate into smaller functions
         import itertools
@@ -666,7 +668,7 @@ class Project:
 
         sample_attributes = sample_attributes or ["name"]
         samples = samples or self.samples
-        rois = [roi for sample in samples for roi in sample.rois]
+        rois = self._get_rois(samples, rois)
         output_prefix = output_prefix or self.results_dir / "single_cell" / self.name + "."
         output_prefix.parent.mkdir(exist_ok=True)
 
@@ -963,7 +965,7 @@ class Project:
             xticklabels=True,
             yticklabels=True,
         )
-        grid.savefig(output_prefix + f"cell_type_abundance.by_area.svg", **FIG_KWS)
+        grid.savefig(output_prefix + "cell_type_abundance.by_area.svg", **FIG_KWS)
 
         grid = sns.clustermap(
             cluster_densities,
@@ -976,16 +978,19 @@ class Project:
             xticklabels=True,
             yticklabels=True,
         )
-        grid.savefig(output_prefix + f"cell_type_abundance.by_area.zscore.svg", **FIG_KWS)
+        grid.savefig(output_prefix + "cell_type_abundance.by_area.zscore.svg", **FIG_KWS)
 
     def measure_adjacency(
-        self, samples: Optional[List["IMCSample"]] = None, output_prefix: Optional[Path] = None
+        self,
+        output_prefix: Optional[Path] = None,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
     ) -> None:
         """
         Derive cell adjacency graphs for each ROI.
         """
         output_prefix = output_prefix or self.results_dir / "single_cell" / self.name + "."
-        rois = [r for sample in (samples or self.samples) for r in sample.rois]
+        rois = self._get_rois(samples, rois)
 
         # Get graph for missing ROIs
         _rois = [r for r in rois if r._adjacency_graph is None]
@@ -1046,12 +1051,13 @@ class Project:
 
     def find_communities(
         self,
-        samples: Optional[List["IMCSample"]] = None,
         output_prefix: Optional[Path] = None,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
         **kwargs,
     ) -> None:
         """
         Find communities and supercommunities of cell types across all images.
         """
-        rois = [r for sample in (samples or self.samples) for r in sample.rois]
+        rois = self._get_rois(samples, rois)
         cluster_communities(rois=rois, output_prefix=output_prefix, **kwargs)
