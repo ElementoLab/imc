@@ -288,6 +288,7 @@ class IMCSample:
     def plot_channels(
         self,
         channels: List[str] = ["mean"],
+        merged: bool = False,
         rois: Optional[List["ROI"]] = None,
         per_roi: bool = False,
         save: bool = False,
@@ -307,18 +308,19 @@ class IMCSample:
             fig_file = output_dir / ".".join([self.name, f"all_rois.{channels_str}.pdf"])
         if per_roi:
             for roi in rois:
-                fig = roi.plot_channels(channels, **kwargs)
+                fig = roi.plot_channels(channels, merged=merged, **kwargs)
                 if save:
                     fig_file = output_dir / ".".join([self.name, roi.name, channels_str, "pdf"])
                     fig.savefig(fig_file, **FIG_KWS)
         else:
             i = 0
-            j = len(channels)
-            n, m = get_grid_dims(len(rois) * j)
+            j = 1 if merged else len(channels)
+            n, m = get_grid_dims(len(rois)) if merged else get_grid_dims(len(rois) * j)
+
             fig, axes = plt.subplots(n, m, figsize=(4 * m, 4 * n))
             axes = axes.flatten()
             for roi in rois:
-                roi.plot_channels(channels, axes=axes[i : i + j], **kwargs)
+                roi.plot_channels(channels, axes=axes[i : i + j], merged=merged, **kwargs)
                 i += j
             for _ax in axes[i:]:
                 _ax.axis("off")
