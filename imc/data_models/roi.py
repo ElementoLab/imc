@@ -373,34 +373,6 @@ class ROI:
             )
         return res if not set_attribute else None
 
-    def plot_channels(
-        self,
-        channels: Optional[Sequence[str]] = None,
-        axes: List[Axis] = None,
-        share_axes: bool = True,
-        **kwargs,
-    ) -> Optional[Figure]:
-        """If axes is given it must be length channels"""
-        # TODO: optimize this by avoiding reading stack for every channel
-        if channels is None:
-            channels = self.channel_labels.index
-
-        if axes is None:
-            m, n = get_grid_dims(len(channels))
-            fig, _axes = plt.subplots(
-                n, m, figsize=(m * 4, n * 4), squeeze=False, sharex=share_axes, sharey=share_axes,
-            )
-            fig.suptitle(f"{self.sample}\n{self}")
-            _axes = _axes.flatten()
-        else:
-            _axes = axes
-        i = 0  # in case channels is length 0
-        for i, channel in enumerate(channels):
-            self.plot_channel(channel, ax=_axes[i], **kwargs)
-        for _ax in _axes[i + 1 :]:
-            _ax.axis("off")
-        return fig if axes is None else None
-
     def _get_channel(
         self,
         channel: Union[int, str],
@@ -534,8 +506,70 @@ class ROI:
             _add_minmax(minmax, _ax)
         _ax.axis("off")
         _ax.set_title(f"{self.name}\n{channel}")
-        # TODO: add scale bar
         return _ax
+
+    def plot_channels(
+        self,
+        channels: Optional[List[str]] = None,
+        merged: bool = False,
+        axes: List[Axis] = None,
+        equalize: bool = True,
+        log: bool = True,
+        add_scale: bool = True,
+        add_minmax: bool = True,
+        share_axes: bool = True,
+        **kwargs,
+    ) -> Optional[Figure]:
+        """If axes is given it must be length channels"""
+        # TODO: optimize this by avoiding reading stack for every channel
+        if channels is None:
+            channels = self.channel_labels.index
+
+        if axes is None:
+            n, m = (1, 1) if merged else get_grid_dims(len(channels))
+            fig, _axes = plt.subplots(
+                n, m, figsize=(m * 4, n * 4), squeeze=False, sharex=share_axes, sharey=share_axes,
+            )
+            fig.suptitle(f"{self.sample}\n{self}")
+            _axes = _axes.flatten()
+        else:
+            _axes = axes
+
+        # i = 0  # in case merged or len(channels) is 0
+        if merged:
+            from imc.graphics import merge_channels, rainbow_text
+
+            names, arr, minmaxes = self._get_channels(list(channels))
+            if log:
+                arr += abs(arr.min())
+                arr = np.log1p(arr)
+            if equalize:
+                arr = eq(arr)
+            arr2, colors = merge_channels(arr, return_colors=True, **kwargs)
+            x, y, _ = arr2.shape
+            _axes[0].imshow(arr2)
+            x = x * 0.05
+            y = y * 0.05
+            bbox = dict(boxstyle="round", ec=(0.3, 0.3, 0.3, 0.5), fc=(0.0, 0.0, 0.0, 0.5))
+            rainbow_text(
+                x, y, names.split(","), colors, ax=_axes[0], fontsize=3, bbox=bbox,
+            )
+        else:
+            for i, channel in enumerate(channels):
+                self.plot_channel(
+                    channel,
+                    ax=_axes[i],
+                    log=log,
+                    add_scale=add_scale,
+                    add_minmax=add_minmax,
+                    **kwargs,
+                )
+        for _ax in _axes:  # [i + 1 :]
+            _ax.axis("off")
+        return fig if axes is None else None
+
+    def stack_to_probabilities(self):
+        pass
 
     def get_cell_type_assignments(self) -> Series:
         sample = cast(self.sample)
