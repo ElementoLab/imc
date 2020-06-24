@@ -265,7 +265,8 @@ def write_image_to_file(
 
 
 def minmax_scale(x):
-    return (x - x.min()) / (x.max() - x.min())
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return (x - x.min()) / (x.max() - x.min())
 
 
 def estimate_noise(i):

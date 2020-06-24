@@ -20,6 +20,19 @@ from imc.utils import minmax_scale
 DEFAULT_PIXEL_UNIT_NAME = r"$\mu$m"
 
 
+DEFAULT_CHANNEL_COLORS = [
+    "red",
+    "green",
+    "blue",
+    "orange",
+    "purple",
+    "brown",
+    "pink",
+    "olive",
+    "cyan",
+    "gray",
+]
+
 SEQUENCIAL_CMAPS = [
     "Purples",
     "Greens",
@@ -58,9 +71,56 @@ SEQUENCIAL_CMAPS = [
 ]
 
 
+def is_numeric(x: Series) -> bool:
+    if x.dtype in ["float", "float32", "float64", "int", "int32", "int64"] or is_datetime(x):
+        return True
+    if (x.dtype in ["object"]) or isinstance(x.dtype, pd.CategoricalDtype):
+        return False
+    raise ValueError(f"Cannot transfer data type '{x.dtype}' to color!")
+
+
+def is_datetime(x: Series) -> bool:
+    if "datetime" in x.dtype.name:
+        return True
+    return False
+
+
+def to_numeric(x: Series) -> Series:
+    """Encode a string or categorical series to integer type."""
+    res = pd.Series(index=x.index, dtype=int)  # this will imply np.nan keeps being np.nan
+    for i, v in enumerate(x.value_counts().sort_index().index):
+        res.loc[x == v] = i
+    return res
+
+
+def get_categorical_cmap(x: Series) -> matplotlib.colors.ListedColormap:
+    """Choose a colormap for a categorical series encoded as ints."""
+    # get appropriate cmap
+    n = x.max() + 1
+    # colormaps are truncated to existing values
+    for v in [10, 20]:
+        if n < v:
+            return matplotlib.colors.ListedColormap(
+                colors=plt.get_cmap(f"tab{v}").colors[:n], name=f"tab{v}-{n}"
+            )
+    if n < 40:
+        return matplotlib.colors.ListedColormap(
+            colors=np.concatenate(
+                [plt.get_cmap("tab20c")(range(20)), plt.get_cmap("tab20b")(range(20))]
+            )[:n],
+            name=f"tab40-{n}",
+        )
+    raise ValueError("Only up to 40 unique values can be plotted as color.")
+
+
 def to_color_series(x: Series, cmap: Optional[str] = "Greens") -> Series:
     """Map a numeric pandas series to a series of RBG values."""
-    return Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
+    if is_numeric(x):
+        return pd.Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
+    # str or categorical
+    res = to_numeric(x)
+    cmap = get_categorical_cmap(res)
+    return pd.Series(cmap(res).tolist(), index=x.index, name=x.name)
 
 
 def to_color_dataframe(
@@ -88,10 +148,23 @@ def _add_extra_colorbars_to_clustermap(
 
     def add(data: Series, cmap: str, bbox: List[List[int]], orientation: str) -> None:
         ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
-        norm = matplotlib.colors.Normalize(vmin=data.min(), vmax=data.max())
-        cb1 = matplotlib.colorbar.ColorbarBase(
-            ax, cmap=plt.get_cmap(cmap), norm=norm, orientation=orientation, label=data.name
-        )
+        if is_numeric(data):
+            if is_datetime(data):
+                data = minmax_scale(data)
+            norm = matplotlib.colors.Normalize(vmin=data.min(), vmax=data.max())
+            cbar = matplotlib.colorbar.ColorbarBase(
+                ax, cmap=plt.get_cmap(cmap), norm=norm, orientation=orientation, label=data.name
+            )
+        else:
+            res = to_numeric(data)
+            # res /= res.max()
+            cmap = get_categorical_cmap(res)
+            # norm = matplotlib.colors.Normalize(vmin=res.min(), vmax=res.max())
+            cbar = matplotlib.colorbar.ColorbarBase(
+                ax, cmap=cmap, orientation=orientation, label=data.name,
+            )
+            cbar.set_ticks(res.drop_duplicates().sort_values() / res.max())
+            cbar.set_ticklabels(data.value_counts().sort_index().index)
 
     offset = 1 if location == "row" else 0
 
@@ -252,6 +325,8 @@ def saturize(arr: Array) -> Array:
     elif np.argmin(arr.shape) == 2:
         for i in range(arr.shape[2]):
             arr[:, :, i] = minmax_scale(arr[:, :, i])
+    else:
+        raise ValueError("Do not understand order of array axis.")
     return arr
 
 
@@ -262,33 +337,72 @@ def merge_channels(
     Assumes [0, 1] float array.
     to is a tuple of 3 colors.
     """
-    defaults = [
-        "red",
-        "green",
-        "blue",
-        "orange",
-        "purple",
-        "brown",
-        "pink",
-        "olive",
-        "cyan",
-        "gray",
-    ]
     # defaults = list(matplotlib.colors.TABLEAU_COLORS.values())
     n_channels = arr.shape[0]
     if output_colors is None:
-        target_colors = [matplotlib.colors.to_rgb(col) for col in defaults[:n_channels]]
-    elif isinstance(output_colors, list):
+        target_colors = [
+            matplotlib.colors.to_rgb(col) for col in DEFAULT_CHANNEL_COLORS[:n_channels]
+        ]
+    elif isinstance(output_colors, (list, tuple)):
         assert len(output_colors) == n_channels
         target_colors = [matplotlib.colors.to_rgb(col) for col in output_colors]
 
+    # work in int space to avoid float underflow
     if arr.min() >= 0 and arr.max() <= 1:
-        arr *= 256  # done in int space to avoid float underflow
+        arr *= 256
+    else:
+        arr = saturize(arr) * 256
     res = np.zeros(arr.shape[1:] + (3,))
     for i in range(n_channels):
         for j in range(3):
             res[:, :, j] = res[:, :, j] + arr[i] * target_colors[i][j]
-    return saturize(res) if not return_colors else (saturize(res), target_colors)
+    # return saturize(res) if not return_colors else (saturize(res), target_colors)
+    return res if not return_colors else (res, target_colors)
+
+
+def rainbow_text(x, y, strings, colors, orientation="horizontal", ax=None, **kwargs):
+    """
+    Take a list of *strings* and *colors* and place them next to each
+    other, with text strings[i] being shown in colors[i].
+
+    Parameters
+    ----------
+    x, y : float
+        Text position in data coordinates.
+    strings : list of str
+        The strings to draw.
+    colors : list of color
+        The colors to use.
+    orientation : {'horizontal', 'vertical'}
+    ax : Axes, optional
+        The Axes to draw into. If None, the current axes will be used.
+    **kwargs
+        All other keyword arguments are passed to plt.text(), so you can
+        set the font size, family, etc.
+
+    From: https://matplotlib.org/3.2.1/gallery/text_labels_and_annotations/rainbow_text.html
+    """
+    from matplotlib.transforms import Affine2D
+
+    if ax is None:
+        ax = plt.gca()
+    t = ax.transData
+    canvas = ax.figure.canvas
+
+    assert orientation in ["horizontal", "vertical"]
+    if orientation == "vertical":
+        kwargs.update(rotation=90, verticalalignment="bottom")
+
+    for s, c in zip(strings, colors):
+        text = ax.text(x, y, s + " ", color=c, transform=t, **kwargs)
+
+        # Need to draw to update the text position.
+        text.draw(canvas.get_renderer())
+        ex = text.get_window_extent()
+        if orientation == "horizontal":
+            t = text.get_transform() + Affine2D().translate(ex.width, 0)
+        else:
+            t = text.get_transform() + Affine2D().translate(0, ex.height)
 
 
 def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
@@ -300,7 +414,7 @@ def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
 def get_dark_cmaps(n: int = 3, from_palette: str = "colorblind") -> List[ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
     if n > len(sns.color_palette(from_palette)):
-        warnings.warn("Chosen palette has less than the requested number of colors. " "Will reuse!")
+        print("Chosen palette has less than the requested number of colors. " "Will reuse!")
     return [
         matplotlib.colors.LinearSegmentedColormap.from_list("", np.array(p) * r)
         for p in sns.color_palette(from_palette, n)
@@ -310,7 +424,7 @@ def get_dark_cmaps(n: int = 3, from_palette: str = "colorblind") -> List[ColorMa
 def get_transparent_cmaps(n: int = 3, from_palette: Optional[str] = "colorblind") -> List[ColorMap]:
     __r = np.linspace(0, 1, 100)
     if n > len(sns.color_palette(from_palette)):
-        warnings.warn("Chosen palette has less than the requested number of colors. " "Will reuse!")
+        print("Chosen palette has less than the requested number of colors. " "Will reuse!")
     return [
         matplotlib.colors.LinearSegmentedColormap.from_list("", [p + (c,) for c in __r])
         for p in sns.color_palette(from_palette, n)
@@ -338,7 +452,7 @@ def numbers_to_rgb_colors(
     n_colors = len(ident)
 
     if n_colors > len(sns.color_palette(from_palette)):
-        warnings.warn("Chosen palette has less than the requested number of colors." "Will reuse!")
+        print("Chosen palette has less than the requested number of colors." "Will reuse!")
 
     colors = Series(sns.color_palette(from_palette, ident.max())).reindex(ident - 1)
     res = np.zeros((mask.shape) + (3,))
@@ -361,7 +475,7 @@ def get_grid_dims(dims: int, nstart: Optional[int] = None) -> Tuple[int, int]:
     if (n * n) == dims:
         m = n
     else:
-        a = Series(n * np.arange(1, n + 1)) / dims
+        a = pd.Series(n * np.arange(1, n + 1)) / dims
         m = a[a >= 1].index[0] + 1
     assert n * m >= dims
 
