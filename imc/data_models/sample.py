@@ -75,7 +75,7 @@ class IMCSample:
         self.subfolder_per_sample = subfolder_per_sample
         self.roi_name_atribute = roi_name_atribute
         self.roi_number_atribute = roi_number_atribute
-        self._panel_metadata: Optional[DataFrame] = (
+        self.panel_metadata: Optional[DataFrame] = (
             pd.read_csv(panel_metadata, index_col=0)
             if isinstance(panel_metadata, (str, Path))
             else panel_metadata
@@ -190,7 +190,13 @@ class IMCSample:
     def clusters(self) -> MultiIndexSeries:
         if self._clusters is not None:
             return self._clusters
-        self.prj.set_clusters(samples=[self])
+        try:
+            self.prj.set_clusters(samples=[self])
+        except KeyError:
+            self._clusters = pd.read_csv(
+                self._get_input_filename("cell_type_assignments"), index_col=[0, 1, 2]
+            ).loc[self.name]
+            self.set_clusters(self._clusters)
         return self._clusters
 
     def _get_input_filename(self, input_type: str) -> Path:
@@ -203,7 +209,7 @@ class IMCSample:
             # "cell": ("cpout", "cell.csv"),
             # "relationships": ("cpout", "Object relationships.csv"),
             "cell_type_assignments": ("single_cell", ".cell_type_assignment_against_reference.csv"),
-            # "anndata": ("single_cell", ".cell.mean.all_vars.processed.h5ad")
+            "anndata": ("single_cell", ".single_cell.processed.h5ad"),
         }
         dir_, suffix = to_read[input_type]
         return self.root_dir / dir_ / (self.name + suffix)
@@ -402,10 +408,10 @@ class IMCSample:
 
     def cluster_cells(
         self,
-        rois: Optional[List["ROI"]] = None,
         output_prefix: Optional[Path] = None,
         plot: bool = True,
         set_attribute: bool = True,
+        rois: Optional[List["ROI"]] = None,
         **kwargs,
     ) -> Optional[Series]:
         """
@@ -413,46 +419,29 @@ class IMCSample:
         """
         output_prefix = Path(output_prefix or self.root_dir / "single_cell" / self.name)
 
-        quantification = None
-        if "quantification" in kwargs:
-            quantification = kwargs["quantification"]
-            del kwargs["quantification"]
-        cell_type_channels = None
-        if "cell_type_channels" in kwargs:
-            cell_type_channels = kwargs["cell_type_channels"]
-            del kwargs["cell_type_channels"]
-        else:
-            try:
-                if self.panel_metadata is not None:
-                    if "cell_type" in self.panel_metadata.columns:
-                        cell_type_channels = self.panel_metadata.query(
-                            "cell_type == 1"
-                        ).index.tolist()
-            except FileNotFoundError:
-                print(
-                    "`panel_metadata` is not set and "
-                    "`cell_type_channels` was not given, will use all channels "
-                    "for cell type clustering."
-                )
+        if "quantification" not in kwargs and self.quantification is not None:
+            kwargs["quantification"] = self.quantification
+        if "cell_type_channels" not in kwargs and self.panel_metadata is not None:
+            if "cell_type" in self.panel_metadata.columns:
+                kwargs["cell_type_channels"] = self.panel_metadata.query(
+                    "cell_type == 1"
+                ).index.tolist()
 
         clusters = single_cell_analysis(
-            output_prefix=output_prefix,
-            rois=[r for r in rois or self.rois],
-            quantification=quantification,
-            cell_type_channels=cell_type_channels,
-            plot=plot,
-            **kwargs,
+            output_prefix=output_prefix, rois=rois or self.rois, plot=plot, **kwargs,
         )
         # save clusters as CSV in default file
-        clusters.reset_index().to_csv(output_prefix + "cell_cluster_assignments", index=False)
+        clusters.reset_index().to_csv(
+            self._get_input_filename("cell_type_assignments"), index=False
+        )
         if not set_attribute:
             return clusters
 
-        # Set clusters for project and propagate for ROIs.
+        # Set clusters for project and propagate for Samples and ROIs.
         # in principle there was no need to pass clusters here as it will be read
         # however, the CSV roundtrip might give problems in edge cases, for
         # example when the sample name is only integers
-        self.set_clusters(clusters.astype(str))
+        self.set_clusters(clusters.astype(str).loc[self.name])
         return None
 
     def set_clusters(
@@ -465,9 +454,8 @@ class IMCSample:
             assert isinstance(clusters.index, pd.MultiIndex)
             assert clusters.index.names == id_cols
             self._clusters = clusters
-            "cell_type_assignments"
         for roi in rois or self.rois:
-            roi.set_clusters(clusters=self.clusters.loc[roi.name])
+            roi.set_clusters(clusters=self.clusters.loc[roi.name].squeeze())
 
     def predict_cell_types_from_reference(self, **kwargs) -> None:
         predict_cell_types_from_reference(self, **kwargs)
