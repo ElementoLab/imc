@@ -56,7 +56,7 @@ DEFAULT_SUPERCOMMUNITY_RESOLUTION = 0.5
 # DEFAULT_SUPER_COMMUNITY_NUMBER = 12
 
 
-def quantify_cells(
+def quantify_cell_intensity(
     image_file: Path,
     segmentation_file: Path,
     red_func: str = "mean",
@@ -90,33 +90,7 @@ def quantify_cells(
     return pd.DataFrame(res, index=cells[1:])
 
 
-def _quantify_cell_intensity__roi(roi: "ROI", **kwargs) -> DataFrame:
-    assignment = dict(roi=roi.name)
-    if roi.sample is not None:
-        assignment["sample"] = roi.sample.name
-    return roi.quantify_cell_intensity(**kwargs).assign(**assignment)
-
-
-def _quantify_cell_morphology__roi(roi: "ROI", **kwargs) -> DataFrame:
-    assignment = dict(roi=roi.name)
-    if roi.sample is not None:
-        assignment["sample"] = roi.sample.name
-    return roi.quantify_cell_morphology(**kwargs).assign(**assignment)
-
-
-def _correlate_channels__roi(roi: "ROI", labels: str = "channel_names") -> DataFrame:
-    xcorr = np.corrcoef(roi.stack.reshape((roi.channel_number, -1)))
-    np.fill_diagonal(xcorr, 0)
-    labs = getattr(roi, labels)
-    return pd.DataFrame(xcorr, index=labs, columns=labs)
-
-
-def _get_adjacency_graph__roi(roi: "ROI", **kwargs) -> DataFrame:
-    output_prefix = roi.sample.root_dir / "single_cell" / roi.name
-    return get_adjacency_graph(roi.stack, roi.mask, roi.clusters, output_prefix, **kwargs)
-
-
-def measure_cell_attributes(
+def quantify_cell_morphology(
     segmentation_file: Path,
     attributes: List[str] = [
         "area",
@@ -138,6 +112,65 @@ def measure_cell_attributes(
     return pd.DataFrame(
         skimage.measure.regionprops_table(segmentation, properties=attributes),
         index=np.unique(segmentation)[1:],
+    )
+
+
+def _quantify_cell_intensity__roi(roi: "ROI", **kwargs) -> DataFrame:
+    assignment = dict(roi=roi.name)
+    if roi.sample is not None:
+        assignment["sample"] = roi.sample.name
+    return roi.quantify_cell_intensity(**kwargs).assign(**assignment)
+
+
+def _quantify_cell_morphology__roi(roi: "ROI", **kwargs) -> DataFrame:
+    assignment = dict(roi=roi.name)
+    if roi.sample is not None:
+        assignment["sample"] = roi.sample.name
+    return roi.quantify_cell_morphology(**kwargs).assign(**assignment)
+
+
+def _correlate_channels__roi(roi: "ROI", labels: str = "channel_names") -> DataFrame:
+    xcorr = np.corrcoef(roi.stack.reshape((roi.channel_number, -1)))
+    np.fill_diagonal(xcorr, 0)
+    labs = getattr(roi, labels)
+    return pd.DataFrame(xcorr, index=labs, columns=labs)
+
+
+# def _get_adjacency_graph__roi(roi: "ROI", **kwargs) -> DataFrame:
+#     output_prefix = roi.sample.root_dir / "single_cell" / roi.name
+#     return get_adjacency_graph(roi.stack, roi.mask, roi.clusters, output_prefix, **kwargs)
+
+
+def quantify_cell_intensity_rois(rois: List["ROI"], **kwargs,) -> DataFrame:
+    """
+    Measure the intensity of each channel in each single cell.
+    """
+    return pd.concat(parmap.map(_quantify_cell_intensity__roi, rois, pm_pbar=True, **kwargs))
+
+
+def quantify_cell_morphology_rois(rois: List["ROI"], **kwargs,) -> DataFrame:
+    """
+    Measure the shape parameters of each single cell.
+    """
+    return pd.concat(parmap.map(_quantify_cell_morphology__roi, rois, pm_pbar=True, **kwargs))
+
+
+def quantify_cells_rois(
+    rois: List["ROI"], intensity: bool = True, morphology: bool = True, **kwargs
+) -> DataFrame:
+    """
+    Measure the intensity of each channel in each single cell.
+    """
+    quants = list()
+    if intensity:
+        quants.append(quantify_cell_intensity_rois(rois=rois, **kwargs))
+    if morphology:
+        quants.append(quantify_cell_morphology_rois(rois=rois, **kwargs))
+
+    return (
+        pd.concat([quants[0].drop(["sample", "roi"], axis=1), quants[1]], axis=1)
+        if len(quants) > 1
+        else quants[0]
     )
 
 
@@ -357,14 +390,19 @@ def measure_channel_background(
 
     grid = sns.clustermap(metrics_std, xticklabels=True, yticklabels=True)
     grid.fig.savefig(output_prefix + "channel_mean_variation_noise.clustermap.svg", **FIG_KWS)
+    # TODO: review what metrics should be included in the final decision
     return metrics_std.mean(1)
 
 
-def anndata_to_cluster_means(ann, cluster_label="cluster"):
+def anndata_to_cluster_means(
+    ann: anndata.AnnData, raw: bool = False, cluster_label: str = "cluster"
+) -> DataFrame:
     means = dict()
+    obj = ann if not raw else ann.raw
     for cluster in ann.obs[cluster_label].unique():
-        means[cluster] = ann[ann.obs[cluster_label] == cluster, :].X.mean(0)
-    mean_expr = pd.DataFrame(means, index=ann.var.index).sort_index(axis=1)
+        clust = ann.obs[cluster_label] == cluster
+        means[cluster] = obj[clust, :].X.mean(0)
+    mean_expr = pd.DataFrame(means, index=obj.var.index).sort_index(axis=1)
     mean_expr.columns.name = "cluster"
     return mean_expr
 
@@ -375,7 +413,8 @@ def single_cell_analysis(
     rois: Optional[List["ROI"]] = None,
     label_clusters: bool = True,
     plot: bool = True,
-    morphology: bool = False,
+    intensity: bool = True,
+    morphology: bool = True,
     filter_channels: bool = False,
     cell_type_channels: Optional[List[str]] = None,
     channel_filtering_threshold: float = 0.1,  # 0.12
@@ -417,23 +456,18 @@ def single_cell_analysis(
         filtered_channels = channel_labels.tolist()
 
     if quantification is None:
-        print("Quantifying single cell intensity.")
-        # technically here I should pass `channels_include` as kwarg,
-        # but as that is a series, it is not well serializable
-        intensity = pd.concat(parmap.map(_quantify_cell_intensity__roi, rois, pm_pbar=True))
-        _morphology = None
-        if morphology:
-            print("Quantifying single cell morphology.")
-            intensity = intensity.drop(["sample", "roi"], axis=1)
-            _morphology = pd.concat(parmap.map(_quantify_cell_morphology__roi, rois, pm_pbar=True))
-        print("Joining quantifications.")
-        quantification = pd.concat([intensity, _morphology], axis=1)
-        quantification = quantification[filtered_channels + ["sample", "roi"]]
+        print("Quantifying single cells.")
+        quantification = quantify_cells_rois(rois=rois, intensity=intensity, morphology=morphology)
 
     # Remove excluded channels
     for _ch in channel_exclude:
         quantification = quantification.loc[:, ~quantification.columns.str.contains(_ch)]
-    # Include
+    # Filter out low QC channels
+    if filter_channels:
+        # TODO: fileter channels by QC metrics
+        pass
+
+    # Keep only include channels
     if channel_include is not None:
         _includes = [_ch for _ch in quantification.columns if _ch in channel_include]
         quantification = quantification.loc[:, _includes]
@@ -562,20 +596,19 @@ def single_cell_analysis(
     )
 
     fig, axes = plt.subplots(1, 3, figsize=(4 * 3, 4), sharey=True)
+    kwargs = dict(robust=True, square=True, xticklabels=True, yticklabels=True)
     for ax, log in zip(axes, [False, True]):
         sns.heatmap(
             cluster_counts_per_roi if not log else np.log10(1 + cluster_counts_per_roi),
             cbar_kws=dict(label="Cells per cluster" + ("" if not log else " (log10)")),
-            robust=True,
             ax=ax,
-            square=True,
+            **kwargs,
         )
     sns.heatmap(
         (cluster_counts_per_roi / cluster_counts_per_roi.sum()) * 100,
         cbar_kws=dict(label="Cells per cluster (%)"),
-        robust=True,
         ax=axes[2],
-        square=True,
+        **kwargs,
     )
     fig.savefig(output_prefix + "cell.counts_per_cluster_per_roi.svg", **FIG_KWS)
 
@@ -618,15 +651,15 @@ def single_cell_analysis(
             grid.savefig(output_prefix + f"cell.mean_expression_per_cluster.{label1}.{label2}svg",)
             # **FIG_KWS)
 
-    # these take really long to be saved
-    markers = ann_ct.var.index.tolist() if plot_only_channels is None else plot_only_channels
-    sc_kwargs = dict(color=variables + markers, show=False, return_fig=True, use_raw=True)
-    fig = sc.pl.pca(ann, **sc_kwargs)
-    rasterize_scanpy(fig)
-    fig.savefig(output_prefix + "cell.pca.all_channels.pdf", **FIG_KWS)
-    fig = sc.pl.umap(ann, **sc_kwargs)
-    rasterize_scanpy(fig)
-    fig.savefig(output_prefix + "cell.umap.all_channels.pdf", **FIG_KWS)
+    # # these take really long to be saved
+    # markers = ann_ct.var.index.tolist() if plot_only_channels is None else plot_only_channels
+    # sc_kwargs = dict(color=variables + markers, show=False, return_fig=True, use_raw=True)
+    # fig = sc.pl.pca(ann, **sc_kwargs)
+    # rasterize_scanpy(fig)
+    # fig.savefig(output_prefix + "cell.pca.all_channels.pdf", **FIG_KWS)
+    # fig = sc.pl.umap(ann, **sc_kwargs)
+    # rasterize_scanpy(fig)
+    # fig.savefig(output_prefix + "cell.umap.all_channels.pdf", **FIG_KWS)
 
     return clusters.set_index(cats + ["obj_id"])["cluster"]
 
@@ -745,7 +778,7 @@ def derive_reference_cell_type_labels(
         xticklabels=True,
         yticklabels=True,
         row_colors=cmeans,
-        # col_colors=fractions,
+        col_colors=fractions,
     )
     opts = [
         (mean_expr, "original", dict()),
@@ -777,7 +810,7 @@ def derive_reference_cell_type_labels(
         cmap="RdBu_r",
         cbar_kws=dict(label="Mean expression (Z-score)"),
         row_colors=cmeans,
-        col_colors=fractions,
+        col_colors=fractions_l,
     )
     opts = [
         (mean_expr_z_l, "labeled.both_z", dict()),
@@ -807,29 +840,29 @@ def derive_reference_cell_type_labels(
     return new_labels
 
 
-def add_extra_colorbar_to_clustermap(
-    data: Series, grid, cmap="inferno", location="columns", **kwargs
-):
-    # get position to add new axis in existing figure
-    # # get_position() returns ((x0, y0), (x1, y1))
-    heat = grid.ax_heatmap.get_position()
+# def add_extra_colorbar_to_clustermap(
+#     data: Series, grid, cmap="inferno", location="columns", **kwargs
+# ):
+#     # get position to add new axis in existing figure
+#     # # get_position() returns ((x0, y0), (x1, y1))
+#     heat = grid.ax_heatmap.get_position()
 
-    if location == "columns":
-        width = 0.025
-        orientation = "vertical"
-        dend = grid.ax_col_dendrogram.get_position()
-        bbox = [[heat.x1, dend.y0], [heat.x1 + width, dend.y1]]
-    else:
-        height = 0.025
-        orientation = "horizontal"
-        dend = grid.ax_row_dendrogram.get_position()
-        bbox = [[dend.x0, dend.y0 - height], [dend.x1, dend.y0]]
+#     if location == "columns":
+#         width = 0.025
+#         orientation = "vertical"
+#         dend = grid.ax_col_dendrogram.get_position()
+#         bbox = [[heat.x1, dend.y0], [heat.x1 + width, dend.y1]]
+#     else:
+#         height = 0.025
+#         orientation = "horizontal"
+#         dend = grid.ax_row_dendrogram.get_position()
+#         bbox = [[dend.x0, dend.y0 - height], [dend.x1, dend.y0]]
 
-    ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
-    norm = matplotlib.colors.Normalize(vmin=data.min(), vmax=data.max())
-    cb1 = matplotlib.colorbar.ColorbarBase(
-        ax, cmap=plt.get_cmap(cmap), norm=norm, orientation=orientation, label=data.name
-    )
+#     ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
+#     norm = matplotlib.colors.Normalize(vmin=data.min(), vmax=data.max())
+#     cb1 = matplotlib.colorbar.ColorbarBase(
+#         ax, cmap=plt.get_cmap(cmap), norm=norm, orientation=orientation, label=data.name
+#     )
 
 
 def predict_cell_types_from_reference(
