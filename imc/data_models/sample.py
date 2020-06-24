@@ -160,24 +160,6 @@ class IMCSample:
         return len(self.rois)
 
     @property
-    def panel_metadata(self) -> DataFrame:
-        """Get an order of channel labels from sample panel."""
-        if self._panel_metadata is not None:
-            return self._panel_metadata
-        # read reference
-        rpath = Path(
-            self.root_dir, "ometiff", self.name, self.name + "_AcquisitionChannel_meta.csv"
-        )
-        if not rpath.exists():
-            msg = (
-                "Sample `panel_metadata` was not given upon initialization "
-                f"and '{rpath}' could not be found!"
-            )
-            raise FileNotFoundError(msg)
-        self._panel_metadata = parse_acquisition_metadata(rpath)
-        return self._panel_metadata
-
-    @property
     def channel_labels(self) -> Union[Series, DataFrame]:
         labels = pd.DataFrame(
             [roi.channel_labels.rename(roi.name) for roi in self.rois]
