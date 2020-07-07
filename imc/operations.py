@@ -674,8 +674,6 @@ def derive_reference_cell_type_labels(
     std_threshold: float = 1.5,
     cluster_min_percentage: float = 0.0,
 ) -> Series:
-    from imc.utils import get_threshold_from_gaussian_mixture
-
     if plot and output_prefix is None:
         raise ValueError("If `plot` if True, `output_prefix` must be given.")
 
@@ -944,6 +942,55 @@ def predict_cell_types_from_reference(
     return cell_type_assignments
 
 
+# def merge_clusterings(samples: List["IMCSample"]):
+
+#     means = dict()
+#     for sample in samples:
+#         ann = sc.read(
+#             sample.root_dir / "single_cell" / (sample.name + ".single_cell.processed.h5ad")
+#         )
+#         mean = anndata_to_cluster_means(ann, raw=False, cluster_label="cluster")
+#         mean.columns = sample.name + " - " + mean.columns.str.extract(r"^(\d+) - .*")[0]
+#         means[sample.name] = mean
+
+#     _vars = set([y for x in means.values() for y in x.index.tolist()])
+#     variables = [v for v in _vars if all([v in var.index for var in means.values()])]
+#     means = {k: v.loc[variables].apply(minmax_scale, axis=1) for k, v in means.items()}
+
+#     index = [y for x in means.values() for y in x.columns]
+#     res = pd.DataFrame(index=index, columns=index, dtype=float)
+#     for s1, m1 in means.items():
+#         for s2, m2 in means.items():
+#             for c2 in m2:
+#                 res.loc[m1.columns, c2] = m1.corrwith(m2[c2])
+
+#     res2 = res.copy()
+#     np.fill_diagonal(res2.values, np.nan)
+#     intra = list()
+#     for sample in samples:
+#         intra += (
+#             res2.loc[res2.index.str.contains(sample.name), res2.index.str.contains(sample.name)]
+#             .values.flatten()
+#             .tolist()
+#         )
+#     inter = list()
+#     for s1 in samples:
+#         for s2 in samples:
+#             if s1 == s2:
+#                 continue
+#         inter += (
+#             res2.loc[res2.index.str.contains(s1.name), res2.index.str.contains(s2.name)]
+#             .values.flatten()
+#             .tolist()
+#         )
+
+#     disp = res.loc[
+#         res.index.str.contains("|".join([x.name for x in samples[:-1]])),
+#         res.index.str.contains("|".join([x.name for x in samples[1:]])),
+#     ]
+#     sns.clustermap(disp, center=0, cmap="RdBu_r", xticklabels=True, yticklabels=True)
+
+
 def get_adjacency_graph(
     roi: "ROISample", output_prefix: Optional[Path] = None, max_dist: int = MAX_BETWEEN_CELL_DIST
 ):
@@ -951,10 +998,6 @@ def get_adjacency_graph(
     if not output_prefix.endswith("."):
         output_prefix += "."
     os.makedirs(output_prefix.parent, exist_ok=True)
-
-    # if not hasattr(roi, "clusters"):
-    #     # LOGGER.info("Reading cluster assignments from disk.")
-    #     roi.set_clusters()
 
     mask = roi.cell_mask
 
@@ -1005,56 +1048,92 @@ def get_adjacency_graph(
 
 def measure_cell_type_adjacency(
     roi: "ROISample",
-    g: Optional[nx.Graph] = None,
+    method: str = "random",
+    adjacency_graph: Optional[nx.Graph] = None,
     n_iterations: int = 100,
+    inf_replace_method: str = "min",
     output_prefix: Optional[Path] = None,
+    plot: bool = True,
 ) -> DataFrame:
-    # import community
-
     output_prefix = output_prefix or (roi.sample.root_dir / "single_cell" / roi.name + ".")
     if not output_prefix.endswith("."):
         output_prefix += "."
 
-    if not hasattr(roi, "clusters"):
-        # LOGGER.info("Reading cluster assignments from disk.")
-        roi.set_clusters()
-    roi_cell_type = roi.clusters.astype(str).to_dict()
+    cluster_counts = roi.clusters.value_counts()
 
-    if g is None:
-        g = roi.adjacency_graph
+    if adjacency_graph is None:
+        adjacency_graph = roi.adjacency_graph
 
-    adj, labels = nx.linalg.attrmatrix.attr_matrix(g, node_attr="cluster")
-    freqs = pd.DataFrame(adj, labels, labels).sort_index(0).sort_index(1)
+    adj = nx.linalg.attrmatrix.attr_matrix(
+        adjacency_graph, node_attr="cluster", rc_order=cluster_counts.index
+    )
+    freqs = (
+        pd.DataFrame(adj, cluster_counts.index, cluster_counts.index).sort_index(0).sort_index(1)
+    )
     freqs.to_csv(output_prefix + "cluster_adjacency_graph.frequencies.csv")
 
-    shuffled_freqs = list()
-    for _ in tqdm(range(n_iterations)):
-        g2 = g.copy()
-        shuffled_attr = dict(
-            zip(
-                np.random.choice(list(roi_cell_type.keys()), len(roi_cell_type)),
-                roi_cell_type.values(),
+    if method == "random":
+        roi_cell_type = roi.clusters.astype(str).to_dict()
+        shuffled_freqs = list()
+        for _ in tqdm(range(n_iterations)):
+            g2 = adjacency_graph.copy()
+            shuffled_attr = dict(
+                zip(
+                    np.random.choice(list(roi_cell_type.keys()), len(roi_cell_type)),
+                    roi_cell_type.values(),
+                )
             )
+            nx.set_node_attributes(g2, shuffled_attr, name="cluster")
+            rf, rl = nx.linalg.attrmatrix.attr_matrix(g2, node_attr="cluster")
+            shuffled_freqs.append(pd.DataFrame(rf, rl, rl))
+        shuffled_freq = pd.concat(shuffled_freqs)
+        shuffled_freq.to_csv(
+            output_prefix
+            + f"cluster_adjacency_graph.random_frequencies.all_iterations_{n_iterations}.csv"
         )
-        nx.set_node_attributes(g2, shuffled_attr, name="cluster")
-        rf, rl = nx.linalg.attrmatrix.attr_matrix(g2, node_attr="cluster")
-        shuffled_freqs.append(pd.DataFrame(rf, rl, rl))
-    shuffled_freq = pd.concat(shuffled_freqs)
-    shuffled_freq.to_csv(
-        output_prefix
-        + f"cluster_adjacency_graph.random_frequencies.all_iterations_{n_iterations}.csv"
-    )
-    shuffled_freq = shuffled_freq.groupby(level=0).sum().sort_index(1)
-    shuffled_freq.to_csv(output_prefix + "cluster_adjacency_graph.random_frequencies.csv")
+        shuffled_freq = shuffled_freq.groupby(level=0).sum().sort_index(1)
+        shuffled_freq.to_csv(output_prefix + "cluster_adjacency_graph.random_frequencies.csv")
 
-    fl = np.log1p((freqs / freqs.values.sum()) * 1e6)
-    sl = np.log1p((shuffled_freq / shuffled_freq.values.sum()) * 1e6)
-    # make sure both contain all edges/nodes
-    fl = fl.reindex(sl.index, axis=0).reindex(sl.index, axis=1).fillna(0)
-    sl = sl.reindex(fl.index, axis=0).reindex(fl.index, axis=1).fillna(0)
-    norm_freqs = fl - sl
+        fl = np.log1p((freqs / freqs.values.sum()) * 1e6)
+        sl = np.log1p((shuffled_freq / shuffled_freq.values.sum()) * 1e6)
+        # make sure both contain all edges/nodes
+        fl = fl.reindex(sl.index, axis=0).reindex(sl.index, axis=1).fillna(0)
+        sl = sl.reindex(fl.index, axis=0).reindex(fl.index, axis=1).fillna(0)
+        norm_freqs = fl - sl
+    elif method == "pharmacoscopy":
+        c = roi.clusters.shape[0]
+        fa = np.log(freqs.sum().sum() / c)
+        norms = pd.DataFrame()
+        for ct1 in freqs.index:
+            for ct2 in freqs.columns:
+                o = np.log(freqs.loc[ct1, ct2] / freqs.loc[ct1].sum())
+                if o == 0:
+                    norms.loc[ct1, ct2] = 0.0
+                    continue
+                f1 = np.log(cluster_counts.loc[ct1] / c)
+                f2 = np.log(cluster_counts.loc[ct2] / c)
+
+                norms.loc[ct1, ct2] = o - (f1 + f2 + fa)
+
+        # three ways to replace -inf (cell types with no event touching):
+        # # 1. replace with lowest non-inf value (dehemphasize the lower bottom - lack of touching)
+        if inf_replace_method == "min":
+            norm_freqs = norms.replace(-np.inf, norms[norms != (-np.inf)].min().min())
+        # # 2. replace with minus highest (try to )
+        if inf_replace_method == "max":
+            norm_freqs = norms.replace(-np.inf, -norms.max().max())
+        # # 3. One of the above + make symmetric by  X @ X.T + Z-score
+        if inf_replace_method == "min_symmetric":
+            norm_freqs = norms.replace(-np.inf, norms[norms != (-np.inf)].min().min())
+            norm_freqs = norm_freqs @ norm_freqs.T
+            norm_freqs = (norm_freqs - norm_freqs.values.mean()) / norm_freqs.values.std()
+        if inf_replace_method == "max_symmetric":
+            norm_freqs = norm_freqs @ norm_freqs.T
+            norm_freqs = (norm_freqs - norm_freqs.values.mean()) / norm_freqs.values.std()
     norm_freqs.to_csv(output_prefix + "cluster_adjacency_graph.norm_over_random.csv")
 
+    if not plot:
+        return norm_freqs
     v = norm_freqs.values.std() * 2
     fig, axes = plt.subplots(1, 2, sharey=True, figsize=(4 * 2, 4))
     kws = dict(cmap="RdBu_r", center=0, square=True, xticklabels=True, yticklabels=True)
@@ -1067,7 +1146,6 @@ def measure_cell_type_adjacency(
     grid.savefig(
         output_prefix + "cluster_adjacency_graph.norm_over_random.clustermap.svg", **FIG_KWS
     )
-
     return norm_freqs
 
 
@@ -1482,10 +1560,14 @@ def stack_to_probabilities(
     channel_labels: Series,
     nuclear_channels: Optional[List[str]] = None,
     cytoplasm_channels: Optional[List[str]] = None,
+    log: bool = True,
+    # scale: bool = True,
 ) -> Array:
     """
     Very simple way to go from a channel stack to nuclei, cytoplasm and background probabilities.
     """
+    from skimage.exposure import equalize_hist as eq
+
     # nuclear_channels = ["DNA", "Histone", "pCREB", "cKIT", "pSTAT3"]
     nuclear_channels = nuclear_channels or ["DNA", "Histone"]
     _nuclear_channels = channel_labels[channel_labels.str.contains("|".join(nuclear_channels))]
@@ -1496,7 +1578,11 @@ def stack_to_probabilities(
             channel_labels.str.contains("|".join(cytoplasm_channels))
         ]
 
-    stack = np.log1p(stack)
+    if log:
+        stack = np.log1p(stack)
+
+    # if scale:
+    #     stack = saturize(stack)
 
     # # mean of nuclear signal
     ns = stack[_nuclear_channels.index].mean(0)
@@ -1504,22 +1590,23 @@ def stack_to_probabilities(
     cs = stack[_cytoplasm_channels.index].mean(0)
 
     # # normalize
-    ns = ns / ns.max()
-    cs = cs / cs.max()
+    ns = minmax_scale(ns)
+    cs = minmax_scale(eq(cs, 256 * 4))
 
     # # convert into probabilities
-    pn = minmax_scale(ns)
-    pb = 1 - minmax_scale((pn + minmax_scale(cs)))
-    pc = minmax_scale(minmax_scale(cs) - (pn + pb))
+    pn = ns
+    pb = 1 - minmax_scale(pn + cs)
+    # pb = (pb - pb.min()) / pb.max()
+    # pc = minmax_scale(cs - (pn + pb))
+    pc = 1 - (pn + pb)
+    rgb = np.asarray([pn, pc, pb])
 
     # pnf = ndi.gaussian_filter(pn, 1)
     # pcf = ndi.gaussian_filter(pc, 1)
     # pbf = ndi.gaussian_filter(pb, 1)
-
-    rgb = np.asarray([pn, pc, pb])
-    for c in range(rgb.shape[0]):
-        rgb[c] = minmax_scale(rgb[c])
-    return rgb / rgb.sum(0)
+    # rgb = np.asarray([pnf, pcf, pbf])
+    # return saturize(rgb)
+    return np.clip(rgb, 0, 1)
 
     # # pp = ndi.zoom(roi.probabilities, (1, 0.5, 0.5))
     # # pp = pp / pp.max()
@@ -1530,3 +1617,106 @@ def stack_to_probabilities(
     # from skimage.exposure import equalize_hist as eq
     # axes[2].imshow(minmax_scale(eq(roi._get_channel("mean")[1])))
     # axes[3].imshow(roi.mask)
+
+
+# def probabilities_to_mask(arr: Array, nuclei_diameter_range=(5, 30)) -> Array:
+#     import h5py
+#     import skimage.filters
+#     import centrosome
+#     import scipy
+#     from skimage.filters import threshold_local
+#     from skimage.exposure import equalize_hist as eq
+#     from centrosome.threshold import get_threshold
+
+#     def size_fn(size, is_foreground):
+#         return size < nuclei_diameter_range[1] * nuclei_diameter_range[1]
+
+#     nuclei, cyto, backgd = arr
+
+#     # make cyto
+#     nuc_cyto = eq(nuclei + cyto)
+
+#     # smooth nuclei
+
+#     # # typical diameter
+#     5, 30
+
+#     # # discard objects outside diameter range
+#     False
+
+#     # # discard touching border
+#     True
+
+#     sn = skimage.filters.sobel(nuclei)
+#     snt = nuclei > skimage.filters.threshold_otsu(nuclei)
+#     sntr = skimage.morphology.remove_small_objects(snt)
+#     sntrd = ~skimage.morphology.dilation(~sntr)
+
+
+#     skimage.segmentation.flood_fill(nuc_cyto
+
+#     skimage.segmentation.watershed(scipy.ndimage.morphology.distance_transform_edt(sntr))
+
+
+#     # # local thresholding
+#     nuc = eq(nuclei)
+#     # # # threshold smoothing scale 0
+#     # # # threshold correction factor 1.2
+#     # # # threshold bounds 0.0, 1.0
+#     lt, gt = get_threshold(
+#         "Otsu",
+#         "Adaptive",
+#         nuc,
+#         threshold_range_min=0,
+#         threshold_range_max=1.0,
+#         threshold_correction_factor=1.2,
+#         adaptive_window_size=50,
+#     )
+
+#     binary_image = (nuc >= lt) & (nuc >= gt)
+
+#     # remove small objects
+#     skimage.morphology.remove_small_objects(binary_image, min_size=min_size)
+
+#     # # # measure variance and entropy in foreground vs background
+
+#     # fill holes inside foreground
+
+#     binary_image = centrosome.cpmorphology.fill_labeled_holes(binary_image, size_fn=size_fn)
+
+#     # label
+#     labeled_image, object_count = scipy.ndimage.label(binary_image, np.ones((3, 3), bool))
+#     return labeled_image
+
+
+# import numpy as np
+# import cv2
+# from matplotlib import pyplot as plt
+
+# gray = (nuclei.copy() * 255).astype('u8')
+# gray = cv2.cvtColor(np.moveaxis(pr, 0, -1),cv2.COLOR_BGR2GRAY)
+# ret, thresh = cv2.threshold(gray,0,255,cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+
+# #noise removal
+# kernel = np.ones((3,3),np.uint8)
+# opening = cv2.morphologyEx(thresh,cv2.MORPH_OPEN,kernel, iterations = 2)
+
+# # sure background area
+# sure_bg = cv2.dilate(opening,kernel,iterations=3)
+
+# # Finding sure foreground area
+# dist_transform = cv2.distanceTransform(opening,cv2.DIST_L2,5)
+# ret, sure_fg = cv2.threshold(dist_transform,0.7*dist_transform.max(),255,0)
+
+# # Finding unknown region
+# sure_fg = np.uint8(sure_fg)
+# unknown = cv2.subtract(sure_bg,sure_fg)
+
+# # Marker labelling
+# ret, markers = cv2.connectedComponents(sure_fg)
+
+# # Add one to all labels so that sure background is not 0, but 1
+# markers = markers+1
+
+# # Now, mark the region of unknown with zero
+# markers[unknown==255] = 0
