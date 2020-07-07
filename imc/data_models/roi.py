@@ -373,6 +373,14 @@ class ROI:
             )
         return res if not set_attribute else None
 
+    # def _get_channels_from_string(self, string: str) -> Series:
+    #     match = self.channel_labels.str.contains(re.escape((string)))
+    #     if match.any():
+    #         return match
+    #     msg = f"Could not find out channel '{string}' in `sample.channel_labels`."
+    #     # # LOGGER.error(msg)
+    #     raise ValueError(msg)
+
     def _get_channel(
         self,
         channel: Union[int, str],

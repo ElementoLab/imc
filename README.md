@@ -1,4 +1,4 @@
-<!--![imc logo](https://raw.githubusercontent.com/elementolab/imc/master/logo.png)-->
+<!--![imc logo](https://raw.githubusercontent.com/elementolab/imcpipeline/master/logo.png)-->
 ![imc logo](logo.png)
 
 # Imaging mass cytometry
