@@ -1,3 +1,4 @@
+ipython
 pylint
 git-lint
 black[d]
@@ -7,6 +8,6 @@ PyQt5
 pytest
 rich
 
-sphinx
+Sphinx
 sphinx-issues
 sphinx-rtd-theme
