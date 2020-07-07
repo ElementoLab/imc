@@ -87,7 +87,7 @@ def is_datetime(x: Series) -> bool:
 
 def to_numeric(x: Series) -> Series:
     """Encode a string or categorical series to integer type."""
-    res = pd.Series(index=x.index, dtype=int)  # this will imply np.nan keeps being np.nan
+    res = pd.Series(index=x.index, dtype=float)  # this will imply np.nan keeps being np.nan
     for i, v in enumerate(x.value_counts().sort_index().index):
         res.loc[x == v] = i
     return res
@@ -95,9 +95,11 @@ def to_numeric(x: Series) -> Series:
 
 def get_categorical_cmap(x: Series) -> matplotlib.colors.ListedColormap:
     """Choose a colormap for a categorical series encoded as ints."""
-    # get appropriate cmap
-    n = x.max() + 1
+    # TODO: allow choosing from sets of categorical cmaps.
+    # additional ones could be Pastel1/2, Set2/3
+
     # colormaps are truncated to existing values
+    n = int(x.max() + 1)
     for v in [10, 20]:
         if n < v:
             return matplotlib.colors.ListedColormap(
@@ -114,13 +116,17 @@ def get_categorical_cmap(x: Series) -> matplotlib.colors.ListedColormap:
 
 
 def to_color_series(x: Series, cmap: Optional[str] = "Greens") -> Series:
-    """Map a numeric pandas series to a series of RBG values."""
+    """
+    Map a numeric pandas series to a series of RBG values.
+    NaN values are white.
+    """
     if is_numeric(x):
         return pd.Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
     # str or categorical
     res = to_numeric(x)
     cmap = get_categorical_cmap(res)
-    return pd.Series(cmap(res).tolist(), index=x.index, name=x.name)
+    # float values passed to cmap must be in [0.0-1.0] range
+    return pd.Series(cmap(res / res.max()).tolist(), index=x.index, name=x.name)
 
 
 def to_color_dataframe(
