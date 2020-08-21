@@ -4,7 +4,7 @@
 A class to model a imaging mass cytometry sample.
 """
 
-from typing import Dict, Tuple, List, Optional, Union
+from typing import Dict, Tuple, List, Optional, Union, Iterator
 
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
@@ -106,6 +106,9 @@ class IMCSample:
 
     def __getitem__(self, item: int) -> "ROI":
         return self.rois[item]
+
+    def __iter__(self) -> Iterator["ROI"]:
+        return iter(self.rois)
 
     def _detect_rois(self) -> DataFrame:
         if self.root_dir is None:

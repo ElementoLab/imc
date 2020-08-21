@@ -5,7 +5,7 @@ A class to model a imaging mass cytometry project.
 """
 
 import os
-from typing import Tuple, List, Optional, Union  # , cast
+from typing import Tuple, List, Optional, Union, Iterator  # , cast
 
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
@@ -156,6 +156,9 @@ class Project:
 
     def __getitem__(self, item: int) -> "IMCSample":
         return self.samples[item]
+
+    def __iter__(self) -> Iterator["IMCSample"]:
+        return iter(self.samples)
 
     def _detect_samples(self) -> DataFrame:
         if self.processed_dir is None:
