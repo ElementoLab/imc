@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := all
 
 
-NAME="imc"
+NAME=$(shell basename `pwd`)
 DOCS_DIR="docs"
 
 

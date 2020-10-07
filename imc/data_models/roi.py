@@ -5,7 +5,16 @@ A class to model a imaging mass cytometry acquired region of interest (ROI).
 """
 
 import re
-from typing import Dict, Tuple, List, Sequence, Optional, Union, Any  # , cast
+from typing import (
+    Dict,
+    Tuple,
+    List,
+    Sequence,
+    Optional,
+    Union,
+    Any,
+    overload,
+)  # , cast
 
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
@@ -30,11 +39,17 @@ from imc.graphics import (
     add_minmax as _add_minmax,
     get_grid_dims,
     get_transparent_cmaps,
-    add_legend,
+    add_legend as _add_legend,
     cell_labels_to_mask,
     numbers_to_rgb_colors,
+    merge_channels,
+    rainbow_text,
 )
-from imc.exceptions import cast  # TODO: replace with typing.cast
+
+from imc.exceptions import (
+    cast,
+    AttributeNotSetError,
+)  # TODO: replace with typing.cast
 
 
 FIG_KWS = dict(dpi=300, bbox_inches="tight")
@@ -90,7 +105,9 @@ class ROI:
         roi_number: Optional[int] = None,
         channel_labels: Optional[Union[Path, Series]] = None,
         root_dir: Optional[Path] = None,
-        stacks_dir: Optional[Path] = ROI_STACKS_DIR,  # TODO: make these relative to the root_dir
+        stacks_dir: Optional[
+            Path
+        ] = ROI_STACKS_DIR,  # TODO: make these relative to the root_dir
         masks_dir: Optional[Path] = ROI_MASKS_DIR,
         single_cell_dir: Optional[Path] = ROI_SINGLE_CELL_DIR,
         sample: Optional["IMCSample"] = None,
@@ -105,7 +122,9 @@ class ROI:
         self.masks_dir = masks_dir
         self.single_cell_dir = single_cell_dir
         self.channel_labels_file: Optional[Path] = (
-            Path(channel_labels) if isinstance(channel_labels, (str, Path)) else None
+            Path(channel_labels)
+            if isinstance(channel_labels, (str, Path))
+            else None
         )
         # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
         self._channel_labels: Optional[Series] = (
@@ -113,12 +132,15 @@ class ROI:
             if isinstance(channel_labels, (str, Path))
             else channel_labels
         )
+        self._channel_include = None
+        self._channel_exclude = None
         # obj connections
         self.sample = sample
         self.prj: Optional["Project"] = None
         # data
         self._stack: Optional[Array] = None
         self._shape: Optional[Tuple] = None
+        self._area: Optional[int] = None
         self._channel_number: Optional[int] = None
         self._probabilities: Optional[Array] = None
         self._nuclei_mask: Optional[Array] = None
@@ -134,7 +156,11 @@ class ROI:
         return (
             "Region"
             + (f" {self.roi_number}" if self.roi_number is not None else "")
-            + (f" of sample '{self.sample.name}'" if self.sample is not None else "")
+            + (
+                f" of sample '{self.sample.name}'"
+                if self.sample is not None
+                else ""
+            )
         )
 
     @property
@@ -158,10 +184,16 @@ class ROI:
         # self._channel_labels = pd.read_csv(channel_labels_file, header=None, squeeze=True)
         preview = pd.read_csv(channel_labels_file, header=None, squeeze=True)
         if isinstance(preview, pd.Series):
-            order = preview.to_frame(name="ChannelName").set_index("ChannelName")
+            order = preview.to_frame(name="ChannelName").set_index(
+                "ChannelName"
+            )
             # read reference
             ref: DataFrame = cast(sample.panel_metadata)
-            ref = ref.loc[ref["AcquisitionID"].isin([self.roi_number, str(self.roi_number)])]
+            ref = ref.loc[
+                ref["AcquisitionID"].isin(
+                    [self.roi_number, str(self.roi_number)]
+                )
+            ]
             self._channel_labels = (
                 order.join(ref.reset_index().set_index("ChannelName"))["index"]
                 .reset_index(drop=True)
@@ -172,6 +204,21 @@ class ROI:
             preview.index = preview.index.astype(int)
             self._channel_labels = preview
         return self._channel_labels
+
+    @property
+    def channel_exclude(self) -> Series:
+        if self._channel_exclude is not None:
+            return self._channel_exclude
+        if self.channel_labels is not None:
+            self._channel_exclude = pd.Series(index=self.channel_labels).fillna(
+                False
+            )
+            return self._channel_exclude
+
+    def set_channel_exclude(self, values: Union[List, Series]):
+        self._channel_exclude = self.channel_labels.isin(values).set_axis(
+            self.channel_labels
+        )
 
     @property
     def channel_names(self) -> Series:
@@ -188,7 +235,9 @@ class ROI:
             return self._stack
 
         # read from file and return without storing as attribute
-        mtx: Array = self.read_input("stack", permissive=False, set_attribute=False)
+        mtx: Array = self.read_input(
+            "stack", permissive=False, set_attribute=False
+        )
         self._shape = mtx.shape
         self._channel_number = mtx.shape[0]
         return mtx
@@ -206,13 +255,28 @@ class ROI:
         # .to_netcdf(file_name + ".nc", engine='h5netcdf')
 
     @property
-    def shape(self) -> Tuple[Any, ...]:
+    def shape(self) -> Tuple[int, ...]:
         """The shape of the image stack."""
         if self._shape is not None:
             return self._shape
-        self._shape = self.stack.shape
-        self._channel_number = self._shape[0]
+        try:
+            self._shape = (np.nan,) + self.mask.shape
+        except AttributeNotSetError:
+            try:
+                self._shape = self.stack.shape
+            except AttributeNotSetError:
+                raise AttributeNotSetError(
+                    "ROI does not have either stack or mask!"
+                )
         return self._shape
+
+    @property
+    def area(self) -> int:
+        """An array with unique integers for each cell."""
+        if self._area is not None:
+            return self._area
+        self._area = self._get_area()
+        return self._area
 
     @property
     def channel_number(self) -> int:
@@ -260,17 +324,27 @@ class ROI:
     def clusters(self):
         if self._clusters is not None:
             return self._clusters
-        self.set_clusters()
+        try:
+            self.set_clusters()
+        except KeyError:
+            return None
         return self._clusters
 
     @property
     def adjacency_graph(self) -> nx.Graph:
         if self._adjacency_graph is not None:
             return self._adjacency_graph
-        self._adjacency_graph = nx.readwrite.read_gpickle(
-            self._get_input_filename("adjacency_graph")
-        )
+        try:
+            self._adjacency_graph = nx.readwrite.read_gpickle(
+                self._get_input_filename("adjacency_graph")
+            )
+        except FileNotFoundError:
+            return None
         return self._adjacency_graph
+
+    def _get_area(self) -> int:
+        """Get area of ROI"""
+        return np.multiply(*self.shape[1:])  # type: ignore[no-any-return]
 
     def _get_input_filename(self, input_type: str) -> Path:
         """Get path to file with data for ROI.
@@ -297,10 +371,19 @@ class ROI:
                 self.single_cell_dir,
                 ".cell_type_assignment_against_reference.csv",
             ),
-            "adjacency_graph": (self.single_cell_dir, ".neighbor_graph.gpickle"),
+            "adjacency_graph": (
+                self.single_cell_dir,
+                ".neighbor_graph.gpickle",
+            ),
         }
         dir_, suffix = to_read[input_type]
         return cast(sample.root_dir) / cast(dir_) / (self.name + suffix)
+
+    def get(self, attr):
+        try:
+            return self.__getattribute(attr)
+        except AttributeError:
+            return None
 
     def read_input(
         self,
@@ -322,7 +405,9 @@ class ROI:
         if set_attribute and not overwrite and hasattr(self, key):
             return None
         try:
-            value = read_image_from_file(self._get_input_filename(key), **parameters)
+            value = read_image_from_file(
+                self._get_input_filename(key), **parameters
+            )
         except FileNotFoundError:
             if permissive:
                 return None
@@ -331,6 +416,10 @@ class ROI:
             # TODO: fix assignment to @property
             setattr(self, key, value)
             return None
+        if key in ["cell_mask", "nuclei_mask"]:
+            self._shape = (np.nan,) + value.shape
+        elif key == "stack":
+            self._shape = value.shape
         return value
 
     def read_all_inputs(
@@ -360,7 +449,9 @@ class ROI:
             parameters = [parameters] * len(only_these_keys)
         elif isinstance(parameters, list):
             if len(parameters) != len(only_these_keys):
-                raise ValueError("Length of parameter list must match number of inputs to be read.")
+                raise ValueError(
+                    "Length of parameter list must match number of inputs to be read."
+                )
 
         res = dict()
         for ftype, params in zip(only_these_keys, parameters):
@@ -384,12 +475,15 @@ class ROI:
     def _get_channel(
         self,
         channel: Union[int, str],
-        red_func: str = "sum",
+        red_func: str = "mean",
+        log: bool = False,
         equalize: bool = False,
+        minmax: bool = False,
         dont_warn: bool = False,
     ) -> Tuple[str, Array, Tuple[float, float]]:
         """
         Get a 2D signal array from a channel name or number.
+        If the channel name matches more than one channel, return reduction of channels.
 
         Parameters
         ----------
@@ -397,72 +491,111 @@ class ROI:
             An integer index of `channel_labels` or a string for its value.
             If the string does not match exactly the value, the channel that
             contains it would be retrieved.
-            If more than one channel matches, then both are retrieved and the
+            If more than one channel matches, then those are retrieved and the
             data is reduced by `red_func`.
             If the special values "mean" or "sum" are given, the respective
             reduction of all channels is retrieved.
+            The above respects the boolean array attribute `channel_exclude`.
         red_func : {str}, optional
-            A function to reduce the data in case more than one channel is matched.
-        equalize : {bool}, optional
+            An array function name to reduce the data in case more than one channel is matched.
+        log : {bool}
+            Whether to log-transform the channel. Default is `False`.
+            If multiple, will be applied per channel.
+        equalize : {bool}
             Whether to equalize the histogram of the channel. Default is `False`.
+            If multiple, will be applied per channel.
+        equalize : {bool}
+            Whether to minmax-scale the channel. Default is `False`.
+        dont_warn: {bool}
+            Whether to not warn the user if multiple channels are found.
+            Default is `False`.
 
         Returns
         -------
-        Tuple[str, Array]
-            A string describing the channel and the respective array.
+        Tuple[str, Array, Tuple[float, float]]
+            A string describing the channel and the respective array,
+            the actuall array, and a tuple with the min-max values of the array prior
+            to any transformation if applicable.
 
         Raises
         ------
         ValueError
             If `channel` cannot be found in `sample.channel_labels`.
         """
+        import numba as nb
+
+        def reduce_channels(
+            stack: Array, red_func: str, ex: Union[List[str], Series] = None
+        ):
+            ex = [False] * stack.shape[0] if ex is None else ex
+            m = np.asarray([g(f(x)) for i, x in enumerate(stack) if not ex[i]])
+            return getattr(m, red_func)(axis=0)
+
+        @nb.vectorize(target="cpu")
+        def _idenv(x):
+            return x
+
+        excluded_message = (
+            "Requested channel '{0}' only matches '{1}'"
+            " but this is flagged as excluded in `roi.channel_exclude`."
+            " Proceeding anyway with that channel."
+        )
+
         stack = self.stack
+        f = np.log1p if log else _idenv
+        g = eq if equalize else _idenv
+        h = minmax_scale if minmax else _idenv
 
         if isinstance(channel, int):
             label = self.channel_labels.iloc[channel]
             arr = stack[channel]
         elif isinstance(channel, str):
             if channel in ["sum", "mean"]:
-                m = np.empty_like(stack)
-                for i in range(m.shape[0]):
-                    m[i] = stack[i] - stack[i].mean()
+                arr = reduce_channels(stack, channel, self.channel_exclude)
                 label = f"Channel {channel}"
-                arr = getattr(m, channel)(axis=0)
+                f = g = _idenv
             elif sum(self.channel_labels.values == channel) == 1:
                 label = channel
+                if channel in self.channel_exclude:
+                    print(excluded_message.format(channel, label))
                 arr = stack[self.channel_labels == channel]
             else:
                 match = self.channel_labels.str.contains(re.escape((channel)))
-                if any(match):
-                    names = ", ".join(self.channel_labels[match])
+                if match.any():
+                    label = ", ".join(self.channel_labels[match])
                     if match.sum() == 1:
-                        label = names
+                        if (
+                            self.channel_labels[match].squeeze()
+                            in self.channel_exclude[self.channel_exclude]
+                        ):
+                            print(excluded_message.format(channel, label))
                         arr = stack[match]
                     else:
-                        if not dont_warn:
-                            print(
-                                f"Could not find out channel '{channel}' in "
-                                "`sample.channel_labels` "
-                                f"but could find '{names}'. Returning {red_func} of those."
-                            )
-                        order = match.reset_index(drop=True)[match.values].index
-                        m = np.empty((match.sum(),) + stack.shape[1:])
-                        j = 0
-                        for i in order:
-                            m[j] = stack[i] - stack[i].mean()
-                            j += 1
-                        label = names
-                        arr = getattr(m, red_func)(axis=0)
+                        ex = (~match) | self.channel_exclude.values
+                        label = ", ".join(self.channel_labels[~ex])
+                        if ex.sum() == 1:
+                            print(excluded_message.format(channel, label))
+                            arr = stack[match]
+                        else:
+                            if not dont_warn:
+                                msg = f"Could not find out channel '{channel}' in `roi.channel_labels` but could find '{label}'."
+                                print(msg)
+                            if ex.all():
+                                print(excluded_message.format(channel, label))
+                                ex = ~match
+                            arr = reduce_channels(stack, "mean", ex)
+                            f = g = _idenv
                 else:
                     msg = f"Could not find out channel '{channel}' in `sample.channel_labels`."
                     # # LOGGER.error(msg)
                     raise ValueError(msg)
-        minmax = arr.min(), arr.max()
-        if equalize:
-            arr = minmax_scale(eq(arr))
-        return label, arr, minmax
+        vminmax = arr.min(), arr.max()
+        arr = h(g(f((arr))))
+        return label, arr, vminmax
 
-    def _get_channels(self, channels: List[Union[int, str]], **kwargs) -> Tuple[str, Array, Array]:
+    def _get_channels(
+        self, channels: List[Union[int, str]], **kwargs
+    ) -> Tuple[str, Array, Array]:
         """
         Convinience function to get signal from various channels.
         """
@@ -485,9 +618,9 @@ class ROI:
         channel: Union[int, str],
         ax: Optional[Axis] = None,
         equalize: bool = True,
-        log: bool = False,
+        log: bool = True,
         add_scale: bool = True,
-        add_minmax: bool = True,
+        add_range: bool = True,
         **kwargs,
     ) -> Axis:
         """
@@ -500,18 +633,17 @@ class ROI:
         Keyword arguments are passed to :func:`~matplotlib.pyplot.imshow`
         """
         _ax = ax
-        channel, p, minmax = self._get_channel(channel, equalize=equalize)
-        if log:
-            p += abs(p.min())
-            p = np.log1p(p)
+        channel, p, _minmax = self._get_channel(
+            channel, log=log, equalize=equalize
+        )
 
         if _ax is None:
             _, _ax = plt.subplots(1, 1, figsize=(4, 4))
         _ax.imshow(p.squeeze(), rasterized=True, **kwargs)
         if add_scale:
             _add_scale(_ax)
-        if add_minmax:
-            _add_minmax(minmax, _ax)
+        if add_range:
+            _add_minmax(_minmax, _ax)
         _ax.axis("off")
         _ax.set_title(f"{self.name}\n{channel}")
         return _ax
@@ -521,10 +653,11 @@ class ROI:
         channels: Optional[List[str]] = None,
         merged: bool = False,
         axes: List[Axis] = None,
-        equalize: bool = True,
+        equalize: bool = None,
         log: bool = True,
+        minmax: bool = True,
         add_scale: bool = True,
-        add_minmax: bool = True,
+        add_range: bool = True,
         share_axes: bool = True,
         **kwargs,
     ) -> Optional[Figure]:
@@ -536,7 +669,12 @@ class ROI:
         if axes is None:
             n, m = (1, 1) if merged else get_grid_dims(len(channels))
             fig, _axes = plt.subplots(
-                n, m, figsize=(m * 4, n * 4), squeeze=False, sharex=share_axes, sharey=share_axes,
+                n,
+                m,
+                figsize=(m * 4, n * 4),
+                squeeze=False,
+                sharex=share_axes,
+                sharey=share_axes,
             )
             fig.suptitle(f"{self.sample}\n{self}")
             _axes = _axes.flatten()
@@ -545,31 +683,47 @@ class ROI:
 
         # i = 0  # in case merged or len(channels) is 0
         if merged:
-            from imc.graphics import merge_channels, rainbow_text
+            if equalize is None:
+                equalize = True
 
-            names, arr, minmaxes = self._get_channels(list(channels))
-            if log:
-                arr += abs(arr.min())
-                arr = np.log1p(arr)
-            if equalize:
-                arr = eq(arr)
+            names, arr, minmaxes = self._get_channels(
+                list(channels), log=log, equalize=equalize, minmax=minmax
+            )
             arr2, colors = merge_channels(arr, return_colors=True, **kwargs)
             x, y, _ = arr2.shape
-            _axes[0].imshow(arr2)
+            _axes[0].imshow(arr2 / arr2.max())
             x = x * 0.05
             y = y * 0.05
-            bbox = dict(boxstyle="round", ec=(0.3, 0.3, 0.3, 0.5), fc=(0.0, 0.0, 0.0, 0.5))
-            rainbow_text(
-                x, y, names.split(","), colors, ax=_axes[0], fontsize=3, bbox=bbox,
+            bbox = dict(
+                boxstyle="round",
+                ec=(0.3, 0.3, 0.3, 0.5),
+                fc=(0.0, 0.0, 0.0, 0.5),
             )
+            rainbow_text(
+                x,
+                y,
+                names.split(","),
+                colors,
+                ax=_axes[0],
+                fontsize=3,
+                bbox=bbox,
+            )
+            if add_scale:
+                _add_scale(_axes[0])
+            # TODO: add minmaxes, perhaps to the channel labels?
+            # if add_range:
+            #     _add_minmax(minmax, _ax)
         else:
+            if equalize is None:
+                equalize = True
             for i, channel in enumerate(channels):
                 self.plot_channel(
                     channel,
                     ax=_axes[i],
+                    equalize=equalize,
                     log=log,
                     add_scale=add_scale,
-                    add_minmax=add_minmax,
+                    add_range=add_range,
                     **kwargs,
                 )
         for _ax in _axes:  # [i + 1 :]
@@ -587,36 +741,61 @@ class ROI:
             "cell_type_assignments",
             cast(
                 sample.read_all_inputs(
-                    only_these_keys=["cell_type_assignments"], set_attribute=False
+                    only_these_keys=["cell_type_assignments"],
+                    set_attribute=False,
                 )
             )["cell_type_assignments"],
         )
         if "roi" in cell_type_assignments:
-            cell_type_assignments = cell_type_assignments.query(f"roi == {self.roi_number}")
+            cell_type_assignments = cell_type_assignments.query(
+                f"roi == {self.roi_number}"
+            )
         return cell_type_assignments["cluster"]
 
-    def plot_cell_type(self, cluster) -> Figure:
-        fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+    @overload
+    def plot_cell_type(self, cluster, ax: None) -> Figure:
+        ...
+
+    @overload
+    def plot_cell_type(self, cluster, ax: Axis) -> None:
+        ...
+
+    def plot_cell_type(
+        self,
+        cluster,
+        ax: Optional[Axis] = None,
+        cmap: Optional[str] = "gray",
+        add_scale: bool = True,
+    ) -> Figure:
+        if ax is None:
+            fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
+        else:
+            _ax = ax
         m = self.clusters == cluster
         if m.sum() == 0:
             raise ValueError(f"Cound not find cluster '{cluster}'.")
-        ax.imshow(cell_labels_to_mask(self.cell_mask, m))
-        ax.set_title(cluster)
-        ax.axis("off")
-        return fig
+        _ax.imshow(cell_labels_to_mask(self.cell_mask, m), cmap=cmap)
+        _ax.set_title(cluster)
+        _ax.axis("off")
+
+        if add_scale:
+            _add_scale(_ax)
+        return fig if ax is None else None
 
     def plot_cell_types(
         self,
         cell_type_assignments: Series = None,
-        cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
+        cell_type_combinations: Optional[
+            Union[str, List[Tuple[str, str]]]
+        ] = None,
         ax: Union[Axis, List[Axis]] = None,
         palette: Optional[str] = "tab20",
         add_scale: bool = True,
+        add_legend: bool = True,
     ) -> Union[Figure, List[Patch]]:
         """
         If ax is given it must match number of `cell_type_combinations`.
         """
-        # TODO: add scale to one of the axes
         if cell_type_assignments is not None:
             clusters = cell_type_assignments
         else:
@@ -625,7 +804,7 @@ class ROI:
             clusters = clusters.loc[self.name]
         clusters.index = clusters.index.astype(int)
 
-        if clusters.dtype == "object":
+        if clusters.dtype.name in ["object", "category"]:
             # Replace the strings with a number
             labels = pd.Series(sorted_nicely(np.unique(clusters.values)))
             ns = labels.str.extract(r"(\d+) - .*")[0]
@@ -633,10 +812,14 @@ class ROI:
             # that will help having consistent color across ROIs
             if not ns.isnull().any():
                 ns = ns.astype(int)
+                # ns.index = ns.values
                 clusters = clusters.replace(dict(zip(labels, ns)))
+                # clusters -= clusters.min()
             else:
                 ns = labels.index.to_series()
-                clusters = clusters.replace(dict(zip(labels, np.arange(len(labels)))))
+                clusters = clusters.replace(
+                    dict(zip(labels, np.arange(len(labels))))
+                )
         else:
             labels = sorted(np.unique(clusters.values))
             ns = pd.Series(range(len(labels)))
@@ -652,32 +835,50 @@ class ROI:
         if ax is None:
             m = 1
             fig, axes = plt.subplots(
-                n, m, figsize=(3 * m, 3 * n), sharex="col", sharey="col", squeeze=False
+                n,
+                m,
+                figsize=(3 * m, 3 * n),
+                sharex="col",
+                sharey="col",
+                squeeze=False,
             )
         else:
             axes = ax
             if isinstance(ax, np.ndarray) and len(ax) != n:
-                raise ValueError(f"Given axes must be of length of cell_type_combinations ({n}).")
+                raise ValueError(
+                    f"Given axes must be of length of cell_type_combinations ({n})."
+                )
+
+        if not isinstance(axes, np.ndarray):
+            axes = np.array([axes])[:, np.newaxis]
 
         bckgd_cmap = get_transparent_cmaps(1, "binary")[0]
         patches = list()
-        # TODO: fix dimentionality of axes call
         for i, _ in enumerate(combs):
             axes[i, 0].set_title(self.name)
             # plot channel mean for texture/context
-            axes[i, 0].imshow(self.get_mean_all_channels() * 0.1, cmap=bckgd_cmap)
+            axes[i, 0].imshow(
+                self.get_mean_all_channels() * 0.1, cmap=bckgd_cmap
+            )
             # plot each of the cell types with different colors
             res = cell_labels_to_mask(self.cell_mask, clusters)
             rgb = numbers_to_rgb_colors(res, from_palette=cast(palette))
             axes[i, 0].imshow(rgb)
-            colors = pd.Series(sns.color_palette(palette, max(ns.values))).reindex(ns.values - 1)
-            patches += [mpatches.Patch(color=c, label=l) for c, l in zip(colors, labels)]
+            colors = (
+                pd.Series(sns.color_palette(palette, max(ns.values + 1)))
+                .reindex(ns - ns.min())
+                .values
+            )
+            patches += [
+                mpatches.Patch(color=colors[j], label=l)
+                for j, l in enumerate(labels)
+            ]
             axes[i, 0].axis("off")
             if add_scale:
                 _add_scale(axes[i, 0])
 
-        if ax is None:
-            add_legend(patches, axes[-1, 0])
+        if add_legend:
+            _add_legend(patches, axes[-1, 0])
         return fig if ax is None else patches
 
     def get_distinct_marker_sets(
@@ -700,7 +901,10 @@ class ROI:
         )
         grid.ax_col_dendrogram.set_title("Pairwise channel correlation")
         if save_plot:
-            grid.savefig(cast(self.root_dir) / "channel_pairwise_correlation.svg", **FIG_KWS)
+            grid.savefig(
+                cast(self.root_dir) / "channel_pairwise_correlation.svg",
+                **FIG_KWS,
+            )
 
         c = pd.Series(
             scipy.cluster.hierarchy.fcluster(
@@ -713,7 +917,9 @@ class ROI:
         for _sp in range(1, n_groups + 1):
             marker_sets[_sp] = list()
             for i in np.random.choice(np.unique(c), group_size, replace=True):
-                marker_sets[_sp].append(np.random.choice(c[c == i].index, 1, replace=True)[0])
+                marker_sets[_sp].append(
+                    np.random.choice(c[c == i].index, 1, replace=True)[0]
+                )
         return (xcorr, marker_sets)
 
     def plot_overlayied_channels_subplots(self, n_groups: int) -> Figure:
@@ -724,12 +930,18 @@ class ROI:
         stack = self.stack
 
         _, marker_sets = self.get_distinct_marker_sets(
-            n_groups=n_groups, group_size=int(np.floor(self.channel_number / n_groups))
+            n_groups=n_groups,
+            group_size=int(np.floor(self.channel_number / n_groups)),
         )
 
         n, m = get_grid_dims(n_groups)
         fig, axis = plt.subplots(
-            n, m, figsize=(6 * m, 6 * n), sharex=True, sharey=True, squeeze=False,
+            n,
+            m,
+            figsize=(6 * m, 6 * n),
+            sharex=True,
+            sharey=True,
+            squeeze=False,
         )
         axis = axis.flatten()
         for i, (marker_set, mrks) in enumerate(marker_sets.items()):
@@ -739,7 +951,13 @@ class ROI:
                 x = stack[self.channel_labels == _l, :, :].squeeze()
                 v = x.mean() + x.std() * 2
                 axis[i].imshow(
-                    x, cmap=c, vmin=0, vmax=v, label=_l, interpolation="bilinear", rasterized=True,
+                    x,
+                    cmap=c,
+                    vmin=0,
+                    vmax=v,
+                    label=_l,
+                    interpolation="bilinear",
+                    rasterized=True,
                 )
                 axis[i].axis("off")
                 patches.append(mpatches.Patch(color=c(256), label=m))
@@ -809,20 +1027,31 @@ class ROI:
         return fig if axes is None else None
 
     def quantify_cell_intensity(
-        self, channel_include: List[str] = None, channel_exclude: List[str] = None, **kwargs
+        self,
+        channel_include: List[str] = None,
+        channel_exclude: List[str] = None,
+        **kwargs,
     ) -> DataFrame:
         """Quantify intensity of each cell in each channel."""
         if channel_include is not None:
-            kwargs["channel_include"] = self.channel_labels.str.contains(channel_include).values
+            kwargs["channel_include"] = self.channel_labels.str.contains(
+                channel_include
+            ).values
         if channel_exclude is not None:
-            kwargs["channel_exclude"] = self.channel_labels.str.contains(channel_exclude).values
+            kwargs["channel_exclude"] = self.channel_labels.str.contains(
+                channel_exclude
+            ).values
         return quantify_cell_intensity(
-            self._get_input_filename("stack"), self._get_input_filename("cell_mask"), **kwargs
+            self._get_input_filename("stack"),
+            self._get_input_filename("cell_mask"),
+            **kwargs,
         ).rename(columns=self.channel_labels)
 
     def quantify_cell_morphology(self, **kwargs) -> DataFrame:
         """QUantify shape attributes of each cell."""
-        return quantify_cell_morphology(self._get_input_filename("cell_mask"), **kwargs)
+        return quantify_cell_morphology(
+            self._get_input_filename("cell_mask"), **kwargs
+        )
 
     def set_clusters(self, clusters: Optional[Series] = None) -> None:
         if clusters is None:
@@ -836,6 +1065,4 @@ class ROI:
     def cells_per_area_unit(self) -> float:
         """Get cell density in ROI."""
         cells = np.unique(self.mask) - 1
-        area = np.multiply(*self.shape[1:])
-
-        return len(cells) / area
+        return len(cells) / self.area

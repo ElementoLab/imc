@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 
-from typing import Dict, Tuple, List, Union, Optional, Callable  # , Literal
+from typing import (
+    Dict,
+    Tuple,
+    List,
+    Union,
+    Optional,
+    Callable,
+    Any,
+    overload,
+)  # , Literal
 import warnings
 from functools import wraps
 
@@ -12,7 +21,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
 
-# from skimage.exposure import equalize_hist as eq
+from skimage.exposure import equalize_hist as eq
 
 from imc.types import DataFrame, Series, Array, Figure, Axis, Patch, ColorMap
 from imc.utils import minmax_scale
@@ -72,7 +81,14 @@ SEQUENCIAL_CMAPS = [
 
 
 def is_numeric(x: Series) -> bool:
-    if x.dtype in ["float", "float32", "float64", "int", "int32", "int64"] or is_datetime(x):
+    if x.dtype in [
+        "float",
+        "float32",
+        "float64",
+        "int",
+        "int32",
+        "int64",
+    ] or is_datetime(x):
         return True
     if (x.dtype in ["object"]) or isinstance(x.dtype, pd.CategoricalDtype):
         return False
@@ -87,7 +103,9 @@ def is_datetime(x: Series) -> bool:
 
 def to_numeric(x: Series) -> Series:
     """Encode a string or categorical series to integer type."""
-    res = pd.Series(index=x.index, dtype=float)  # this will imply np.nan keeps being np.nan
+    res = pd.Series(
+        index=x.index, dtype=float
+    )  # this will imply np.nan keeps being np.nan
     for i, v in enumerate(x.value_counts().sort_index().index):
         res.loc[x == v] = i
     return res
@@ -108,7 +126,10 @@ def get_categorical_cmap(x: Series) -> matplotlib.colors.ListedColormap:
     if n < 40:
         return matplotlib.colors.ListedColormap(
             colors=np.concatenate(
-                [plt.get_cmap("tab20c")(range(20)), plt.get_cmap("tab20b")(range(20))]
+                [
+                    plt.get_cmap("tab20c")(range(20)),
+                    plt.get_cmap("tab20b")(range(20)),
+                ]
             )[:n],
             name=f"tab40-{n}",
         )
@@ -121,7 +142,11 @@ def to_color_series(x: Series, cmap: Optional[str] = "Greens") -> Series:
     NaN values are white.
     """
     if is_numeric(x):
-        return pd.Series(plt.get_cmap(cmap)(minmax_scale(x)).tolist(), index=x.index, name=x.name)
+        return pd.Series(
+            plt.get_cmap(cmap)(minmax_scale(x)).tolist(),
+            index=x.index,
+            name=x.name,
+        )
     # str or categorical
     res = to_numeric(x)
     cmap = get_categorical_cmap(res)
@@ -130,7 +155,9 @@ def to_color_series(x: Series, cmap: Optional[str] = "Greens") -> Series:
 
 
 def to_color_dataframe(
-    x: Union[Series, DataFrame], cmaps: Optional[Union[str, List[str]]] = None, offset: int = 0,
+    x: Union[Series, DataFrame],
+    cmaps: Optional[Union[str, List[str]]] = None,
+    offset: int = 0,
 ) -> DataFrame:
     """Map a numeric pandas DataFrame to RGB values."""
     if isinstance(x, pd.Series):
@@ -140,7 +167,9 @@ def to_color_dataframe(
         cmaps = [plt.get_cmap(cmap) for cmap in SEQUENCIAL_CMAPS[offset:]]
     if isinstance(cmaps, str):
         cmaps = [cmaps]
-    return pd.concat([to_color_series(x[col], cmap) for col, cmap in zip(x, cmaps)], axis=1)
+    return pd.concat(
+        [to_color_series(x[col], cmap) for col, cmap in zip(x, cmaps)], axis=1
+    )
 
 
 def _add_extra_colorbars_to_clustermap(
@@ -152,14 +181,20 @@ def _add_extra_colorbars_to_clustermap(
 ) -> None:
     """Add either a row or column colorbar to a seaborn Grid."""
 
-    def add(data: Series, cmap: str, bbox: List[List[int]], orientation: str) -> None:
+    def add(
+        data: Series, cmap: str, bbox: List[List[int]], orientation: str
+    ) -> None:
         ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
         if is_numeric(data):
             if is_datetime(data):
                 data = minmax_scale(data)
             norm = matplotlib.colors.Normalize(vmin=data.min(), vmax=data.max())
             cbar = matplotlib.colorbar.ColorbarBase(
-                ax, cmap=plt.get_cmap(cmap), norm=norm, orientation=orientation, label=data.name
+                ax,
+                cmap=plt.get_cmap(cmap),
+                norm=norm,
+                orientation=orientation,
+                label=data.name,
             )
         else:
             res = to_numeric(data)
@@ -223,9 +258,13 @@ def _add_colorbars(
 ) -> None:
     """Add row and column colorbars to a seaborn Grid."""
     if rows is not None:
-        _add_extra_colorbars_to_clustermap(grid, rows, location="row", cmaps=row_cmaps)
+        _add_extra_colorbars_to_clustermap(
+            grid, rows, location="row", cmaps=row_cmaps
+        )
     if cols is not None:
-        _add_extra_colorbars_to_clustermap(grid, cols, location="col", cmaps=col_cmaps)
+        _add_extra_colorbars_to_clustermap(
+            grid, cols, location="col", cmaps=col_cmaps
+        )
 
 
 def colorbar_decorator(f: Callable) -> Callable:
@@ -248,20 +287,28 @@ def colorbar_decorator(f: Callable) -> Callable:
         _kwargs = dict(rows=None, cols=None)
         for arg in ["row", "col"]:
             if arg + "_colors" in kwargs:
-                if isinstance(kwargs[arg + "_colors"], (pd.DataFrame, pd.Series)):
+                if isinstance(
+                    kwargs[arg + "_colors"], (pd.DataFrame, pd.Series)
+                ):
                     _kwargs[arg + "s"] = kwargs[arg + "_colors"]
                     kwargs[arg + "_colors"] = to_color_dataframe(
-                        x=kwargs[arg + "_colors"], cmaps=cmaps[arg], offset=1 if arg == "row" else 0
+                        x=kwargs[arg + "_colors"],
+                        cmaps=cmaps[arg],
+                        offset=1 if arg == "row" else 0,
                     )
         grid = f(*args, **kwargs)
-        _add_colorbars(grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"])
+        _add_colorbars(
+            grid, **_kwargs, row_cmaps=cmaps["row"], col_cmaps=cmaps["col"]
+        )
         return grid
 
     return clustermap
 
 
 def add_scale(
-    _ax: Optional[Axis] = None, width: int = 100, unit: str = DEFAULT_PIXEL_UNIT_NAME
+    _ax: Optional[Axis] = None,
+    width: int = 100,
+    unit: str = DEFAULT_PIXEL_UNIT_NAME,
 ) -> None:
     """
     Add a scale bar to a figure.
@@ -278,7 +325,9 @@ def add_scale(
     yposition = -height - 3
     text_separation = text_separation * height
     _ax.add_patch(
-        mpatches.Rectangle((xposition, yposition), width, height, color="black", clip_on=False)
+        mpatches.Rectangle(
+            (xposition, yposition), width, height, color="black", clip_on=False
+        )
     )
     _ax.text(
         xposition + width + 10,
@@ -307,7 +356,9 @@ def add_minmax(minmax: Tuple[float, float], _ax: Optional[Axis] = None) -> None:
     )
 
 
-def add_legend(patches: List[Patch], ax: Optional[Axis] = None, **kwargs) -> None:
+def add_legend(
+    patches: List[Patch], ax: Optional[Axis] = None, **kwargs
+) -> None:
     """Add a legend to an existing axis."""
     if ax is None:
         ax = plt.gca()
@@ -337,7 +388,9 @@ def saturize(arr: Array) -> Array:
 
 
 def merge_channels(
-    arr: Array, output_colors: Optional[List[str]] = None, return_colors: bool = False
+    arr: Array,
+    output_colors: Optional[List[str]] = None,
+    return_colors: bool = False,
 ) -> Union[Array, Tuple[Array, List[Tuple[float, float, float]]]]:
     """
     Assumes [0, 1] float array.
@@ -347,8 +400,15 @@ def merge_channels(
     n_channels = arr.shape[0]
     if output_colors is None:
         target_colors = [
-            matplotlib.colors.to_rgb(col) for col in DEFAULT_CHANNEL_COLORS[:n_channels]
+            matplotlib.colors.to_rgb(col)
+            for col in DEFAULT_CHANNEL_COLORS[:n_channels]
         ]
+
+    if (n_channels == 3) and output_colors is None:
+        m = np.moveaxis(np.asarray([eq(x) for x in arr]), 0, -1)
+        res = (m - m.min((0, 1))) / (m.max((0, 1)) - m.min((0, 1)))
+        return res if not return_colors else (res, target_colors)
+
     elif isinstance(output_colors, (list, tuple)):
         assert len(output_colors) == n_channels
         target_colors = [matplotlib.colors.to_rgb(col) for col in output_colors]
@@ -366,7 +426,9 @@ def merge_channels(
     return res if not return_colors else (res, target_colors)
 
 
-def rainbow_text(x, y, strings, colors, orientation="horizontal", ax=None, **kwargs):
+def rainbow_text(
+    x, y, strings, colors, orientation="horizontal", ax=None, **kwargs
+):
     """
     Take a list of *strings* and *colors* and place them next to each
     other, with text strings[i] being shown in colors[i].
@@ -413,26 +475,41 @@ def rainbow_text(x, y, strings, colors, orientation="horizontal", ax=None, **kwa
 
 def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
-    r = [matplotlib.colors.LinearSegmentedColormap.from_list("", p * r) for p in np.eye(3)]
+    r = [
+        matplotlib.colors.LinearSegmentedColormap.from_list("", p * r)
+        for p in np.eye(3)
+    ]
     return tuple(r)  # type: ignore
 
 
-def get_dark_cmaps(n: int = 3, from_palette: str = "colorblind") -> List[ColorMap]:
+def get_dark_cmaps(
+    n: int = 3, from_palette: str = "colorblind"
+) -> List[ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
     if n > len(sns.color_palette(from_palette)):
-        print("Chosen palette has less than the requested number of colors. " "Will reuse!")
+        print(
+            "Chosen palette has less than the requested number of colors. "
+            "Will reuse!"
+        )
     return [
         matplotlib.colors.LinearSegmentedColormap.from_list("", np.array(p) * r)
         for p in sns.color_palette(from_palette, n)
     ]
 
 
-def get_transparent_cmaps(n: int = 3, from_palette: Optional[str] = "colorblind") -> List[ColorMap]:
+def get_transparent_cmaps(
+    n: int = 3, from_palette: Optional[str] = "colorblind"
+) -> List[ColorMap]:
     __r = np.linspace(0, 1, 100)
     if n > len(sns.color_palette(from_palette)):
-        print("Chosen palette has less than the requested number of colors. " "Will reuse!")
+        print(
+            "Chosen palette has less than the requested number of colors. "
+            "Will reuse!"
+        )
     return [
-        matplotlib.colors.LinearSegmentedColormap.from_list("", [p + (c,) for c in __r])
+        matplotlib.colors.LinearSegmentedColormap.from_list(
+            "", [p + (c,) for c in __r]
+        )
         for p in sns.color_palette(from_palette, n)
     ]
 
@@ -458,9 +535,14 @@ def numbers_to_rgb_colors(
     n_colors = len(ident)
 
     if n_colors > len(sns.color_palette(from_palette)):
-        print("Chosen palette has less than the requested number of colors." "Will reuse!")
+        print(
+            "Chosen palette has less than the requested number of colors. "
+            "Will reuse!"
+        )
 
-    colors = Series(sns.color_palette(from_palette, ident.max())).reindex(ident - 1)
+    colors = Series(sns.color_palette(from_palette, ident.max())).reindex(
+        ident - 1
+    )
     res = np.zeros((mask.shape) + (3,))
     for c, i in zip(colors, ident):
         x, y = np.nonzero(np.isin(mask, i))
@@ -533,7 +615,9 @@ def plot_single_channel(
 ) -> Union[Figure, Axis]:
     """Plot a single image channel either in a new figure or in an existing axis"""
     if axis is None:
-        fig, axs = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
+        fig, axs = plt.subplots(
+            1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True
+        )
     axs.imshow(arr, cmap=cmap, interpolation="bilinear", rasterized=True)
     axs.axis("off")
     return fig if axis is None else axs
@@ -546,15 +630,26 @@ def plot_overlayied_channels(
     palette: Optional[str] = None,
 ) -> Union[Figure, Axis]:
     if axis is None:
-        fig, ax = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
+        fig, ax = plt.subplots(
+            1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True
+        )
     cmaps = get_transparent_cmaps(arr.shape[0], from_palette=palette)
     patches = list()
     for i, (m, c) in enumerate(zip(channel_labels, cmaps)):
         x = arr[i].squeeze()
-        ax.imshow(x, cmap=c, label=m, interpolation="bilinear", rasterized=True, alpha=0.9)
+        ax.imshow(
+            x,
+            cmap=c,
+            label=m,
+            interpolation="bilinear",
+            rasterized=True,
+            alpha=0.9,
+        )
         ax.axis("off")
         patches.append(mpatches.Patch(color=c(256), label=m))
-    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0)
+    ax.legend(
+        handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0
+    )
     return fig if axis is None else ax
 
 
@@ -564,7 +659,11 @@ def rasterize_scanpy(fig: Figure) -> None:
 
     with warnings.catch_warnings(record=False) as w:
         warnings.simplefilter("always")
-        clss = (matplotlib.text.Text, matplotlib.axis.XAxis, matplotlib.axis.YAxis)
+        clss = (
+            matplotlib.text.Text,
+            matplotlib.axis.XAxis,
+            matplotlib.axis.YAxis,
+        )
         for axs in fig.axes:
             for __c in axs.get_children():
                 if not isinstance(__c, clss):
@@ -573,3 +672,162 @@ def rasterize_scanpy(fig: Figure) -> None:
                     for _cc in __c.get_children():
                         if not isinstance(__c, clss):
                             _cc.set_rasterized(True)
+
+
+def add_transparency_to_boxenplot(ax: Axis) -> None:
+    patches = (
+        matplotlib.collections.PatchCollection,
+        matplotlib.collections.PathCollection,
+    )
+    [x.set_alpha(0.25) for x in ax.get_children() if isinstance(x, patches)]
+
+
+from typing import Literal
+
+
+@overload
+def swarmboxenplot(
+    data: DataFrame,
+    x: str,
+    y: str,
+    hue: Optional[str] = None,
+    swarm: bool = True,
+    boxen: bool = True,
+    ax: None = None,
+    test: Literal[False] = False,
+) -> Figure:
+    ...
+
+
+@overload
+def swarmboxenplot(
+    data: DataFrame,
+    x: str,
+    y: str,
+    hue: Optional[str] = None,
+    swarm: bool = True,
+    boxen: bool = True,
+    ax: Axis = Axis,
+    test: Literal[False] = False,
+) -> None:
+    ...
+
+
+@overload
+def swarmboxenplot(
+    data: DataFrame,
+    x: str,
+    y: str,
+    hue: Optional[str] = None,
+    swarm: bool = True,
+    boxen: bool = True,
+    ax: None = None,
+    test: Literal[True] = True,
+) -> Tuple[Figure, DataFrame]:
+    ...
+
+
+@overload
+def swarmboxenplot(
+    data: DataFrame,
+    x: str,
+    y: str,
+    hue: Optional[str] = None,
+    swarm: bool = True,
+    boxen: bool = True,
+    ax: Axis = Axis,
+    test: Literal[True] = True,
+) -> DataFrame:
+    ...
+
+
+def swarmboxenplot(
+    data: DataFrame,
+    x: str,
+    y: str,
+    hue: Optional[str] = None,
+    swarm: bool = True,
+    boxen: bool = True,
+    ax: Optional[Axis] = None,
+    test: bool = True,
+    multiple_testing: Union[bool, str] = "fdr_bh",
+    test_upper_threshold: float = 0.05,
+    test_lower_threshold: float = 0.01,
+    test_kws: Optional[Dict[str, Any]] = None,
+) -> Optional[Union[Figure, DataFrame, Tuple[Figure, DataFrame]]]:
+    """
+    # Testing:
+
+    data = pd.DataFrame(
+        [np.random.random(20), np.random.choice(['a', 'b'], 20)],
+        index=['cont', 'cat']).T.convert_dtypes()
+    data.loc[data['cat'] == 'b', 'cont'] *= 5
+    fig = swarmboxenplot(data=data, x='cat', y='cont')
+
+
+    data = pd.DataFrame(
+        [np.random.random(40), np.random.choice(['a', 'b', 'c'], 40)],
+        index=['cont', 'cat']).T.convert_dtypes()
+    data.loc[data['cat'] == 'b', 'cont'] *= 5
+    data.loc[data['cat'] == 'c', 'cont'] -= 5
+    fig = swarmboxenplot(data=data, x='cat', y='cont', test_kws=dict(parametric=True))
+
+    """
+    import pingouin as pg
+    import itertools
+
+    if test_kws is None:
+        test_kws = dict()
+
+    if ax is None:
+        fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
+    else:
+        _ax = ax
+    if boxen:
+        sns.boxenplot(data=data, x=x, y=y, hue=hue, ax=_ax)
+    if boxen and swarm:
+        add_transparency_to_boxenplot(_ax)
+    if swarm:
+        sns.swarmplot(data=data, x=x, y=y, hue=hue, ax=_ax)
+    _ax.set_xticklabels(_ax.get_xticklabels(), rotation=90)
+
+    if test:
+        # remove NaNs
+        data = data.dropna(subset=[x, y])
+        # remove categories with only one element
+        keep = data.groupby(x).size()[data.groupby(x).size() > 1].index
+        data = data.loc[data[x].isin(keep), :]
+        if data[x].dtype.name == "category":
+            data[x] = data[x].cat.remove_unused_categories()
+        ylim = _ax.get_ylim()
+        ylength = abs(ylim[1]) + abs(ylim[0])
+        stat = pd.DataFrame(
+            itertools.combinations(data[x].unique(), 2), columns=["A", "B"]
+        )
+        stat["p-unc"] = np.nan
+        try:
+            stat = pg.pairwise_ttests(data=data, dv=y, between=x, **test_kws)
+        except (AssertionError, ValueError) as e:
+            print(str(e))
+        except KeyError:
+            print("Only one category with values!")
+        if multiple_testing is not False:
+            stat["p-cor"] = pg.multicomp(
+                stat["p-unc"].values, method=multiple_testing
+            )[1]
+            pcol = "p-cor"
+        else:
+            pcol = "p-unc"
+        for i, (idx, row) in enumerate(
+            stat.loc[stat[pcol] <= test_upper_threshold, :].iterrows()
+        ):
+            symbol = "**" if row[pcol] <= test_lower_threshold else "*"
+            # py = data[y].quantile(0.95) - (i * (ylength / 20))
+            py = data[y].max() - (i * (ylength / 20))
+            _ax.plot(
+                (row["A"], row["B"]), (py, py), color="black", linewidth=1.2
+            )
+            _ax.text(row["B"], py, s=symbol, color="black")
+        _ax.set_ylim(ylim)
+        return (fig, stat) if ax is None else stat
+    return fig if ax is None else None
