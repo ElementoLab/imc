@@ -7,6 +7,7 @@ modified: '2020-05-27'
 # `imc` package
 
 
+1. Get distance to opening by using backgrund prob as mask
 1. Method to map clusters between samples/groups of ROIs
 1. Adapt `roi._get_file_names` to support subfolder_per_sample=False
 2. Fix Project.plot_channels
@@ -15,11 +16,10 @@ modified: '2020-05-27'
 1. Decorator to enforce type str -> Path in functions
 3. Reveamp ROI.plot_cell_types
 3. Revisit `panel_metadata` attribute, probably retire.
-2. For GMM fit several `k` choose optimal e.g. https://scikit-learn.org/stable/auto_examples/mixture/plot_gmm_selection.html
-3. Use GMM for thresholding cluster means during cell type labeling
+3. Enable by default GMM for thresholding cluster means during cell type labeling
+2. Re-implement `_get_channel` to be `_get_channels` and avoid reading stack multiple times
 
-
-4. Clustermap colorbars: try to add new axes to the figure; add kwargs for the colorbar_kws; fix NAN
+4. Clustermap colorbars: try to add new axes to the figure; add kwargs for the colorbar_kws
 
 Real test data:
  - change channel names to unique or support repeated

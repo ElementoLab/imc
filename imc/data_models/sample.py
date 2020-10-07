@@ -20,7 +20,10 @@ from imc.data_models.roi import ROI
 from imc.types import Path, Figure, Patch, DataFrame, Series, MultiIndexSeries
 
 # from imc import LOGGER
-from imc.operations import single_cell_analysis, predict_cell_types_from_reference
+from imc.operations import (
+    single_cell_analysis,
+    predict_cell_types_from_reference,
+)
 from imc.utils import parse_acquisition_metadata
 from imc.graphics import get_grid_dims, add_legend, share_axes_by
 from imc.exceptions import cast  # TODO: replace with typing.cast
@@ -68,9 +71,13 @@ class IMCSample:
     ):
         self.name: str = str(sample_name)
         self.sample_name: str = sample_name
-        self.root_dir = Path(root_dir).absolute() if root_dir is not None else None
+        self.root_dir = (
+            Path(root_dir).absolute() if root_dir is not None else None
+        )
         self.metadata: Optional[DataFrame] = (
-            pd.read_csv(csv_metadata) if isinstance(csv_metadata, (str, Path)) else csv_metadata
+            pd.read_csv(csv_metadata)
+            if isinstance(csv_metadata, (str, Path))
+            else csv_metadata
         )
         self.subfolder_per_sample = subfolder_per_sample
         self.roi_name_atribute = roi_name_atribute
@@ -110,9 +117,14 @@ class IMCSample:
     def __iter__(self) -> Iterator["ROI"]:
         return iter(self.rois)
 
+    def __len__(self) -> int:
+        return len(self.rois)
+
     def _detect_rois(self) -> DataFrame:
         if self.root_dir is None:
-            print(f"Sample does not have `root_dir`. Cannot find ROIs for sample '{self.name}'.")
+            print(
+                f"Sample does not have `root_dir`. Cannot find ROIs for sample '{self.name}'."
+            )
             return pd.DataFrame()
 
         d = self.root_dir / "tiffs"
@@ -125,21 +137,31 @@ class IMCSample:
         if df.empty:
             print(f"Could not find ROIs for sample '{self.name}'.")
             return df
-        df[DEFAULT_ROI_NAME_ATTRIBUTE] = df[0].apply(lambda x: x.name.replace("_full.tiff", ""))
+        df[DEFAULT_ROI_NAME_ATTRIBUTE] = df[0].apply(
+            lambda x: x.name.replace("_full.tiff", "")
+        )
         try:
             df[DEFAULT_ROI_NUMBER_ATTRIBUTE] = (
-                df[DEFAULT_ROI_NAME_ATTRIBUTE].str.extract(r"-(\d+)")[0].astype(int)
+                df[DEFAULT_ROI_NAME_ATTRIBUTE]
+                .str.extract(r"-(\d+)")[0]
+                .astype(int)
             )
         except ValueError:
             pass
-        df = df.sort_values(df.columns.tolist(), ignore_index=True).drop(0, axis=1)
+        df = df.sort_values(df.columns.tolist(), ignore_index=True).drop(
+            0, axis=1
+        )
         return df
 
-    def _initialize_sample_from_annotation(self, toggle: Optional[bool] = None) -> None:
+    def _initialize_sample_from_annotation(
+        self, toggle: Optional[bool] = None
+    ) -> None:
         if self.metadata is None:
             metadata = self._detect_rois()
         else:
-            metadata = pd.DataFrame(self.metadata)  # this makes the type explicit
+            metadata = pd.DataFrame(
+                self.metadata
+            )  # this makes the type explicit
         if toggle:
             metadata = metadata[metadata[DEFAULT_TOGGLE_ATTRIBUTE]]
 
@@ -153,7 +175,8 @@ class IMCSample:
                 sample=self,
                 prj=self.prj,
                 **row.drop(
-                    [DEFAULT_ROI_NAME_ATTRIBUTE, DEFAULT_ROI_NUMBER_ATTRIBUTE], errors="ignore"
+                    [DEFAULT_ROI_NAME_ATTRIBUTE, DEFAULT_ROI_NUMBER_ATTRIBUTE],
+                    errors="ignore",
                 ).to_dict(),
             )
             self.rois.append(roi)
@@ -161,6 +184,10 @@ class IMCSample:
     @property
     def n_rois(self) -> int:
         return len(self.rois)
+
+    @property
+    def roi_names(self) -> List[str]:
+        return [r.name for r in self]
 
     @property
     def channel_labels(self) -> Union[Series, DataFrame]:
@@ -197,7 +224,8 @@ class IMCSample:
             self.prj.set_clusters(samples=[self])
         except KeyError:
             self._clusters = pd.read_csv(
-                self._get_input_filename("cell_type_assignments"), index_col=[0, 1, 2]
+                self._get_input_filename("cell_type_assignments"),
+                index_col=[0, 1, 2],
             ).loc[self.name]
             self.set_clusters(self._clusters)
         return self._clusters
@@ -211,11 +239,20 @@ class IMCSample:
         to_read = {
             # "cell": ("cpout", "cell.csv"),
             # "relationships": ("cpout", "Object relationships.csv"),
-            "cell_type_assignments": ("single_cell", ".cell_type_assignment_against_reference.csv"),
+            "cell_type_assignments": (
+                "single_cell",
+                ".cell_type_assignment_against_reference.csv",
+            ),
             "anndata": ("single_cell", ".single_cell.processed.h5ad"),
         }
         dir_, suffix = to_read[input_type]
         return self.root_dir / dir_ / (self.name + suffix)
+
+    def get(self, attr):
+        try:
+            return self.__getattribute(attr)
+        except AttributeError:
+            return None
 
     def read_all_inputs(
         self,
@@ -308,22 +345,32 @@ class IMCSample:
             output_dir = Path(output_dir or self.prj.results_dir / "qc")
             output_dir.mkdir(exist_ok=True)
             channels_str = ",".join(channels)
-            fig_file = output_dir / ".".join([self.name, f"all_rois.{channels_str}.pdf"])
+            fig_file = output_dir / ".".join(
+                [self.name, f"all_rois.{channels_str}.pdf"]
+            )
         if per_roi:
             for roi in rois:
                 fig = roi.plot_channels(channels, merged=merged, **kwargs)
                 if save:
-                    fig_file = output_dir / ".".join([self.name, roi.name, channels_str, "pdf"])
+                    fig_file = output_dir / ".".join(
+                        [self.name, roi.name, channels_str, "pdf"]
+                    )
                     fig.savefig(fig_file, **FIG_KWS)
         else:
             i = 0
             j = 1 if merged else len(channels)
-            n, m = get_grid_dims(len(rois)) if merged else get_grid_dims(len(rois) * j)
+            n, m = (
+                get_grid_dims(len(rois))
+                if merged
+                else get_grid_dims(len(rois) * j)
+            )
 
             fig, axes = plt.subplots(n, m, figsize=(4 * m, 4 * n))
             axes = axes.flatten()
             for roi in rois:
-                roi.plot_channels(channels, axes=axes[i : i + j], merged=merged, **kwargs)
+                roi.plot_channels(
+                    channels, axes=axes[i : i + j], merged=merged, **kwargs
+                )
                 i += j
             for _ax in axes[i:]:
                 _ax.axis("off")
@@ -334,7 +381,9 @@ class IMCSample:
     def plot_cell_types(
         self,
         rois: Optional[List["ROI"]] = None,
-        cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
+        cell_type_combinations: Optional[
+            Union[str, List[Tuple[str, str]]]
+        ] = None,
         cell_type_assignments: Optional[DataFrame] = None,
         palette: Optional[str] = "tab20",
     ) -> Figure:
@@ -359,14 +408,23 @@ class IMCSample:
     ) -> Figure:
         n = len(rois or self.rois)
         fig, axes = plt.subplots(
-            n, 5, figsize=(5 * 4, n * 4), gridspec_kw=dict(wspace=0.05), sharex="row", sharey="row",
+            n,
+            5,
+            figsize=(5 * 4, n * 4),
+            gridspec_kw=dict(wspace=0.05),
+            sharex="row",
+            sharey="row",
         )
         fig.suptitle(self.name)
         for i, roi in enumerate(self.rois):
-            roi.plot_probabilities_and_segmentation(axes=axes[i], add_scale=add_scale)
+            roi.plot_probabilities_and_segmentation(
+                axes=axes[i], add_scale=add_scale
+            )
         return fig
 
-    def cell_to_anndata(self, red_func="mean", set_attribute: bool = False, **kwargs):
+    def cell_to_anndata(
+        self, red_func="mean", set_attribute: bool = False, **kwargs
+    ):
         _df = self.quantify_cell_intensity(func=red_func, **kwargs)
         _an = AnnData(_df.drop("roi", axis=1).sort_index(axis=1))
         _an.obs["roi"] = pd.Categorical(_df["roi"].values)
@@ -389,13 +447,17 @@ class IMCSample:
         """
         from imc.operations import quantify_cells_rois
 
-        quantification = quantify_cells_rois(rois or self.rois, intensity, morphology)
+        quantification = quantify_cells_rois(
+            rois or self.rois, intensity, morphology
+        )
         if not set_attribute:
             return quantification
         self.quantification = quantification
         return None
 
-    def quantify_cell_intensity(self, rois: Optional[List["ROI"]] = None, **kwargs,) -> DataFrame:
+    def quantify_cell_intensity(
+        self, rois: Optional[List["ROI"]] = None, **kwargs,
+    ) -> DataFrame:
         """
         Measure the intensity of each channel in each single cell.
         """
@@ -403,7 +465,9 @@ class IMCSample:
 
         return quantify_cell_intensity_rois(rois or self.rois, **kwargs)
 
-    def quantify_cell_morphology(self, rois: Optional[List["ROI"]] = None, **kwargs,) -> DataFrame:
+    def quantify_cell_morphology(
+        self, rois: Optional[List["ROI"]] = None, **kwargs,
+    ) -> DataFrame:
         """
         Measure the shape parameters of each single cell.
         """
@@ -422,18 +486,26 @@ class IMCSample:
         """
         Derive clusters of single cells based on their channel intensity.
         """
-        output_prefix = Path(output_prefix or self.root_dir / "single_cell" / self.name)
+        output_prefix = Path(
+            output_prefix or self.root_dir / "single_cell" / self.name
+        )
 
         if "quantification" not in kwargs and self.quantification is not None:
             kwargs["quantification"] = self.quantification
-        if "cell_type_channels" not in kwargs and self.panel_metadata is not None:
+        if (
+            "cell_type_channels" not in kwargs
+            and self.panel_metadata is not None
+        ):
             if "cell_type" in self.panel_metadata.columns:
                 kwargs["cell_type_channels"] = self.panel_metadata.query(
                     "cell_type == 1"
                 ).index.tolist()
 
         clusters = single_cell_analysis(
-            output_prefix=output_prefix, rois=rois or self.rois, plot=plot, **kwargs,
+            output_prefix=output_prefix,
+            rois=rois or self.rois,
+            plot=plot,
+            **kwargs,
         )
         # save clusters as CSV in default file
         clusters.reset_index().to_csv(
@@ -450,7 +522,9 @@ class IMCSample:
         return None
 
     def set_clusters(
-        self, clusters: Optional[MultiIndexSeries] = None, rois: Optional[List["ROI"]] = None,
+        self,
+        clusters: Optional[MultiIndexSeries] = None,
+        rois: Optional[List["ROI"]] = None,
     ) -> None:
         id_cols = ["roi", "obj_id"]
         if clusters is None:
@@ -466,7 +540,9 @@ class IMCSample:
         predict_cell_types_from_reference(self, **kwargs)
 
     def cell_type_adjancency(
-        self, rois: Optional[List["ROI"]] = None, output_prefix: Optional[Path] = None
+        self,
+        rois: Optional[List["ROI"]] = None,
+        output_prefix: Optional[Path] = None,
     ) -> None:
         rois = rois or self.rois
 
@@ -478,20 +554,29 @@ class IMCSample:
         # Plot adjancency for all ROIs next to each other and across
         adj_matrices = pd.concat(
             [
-                pd.read_csv(f"{output_prefix}{roi.name}.norm_over_random.csv", index_col=0).assign(
-                    roi=roi.roi_number
-                )
+                pd.read_csv(
+                    f"{output_prefix}{roi.name}.norm_over_random.csv",
+                    index_col=0,
+                ).assign(roi=roi.roi_number)
                 for roi in rois
             ]
         )
         # g2 = nx.readwrite.read_gpickle(roi_prefix + "neighbor_graph.gpickle")
 
-        mean_ = adj_matrices.drop("roi", axis=1).groupby(level=0).mean().sort_index(0).sort_index(1)
+        mean_ = (
+            adj_matrices.drop("roi", axis=1)
+            .groupby(level=0)
+            .mean()
+            .sort_index(0)
+            .sort_index(1)
+        )
         adj_matrices = adj_matrices.append(mean_.assign(roi="mean"))
 
         m = self.n_rois + 1
         nrows = 3
-        fig, _ax = plt.subplots(nrows, m, figsize=(4 * m, 4 * nrows), sharex=False, sharey=False)
+        fig, _ax = plt.subplots(
+            nrows, m, figsize=(4 * m, 4 * nrows), sharex=False, sharey=False
+        )
         v = np.nanstd(adj_matrices.drop("roi", axis=1).values)
         kws = dict(
             cmap="RdBu_r",
@@ -521,4 +606,6 @@ class IMCSample:
         _ax[0, -1].axis("off")
         _ax[2, -1].axis("off")
         share_axes_by(_ax[1:], "both")
-        fig.savefig(output_prefix + "roi_over_mean_rois.image_clustermap.svg", **FIG_KWS)
+        fig.savefig(
+            output_prefix + "roi_over_mean_rois.image_clustermap.svg", **FIG_KWS
+        )

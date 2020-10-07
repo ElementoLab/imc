@@ -95,7 +95,11 @@ class Project:
     ):
         # Initialize
         self.name = name
-        self.metadata = pd.read_csv(metadata) if isinstance(metadata, (str, Path)) else metadata
+        self.metadata = (
+            pd.read_csv(metadata)
+            if isinstance(metadata, (str, Path))
+            else metadata
+        )
         self.samples: List["IMCSample"] = list()
         self.sample_name_attribute = sample_name_attribute
         self.sample_grouping_attributes = (
@@ -119,7 +123,9 @@ class Project:
         self.results_dir = Path(results_dir).absolute()
         self.results_dir.mkdir()
         self.quantification: Optional[DataFrame] = None
-        self._clusters: Optional[MultiIndexSeries] = None  # MultiIndex: ['sample', 'roi', 'obj_id']
+        self._clusters: Optional[
+            MultiIndexSeries
+        ] = None  # MultiIndex: ['sample', 'roi', 'obj_id']
 
         if not hasattr(self, "samples"):
             self.samples = list()
@@ -174,8 +180,10 @@ class Project:
         if df.empty:
             print(f"Could not find any Samples in '{self.processed_dir}'.")
             return df
-        df[DEFAULT_SAMPLE_NAME_ATTRIBUTE] = df[0].apply(lambda x: x.name.replace("_full.tiff", ""))
-        return df.drop(0, axis=1).sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
+        df[DEFAULT_SAMPLE_NAME_ATTRIBUTE] = df[0].apply(
+            lambda x: x.name.replace("_full.tiff", "")
+        )
+        return df.drop(0, axis=1)  # .sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
 
     def _initialize_project_from_annotation(
         self,
@@ -186,7 +194,11 @@ class Project:
         def cols_with_unique_values(dfs: DataFrame) -> set:
             return {col for col in dfs if len(dfs[col].unique()) == 1}
 
-        metadata = self.metadata if self.metadata is not None else self._detect_samples()
+        metadata = (
+            self.metadata
+            if self.metadata is not None
+            else self._detect_samples()
+        )
 
         if metadata.empty:
             return
@@ -200,14 +212,19 @@ class Project:
             or self.sample_grouping_attributes
             or metadata.columns.tolist()
         )
-        for _, idx in metadata.groupby(sample_grouping_attributes).groups.items():
+
+        for _, idx in metadata.groupby(
+            sample_grouping_attributes, sort=False
+        ).groups.items():
             rows = metadata.loc[idx]
             const_cols = cols_with_unique_values(rows)
             row = rows[const_cols].drop_duplicates().squeeze(axis=0)
 
             sample = IMCSample(
                 sample_name=row[self.sample_name_attribute],
-                root_dir=(self.processed_dir / str(row[self.sample_name_attribute]))
+                root_dir=(
+                    self.processed_dir / str(row[self.sample_name_attribute])
+                )
                 if self.subfolder_per_sample
                 else self.processed_dir,
                 subfolder_per_sample=self.subfolder_per_sample,
@@ -240,15 +257,21 @@ class Project:
 
     @property
     def channel_labels(self) -> Union[Series, DataFrame]:
-        return pd.concat([sample.channel_labels for sample in self.samples], axis=1)
+        return pd.concat(
+            [sample.channel_labels for sample in self.samples], axis=1
+        )
 
     @property
     def channel_names(self) -> Union[Series, DataFrame]:
-        return pd.concat([sample.channel_names for sample in self.samples], axis=1)
+        return pd.concat(
+            [sample.channel_names for sample in self.samples], axis=1
+        )
 
     @property
     def channel_metals(self) -> Union[Series, DataFrame]:
-        return pd.concat([sample.channel_metals for sample in self.samples], axis=1)
+        return pd.concat(
+            [sample.channel_metals for sample in self.samples], axis=1
+        )
 
     def _get_rois(
         self, samples: Optional[List["IMCSample"]], rois: Optional[List["ROI"]]
@@ -267,7 +290,10 @@ class Project:
             - "cell_type_assignments": CSV file with cell type assignemts for each cell and each ROI
         """
         to_read = {
-            "h5ad": (DEFAULT_PRJ_SINGLE_CELL_DIR, ".single_cell.processed.h5ad"),
+            "h5ad": (
+                DEFAULT_PRJ_SINGLE_CELL_DIR,
+                ".single_cell.processed.h5ad",
+            ),
             "cell_cluster_assignments": (
                 DEFAULT_PRJ_SINGLE_CELL_DIR,
                 ".single_cell.cluster_assignments.csv",
@@ -296,7 +322,9 @@ class Project:
         if save:
             output_dir.mkdir(exist_ok=True)
             channels_str = ",".join(channels)
-            fig_file = output_dir / ".".join([self.name, f"all_rois.{channels_str}.pdf"])
+            fig_file = output_dir / ".".join(
+                [self.name, f"all_rois.{channels_str}.pdf"]
+            )
         if per_sample:
             for sample in samples or self.samples:
                 fig = sample.plot_channels(channels, **kwargs)
@@ -310,11 +338,17 @@ class Project:
 
             i = 0
             j = 1 if merged else len(channels)
-            n, m = get_grid_dims(len(rois)) if merged else get_grid_dims(len(rois) * j)
+            n, m = (
+                get_grid_dims(len(rois))
+                if merged
+                else get_grid_dims(len(rois) * j)
+            )
             fig, axes = plt.subplots(n, m, figsize=(4 * m, 4 * n))
             axes = axes.flatten()
             for roi in rois:
-                roi.plot_channels(channels, axes=axes[i : i + j], merged=merged, **kwargs)
+                roi.plot_channels(
+                    channels, axes=axes[i : i + j], merged=merged, **kwargs
+                )
                 i += j
             for _ax in axes[i:]:
                 _ax.axis("off")
@@ -339,7 +373,11 @@ class Project:
         if not jointly:
             for sample in samples:
                 plot_file = output_dir / ".".join(
-                    [self.name, sample.name, "all_rois.plot_probabilities_and_segmentation.svg"]
+                    [
+                        self.name,
+                        sample.name,
+                        "all_rois.plot_probabilities_and_segmentation.svg",
+                    ]
                 )
                 fig = sample.plot_probabilities_and_segmentation()
                 fig.savefig(plot_file, **FIG_KWS)
@@ -350,13 +388,16 @@ class Project:
             for i, roi in enumerate(rois):
                 roi.plot_probabilities_and_segmentation(axes=axes[i])
             plot_file = output_dir / (
-                self.name + ".all_rois.plot_probabilities_and_segmentation.all_rois.svg"
+                self.name
+                + ".all_rois.plot_probabilities_and_segmentation.all_rois.svg"
             )
             fig.savefig(plot_file, **FIG_KWS)
 
     def plot_cell_types(
         self,
-        cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
+        cell_type_combinations: Optional[
+            Union[str, List[Tuple[str, str]]]
+        ] = None,
         cell_type_assignments: Optional[DataFrame] = None,
         palette: Optional[str] = "tab20",
         samples: Optional[List["IMCSample"]] = None,
@@ -371,7 +412,9 @@ class Project:
         fig, axes = plt.subplots(n, m, figsize=(3 * m, 3 * n), squeeze=False)
         patches: List[Patch] = list()
         for i, sample in enumerate(samples):
-            for j, roi in enumerate([roi for roi in rois if roi in sample.rois]):
+            for j, roi in enumerate(
+                [roi for roi in rois if roi in sample.rois]
+            ):
                 patches += roi.plot_cell_types(
                     cell_type_combinations=cell_type_combinations,
                     cell_type_assignments=cell_type_assignments,
@@ -388,6 +431,7 @@ class Project:
         red_func: str = "mean",
         channel_exclude: Optional[List[str]] = None,
         plot: bool = True,
+        output_prefix: str = None,
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
         **kwargs,
@@ -399,7 +443,8 @@ class Project:
         _res = dict()
         for roi in rois:
             _res[roi.name] = pd.Series(
-                getattr(roi.stack, red_func)(axis=(1, 2)), index=roi.channel_labels
+                getattr(roi.stack, red_func)(axis=(1, 2)),
+                index=roi.channel_labels,
             )
         res = pd.DataFrame(_res)
 
@@ -433,9 +478,14 @@ class Project:
             def_kwargs = dict(z_score=0, center=0, robust=True, cmap="RdBu_r")
             def_kwargs.update(kwargs)
             # TODO: add {row,col}_colors colorbar to heatmap
-            for kws, label, cbar_label in [({}, "", ""), (def_kwargs, ".z_score", " (Z-score)")]:
+            if output_prefix is None:
+                output_prefix = self.results_dir / "qc" / self.name
+            for kws, label, cbar_label in [
+                ({}, "", ""),
+                (def_kwargs, ".z_score", " (Z-score)"),
+            ]:
                 plot_file = (
-                    self.results_dir / "qc" / self.name + f".mean_per_channel.clustermap{label}.svg"
+                    output_prefix + f".mean_per_channel.clustermap{label}.svg"
                 )
                 grid = sns.clustermap(
                     res,
@@ -454,27 +504,40 @@ class Project:
         res.index.name = "channel"
         return res
 
-    def image_summary(self, samples: Optional[List["IMCSample"]] = None, rois: List["ROI"] = None):
+    def image_summary(
+        self,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: List["ROI"] = None,
+    ):
         raise NotImplementedError
         from imc.utils import lacunarity, fractal_dimension
 
         rois = self._get_rois(samples, rois)
         roi_names = [r.name for r in rois]
         densities = pd.Series(
-            {roi.name: roi.cells_per_area_unit() for roi in rois}, name="cell density"
+            {roi.name: roi.cells_per_area_unit() for roi in rois},
+            name="cell density",
         )
         lacunarities = pd.Series(
-            parmap.map(lacunarity, [roi.cell_mask_o for roi in rois], pm_pbar=True),
+            parmap.map(
+                lacunarity, [roi.cell_mask_o for roi in rois], pm_pbar=True
+            ),
             index=roi_names,
             name="lacunarity",
         )
         fractal_dimensions = pd.Series(
-            parmap.map(fractal_dimension, [roi.cell_mask_o for roi in rois], pm_pbar=True),
+            parmap.map(
+                fractal_dimension,
+                [roi.cell_mask_o for roi in rois],
+                pm_pbar=True,
+            ),
             index=roi_names,
             name="fractal_dimension",
         )
 
-        morphos = pd.DataFrame([densities * 1e4, lacunarities, fractal_dimensions]).T
+        morphos = pd.DataFrame(
+            [densities * 1e4, lacunarities, fractal_dimensions]
+        ).T
 
     def channel_correlation(
         self,
@@ -492,11 +555,18 @@ class Project:
 
         # handling differnet pannels based on channel name
         # that then makes that concatenating dfs with duplicated names in indeces
-        res = pd.concat([x.groupby(level=0).mean().T.groupby(level=0).mean().T for x in _res])
+        res = pd.concat(
+            [
+                x.groupby(level=0).mean().T.groupby(level=0).mean().T
+                for x in _res
+            ]
+        )
         xcorr = res.groupby(level=0).mean().fillna(0)
         labels = xcorr.index
         if channel_exclude is not None:
-            exc = labels.isin(channel_exclude) | labels.str.contains("|".join(channel_exclude))
+            exc = labels.isin(channel_exclude) | labels.str.contains(
+                "|".join(channel_exclude)
+            )
             xcorr = xcorr.loc[labels[~exc], labels[~exc]]
 
         grid = sns.clustermap(
@@ -508,9 +578,13 @@ class Project:
             yticklabels=True,
             cbar_kws=dict(label="Pearson correlation"),
         )
-        grid.ax_col_dendrogram.set_title("Pairwise channel correlation\n(pixel level)")
+        grid.ax_col_dendrogram.set_title(
+            "Pairwise channel correlation\n(pixel level)"
+        )
         grid.savefig(
-            self.results_dir / "qc" / self.name + ".channel_pairwise_correlation.svg", **FIG_KWS
+            self.results_dir / "qc" / self.name
+            + ".channel_pairwise_correlation.svg",
+            **FIG_KWS,
         )
         grid.fig.grid = grid
         return grid.fig
@@ -528,7 +602,9 @@ class Project:
         """
         from imc.operations import quantify_cells_rois
 
-        quantification = quantify_cells_rois(self._get_rois(samples, rois), intensity, morphology)
+        quantification = quantify_cells_rois(
+            self._get_rois(samples, rois), intensity, morphology
+        )
         if not set_attribute:
             return quantification
         self.quantification = quantification
@@ -545,7 +621,9 @@ class Project:
         """
         from imc.operations import quantify_cell_intensity_rois
 
-        return quantify_cell_intensity_rois(self._get_rois(samples, rois), **kwargs)
+        return quantify_cell_intensity_rois(
+            self._get_rois(samples, rois), **kwargs
+        )
 
     def quantify_cell_morphology(
         self,
@@ -558,7 +636,9 @@ class Project:
         """
         from imc.operations import quantify_cell_morphology_rois
 
-        return quantify_cell_morphology_rois(self._get_rois(samples, rois), **kwargs)
+        return quantify_cell_morphology_rois(
+            self._get_rois(samples, rois), **kwargs
+        )
 
     def cluster_cells(
         self,
@@ -572,18 +652,26 @@ class Project:
         """
         Derive clusters of single cells based on their channel intensity.
         """
-        output_prefix = Path(output_prefix or self.results_dir / "single_cell" / self.name)
+        output_prefix = Path(
+            output_prefix or self.results_dir / "single_cell" / self.name
+        )
 
         if "quantification" not in kwargs and self.quantification is not None:
             kwargs["quantification"] = self.quantification
-        if "cell_type_channels" not in kwargs and self.panel_metadata is not None:
+        if (
+            "cell_type_channels" not in kwargs
+            and self.panel_metadata is not None
+        ):
             if "cell_type" in self.panel_metadata.columns:
                 kwargs["cell_type_channels"] = self.panel_metadata.query(
                     "cell_type == 1"
                 ).index.tolist()
 
         clusters = single_cell_analysis(
-            output_prefix=output_prefix, rois=self._get_rois(samples, rois), plot=plot, **kwargs,
+            output_prefix=output_prefix,
+            rois=self._get_rois(samples, rois),
+            plot=plot,
+            **kwargs,
         )
         # save clusters as CSV in default file
         clusters.reset_index().to_csv(
@@ -623,7 +711,11 @@ class Project:
         fn = self._get_input_filename("cell_cluster_assignments")
         fn.parent.mkdir()
         if clusters is None:
-            clusters = (pd.read_csv(fn, dtype={"sample": str, "roi": str},).set_index(id_cols))[
+            clusters = (
+                pd.read_csv(fn, dtype={"sample": str, "roi": str},).set_index(
+                    id_cols
+                )
+            )[
                 "cluster"
             ]  # .astype(str)
         assert isinstance(clusters.index, pd.MultiIndex)
@@ -635,7 +727,10 @@ class Project:
             self._clusters.reset_index().to_csv(fn, index=False)
 
     def label_clusters(
-        self, h5ad_file: Optional[Path] = None, output_prefix: Optional[Path] = None, **kwargs
+        self,
+        h5ad_file: Optional[Path] = None,
+        output_prefix: Optional[Path] = None,
+        **kwargs,
     ) -> None:
         """
         Derive labels for each identified cluster
@@ -644,14 +739,17 @@ class Project:
         prefix = self.results_dir / "single_cell" / self.name
         h5ad_file = Path(h5ad_file or prefix + ".single_cell.processed.h5ad")
         output_prefix = Path(output_prefix or prefix + ".cell_type_reference")
-        new_labels = derive_reference_cell_type_labels(h5ad_file, output_prefix, **kwargs)
+        new_labels = derive_reference_cell_type_labels(
+            h5ad_file, output_prefix, **kwargs
+        )
         self._rename_clusters(new_labels.to_dict())
 
     def _rename_clusters(self, new_labels: dict, save: bool = True):
         clusters = cast(self.clusters).replace(new_labels)
         if save:
             clusters.reset_index().to_csv(
-                self._get_input_filename("cell_cluster_assignments"), index=False
+                self._get_input_filename("cell_cluster_assignments"),
+                index=False,
             )
         self.set_clusters(clusters)
 
@@ -672,7 +770,9 @@ class Project:
         sample_attributes = sample_attributes or ["name"]
         samples = samples or self.samples
         rois = self._get_rois(samples, rois)
-        output_prefix = output_prefix or self.results_dir / "single_cell" / self.name + "."
+        output_prefix = (
+            output_prefix or self.results_dir / "single_cell" / self.name + "."
+        )
         output_prefix.parent.mkdir(exist_ok=True)
 
         # group samples by desired attributes
@@ -685,13 +785,18 @@ class Project:
             .rename_axis("sample")
             .reset_index()
         )
-        sample_groups = sample_df.groupby(sample_attributes)["sample"].apply(set)
+        sample_groups = sample_df.groupby(sample_attributes)["sample"].apply(
+            set
+        )
         sample_roi_df = pd.DataFrame(
-            [(roi.name, roi.sample.name) for roi in rois], columns=["roi", "sample"]
+            [(roi.name, roi.sample.name) for roi in rois],
+            columns=["roi", "sample"],
         )
 
         # Whole channel means
-        channel_means: DataFrame = self.channel_summary(plot=False, channel_exclude=channel_exclude)
+        channel_means: DataFrame = self.channel_summary(
+            plot=False, channel_exclude=channel_exclude
+        )
         channel_means.index.name = "channel"
         channel_means = (
             channel_means.reset_index()
@@ -699,19 +804,31 @@ class Project:
             .reset_index(drop=True)
         )
         channel_df = (
-            channel_means.merge(sample_roi_df).merge(sample_df).sort_values(sample_attributes)
+            channel_means.merge(sample_roi_df)
+            .merge(sample_df)
+            .sort_values(sample_attributes)
         )
 
         # cell type abundancy per sample or group of samples
         cluster_counts = (
-            self.clusters.groupby(level=["sample", "roi"]).value_counts().rename("cell_count")
+            self.clusters.groupby(level=["sample", "roi"])
+            .value_counts()
+            .rename("cell_count")
         )
-        cluster_perc = (cluster_counts.groupby("cluster").sum() / cluster_counts.sum()) * 100
-        filtered_clusters = cluster_perc[cluster_perc > cell_type_percentage_threshold].index
+        cluster_perc = (
+            cluster_counts.groupby("cluster").sum() / cluster_counts.sum()
+        ) * 100
+        filtered_clusters = cluster_perc[
+            cluster_perc > cell_type_percentage_threshold
+        ].index
 
         # # absolute
         # # fraction of total
-        cluster_df = cluster_counts.reset_index().merge(sample_df).sort_values(sample_attributes)
+        cluster_df = (
+            cluster_counts.reset_index()
+            .merge(sample_df)
+            .sort_values(sample_attributes)
+        )
         cluster_df["cell_perc"] = cluster_df.groupby("roi")["cell_count"].apply(
             lambda x: (x / x.sum()) * 100
         )
@@ -721,13 +838,15 @@ class Project:
         _res = list()
         for attribute in sample_attributes:
             for channel in channel_df["channel"].unique():
-                for group1, group2 in itertools.permutations(channel_df[attribute].unique(), 2):
-                    a = channel_df.query(f"channel == '{channel}' & {attribute} == '{group1}'")[
-                        "value"
-                    ]
-                    b = channel_df.query(f"channel == '{channel}' & {attribute} == '{group2}'")[
-                        "value"
-                    ]
+                for group1, group2 in itertools.permutations(
+                    channel_df[attribute].unique(), 2
+                ):
+                    a = channel_df.query(
+                        f"channel == '{channel}' & {attribute} == '{group1}'"
+                    )["value"]
+                    b = channel_df.query(
+                        f"channel == '{channel}' & {attribute} == '{group2}'"
+                    )["value"]
                     am = a.mean()
                     bm = b.mean()
                     means = [am, bm, np.log2(a.mean() / b.mean())]
@@ -735,7 +854,9 @@ class Project:
                         mu = mannwhitneyu(a, b)
                     except ValueError:
                         mu = (np.nan, np.nan)
-                    _res.append([attribute, channel, group1, group2, *means, *mu])
+                    _res.append(
+                        [attribute, channel, group1, group2, *means, *mu]
+                    )
         cols = [
             "attribute",
             "channel",
@@ -748,7 +869,9 @@ class Project:
             "p_value",
         ]
         channel_stats = pd.DataFrame(_res, columns=cols)
-        channel_stats["p_adj"] = multipletests(channel_stats["p_value"], method="fdr_bh")[1]
+        channel_stats["p_adj"] = multipletests(
+            channel_stats["p_value"], method="fdr_bh"
+        )[1]
 
         # # # remove duplication due to lazy itertools.permutations
         channel_stats["abs_log2_fold"] = channel_stats["log2_fold"].abs()
@@ -768,20 +891,23 @@ class Project:
                 channel_stats.loc[i] = row
         # # # save
         channel_stats.to_csv(
-            output_prefix + f"channel_mean.testing_between_attributes.csv", index=False
+            output_prefix + f"channel_mean.testing_between_attributes.csv",
+            index=False,
         )
 
         # # clusters
         _res = list()
         for attribute in sample_attributes:
             for cluster in cluster_df["cluster"].unique():
-                for group1, group2 in itertools.permutations(cluster_df[attribute].unique(), 2):
-                    a = cluster_df.query(f"cluster == '{cluster}' & {attribute} == '{group1}'")[
-                        "cell_count"
-                    ]
-                    b = cluster_df.query(f"cluster == '{cluster}' & {attribute} == '{group2}'")[
-                        "cell_count"
-                    ]
+                for group1, group2 in itertools.permutations(
+                    cluster_df[attribute].unique(), 2
+                ):
+                    a = cluster_df.query(
+                        f"cluster == '{cluster}' & {attribute} == '{group1}'"
+                    )["cell_count"]
+                    b = cluster_df.query(
+                        f"cluster == '{cluster}' & {attribute} == '{group2}'"
+                    )["cell_count"]
                     am = a.mean()
                     bm = b.mean()
                     means = [am, bm, np.log2(a.mean() / b.mean())]
@@ -789,7 +915,9 @@ class Project:
                         mu = mannwhitneyu(a, b)
                     except ValueError:
                         mu = (np.nan, np.nan)
-                    _res.append([attribute, cluster, group1, group2, *means, *mu])
+                    _res.append(
+                        [attribute, cluster, group1, group2, *means, *mu]
+                    )
         cols = [
             "attribute",
             "cluster",
@@ -802,7 +930,9 @@ class Project:
             "p_value",
         ]
         cluster_stats = pd.DataFrame(_res, columns=cols)
-        cluster_stats["p_adj"] = multipletests(cluster_stats["p_value"], method="fdr_bh")[1]
+        cluster_stats["p_adj"] = multipletests(
+            cluster_stats["p_value"], method="fdr_bh"
+        )[1]
 
         # # # remove duplication due to lazy itertools.permutations
         cluster_stats["abs_log2_fold"] = cluster_stats["log2_fold"].abs()
@@ -822,11 +952,15 @@ class Project:
                 cluster_stats.loc[i] = row
         # # # save
         cluster_stats.to_csv(
-            output_prefix + f"cell_type_abundance.testing_between_attributes.csv", index=False
+            output_prefix
+            + f"cell_type_abundance.testing_between_attributes.csv",
+            index=False,
         )
 
         # Filter out rare cell types if required
-        filtered_cluster_df = cluster_df.loc[cluster_df["cluster"].isin(filtered_clusters)]
+        filtered_cluster_df = cluster_df.loc[
+            cluster_df["cluster"].isin(filtered_clusters)
+        ]
 
         # Plot
         # # barplots
@@ -835,35 +969,61 @@ class Project:
         kwargs = dict(
             x="value", y="channel", orient="horiz", ci="sd", data=channel_df
         )  # , estimator=np.std)
-        fig, axes = plt.subplots(n, 2, figsize=(5 * 2, 10 * n), squeeze=False, sharey="row")
+        fig, axes = plt.subplots(
+            n, 2, figsize=(5 * 2, 10 * n), squeeze=False, sharey="row"
+        )
         for i, attribute in enumerate(sample_attributes):
             for axs in axes[i, (0, 1)]:
                 sns.barplot(**kwargs, hue=attribute, ax=axs)
             axes[i, 1].set_xscale("log")
-            for axs, lab in zip(axes[i, :], ["Channel mean", "Channel mean (log)"]):
+            for axs, lab in zip(
+                axes[i, :], ["Channel mean", "Channel mean (log)"]
+            ):
                 axs.set_xlabel(lab)
-        fig.savefig(output_prefix + f"channel_mean.by_{attribute}.barplot.svg", **FIG_KWS)
+        fig.savefig(
+            output_prefix + f"channel_mean.by_{attribute}.barplot.svg",
+            **FIG_KWS,
+        )
 
         # # # clusters
         # # # # plot once for all cell types, another time excluding rare cell types
         n = len(sample_attributes)
-        kwargs = dict(y="cluster", orient="horiz", ci="sd")  # , estimator=np.std)
+        kwargs = dict(
+            y="cluster", orient="horiz", ci="sd"
+        )  # , estimator=np.std)
         for label, pl_df in [
             ("all_clusters", cluster_df),
             ("filtered_clusters", filtered_cluster_df),
         ]:
-            fig, axes = plt.subplots(n, 3, figsize=(5 * 3, 10 * n), squeeze=False, sharey="row")
+            fig, axes = plt.subplots(
+                n, 3, figsize=(5 * 3, 10 * n), squeeze=False, sharey="row"
+            )
             for i, attribute in enumerate(sample_attributes):
                 for axs in axes[i, (0, 1)]:
-                    sns.barplot(**kwargs, x="cell_count", hue=attribute, data=pl_df, ax=axs)
+                    sns.barplot(
+                        **kwargs,
+                        x="cell_count",
+                        hue=attribute,
+                        data=pl_df,
+                        ax=axs,
+                    )
                 axes[i, 1].set_xscale("log")
-                sns.barplot(**kwargs, x="cell_perc", hue=attribute, data=pl_df, ax=axes[i, 2])
+                sns.barplot(
+                    **kwargs,
+                    x="cell_perc",
+                    hue=attribute,
+                    data=pl_df,
+                    ax=axes[i, 2],
+                )
                 for axs, lab in zip(
-                    axes[i, :], ["Cell count", "Cell count (log)", "Cell percentage"]
+                    axes[i, :],
+                    ["Cell count", "Cell count (log)", "Cell percentage"],
                 ):
                     axs.set_xlabel(lab)
             fig.savefig(
-                output_prefix + f"cell_type_abundance.by_{attribute}.barplot.svg", **FIG_KWS
+                output_prefix
+                + f"cell_type_abundance.by_{attribute}.barplot.svg",
+                **FIG_KWS,
             )
 
         # # volcano
@@ -878,7 +1038,10 @@ class Project:
             .max()
         )
         fig, axes = plt.subplots(
-            n, m, figsize=(m * 5, n * 5), squeeze=False,  # sharex="row", sharey="row"
+            n,
+            m,
+            figsize=(m * 5, n * 5),
+            squeeze=False,  # sharex="row", sharey="row"
         )
         fig.suptitle("Changes in mean channel intensity")
         for i, attribute in enumerate(sample_attributes):
@@ -902,11 +1065,16 @@ class Project:
                 axes[i, j].axvline(0, linestyle="--", color="grey")
                 title = attribute + f"\n{group1} vs {group2}"
                 axes[i, j].set(
-                    xlabel="log2(fold-change)", ylabel="-log10(p-value)", title=title
+                    xlabel="log2(fold-change)",
+                    ylabel="-log10(p-value)",
+                    title=title,
                 )  # , xlim=(-v, v))
             for axs in axes[i, j + 1 :]:
                 axs.axis("off")
-        fig.savefig(output_prefix + f"channel_mean.by_{attribute}.volcano.svg", **FIG_KWS)
+        fig.savefig(
+            output_prefix + f"channel_mean.by_{attribute}.volcano.svg",
+            **FIG_KWS,
+        )
 
         # # # clusters
         n = len(sample_attributes)
@@ -919,7 +1087,10 @@ class Project:
             .max()
         )
         fig, axes = plt.subplots(
-            n, m, figsize=(m * 5, n * 5), squeeze=False,  # sharex="row", sharey="row"
+            n,
+            m,
+            figsize=(m * 5, n * 5),
+            squeeze=False,  # sharex="row", sharey="row"
         )
         fig.suptitle("Changes in cell type composition\nfor each cell type")
         for i, attribute in enumerate(sample_attributes):
@@ -943,20 +1114,32 @@ class Project:
                 axes[i, j].axvline(0, linestyle="--", color="grey")
                 title = attribute + f"\n{group1} vs {group2}"
                 axes[i, j].set(
-                    xlabel="log2(fold-change)", ylabel="-log10(p-value)", title=title
+                    xlabel="log2(fold-change)",
+                    ylabel="-log10(p-value)",
+                    title=title,
                 )  # , xlim=(-v, v))
             for axs in axes[i, j + 1 :]:
                 axs.axis("off")
-        fig.savefig(output_prefix + f"cell_type_abundance.by_{attribute}.volcano.svg", **FIG_KWS)
+        fig.savefig(
+            output_prefix + f"cell_type_abundance.by_{attribute}.volcano.svg",
+            **FIG_KWS,
+        )
 
         # # heatmap of cell type counts
         cluster_counts = (
             self.clusters.reset_index()
             .assign(count=1)
-            .pivot_table(index="cluster", columns="roi", aggfunc=sum, values="count", fill_value=0)
+            .pivot_table(
+                index="cluster",
+                columns="roi",
+                aggfunc=sum,
+                values="count",
+                fill_value=0,
+            )
         )
         roi_areas = pd.Series(
-            [np.multiply(*roi.shape[1:]) for roi in rois], index=[roi.name for roi in rois]
+            [np.multiply(*roi.shape[1:]) for roi in rois],
+            index=[roi.name for roi in rois],
         )
 
         cluster_densities = (cluster_counts / roi_areas) * 1e4
@@ -968,7 +1151,9 @@ class Project:
             xticklabels=True,
             yticklabels=True,
         )
-        grid.savefig(output_prefix + "cell_type_abundance.by_area.svg", **FIG_KWS)
+        grid.savefig(
+            output_prefix + "cell_type_abundance.by_area.svg", **FIG_KWS
+        )
 
         grid = sns.clustermap(
             cluster_densities,
@@ -981,7 +1166,9 @@ class Project:
             xticklabels=True,
             yticklabels=True,
         )
-        grid.savefig(output_prefix + "cell_type_abundance.by_area.zscore.svg", **FIG_KWS)
+        grid.savefig(
+            output_prefix + "cell_type_abundance.by_area.zscore.svg", **FIG_KWS
+        )
 
     def measure_adjacency(
         self,
@@ -992,7 +1179,9 @@ class Project:
         """
         Derive cell adjacency graphs for each ROI.
         """
-        output_prefix = output_prefix or self.results_dir / "single_cell" / self.name + "."
+        output_prefix = (
+            output_prefix or self.results_dir / "single_cell" / self.name + "."
+        )
         rois = self._get_rois(samples, rois)
 
         # Get graph for missing ROIs
@@ -1019,7 +1208,9 @@ class Project:
 
         melted = pd.concat(
             [
-                f.reset_index().melt(id_vars="index").assign(sample=roi.sample.name, roi=roi.name)
+                f.reset_index()
+                .melt(id_vars="index")
+                .assign(sample=roi.sample.name, roi=roi.name)
                 for roi, f in zip(rois, freqs)
             ]
         )
@@ -1031,7 +1222,9 @@ class Project:
 
         v = np.percentile(melted["value"].abs(), 95)
         n, m = get_grid_dims(len(freqs))
-        fig, axes = plt.subplots(n, m, figsize=(m * 5, n * 5), sharex=True, sharey=True)
+        fig, axes = plt.subplots(
+            n, m, figsize=(m * 5, n * 5), sharex=True, sharey=True
+        )
         axes = axes.flatten()
         i = -1
         for i, (dfs, roi) in enumerate(zip(freqs, rois)):
