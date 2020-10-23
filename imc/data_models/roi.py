@@ -215,7 +215,7 @@ class ROI:
             )
             return self._channel_exclude
 
-    def set_channel_exclude(self, values: Union[List, Series]):
+    def set_channel_exclude(self, values: Union[List[str], Series]):
         self._channel_exclude = self.channel_labels.isin(values).set_axis(
             self.channel_labels
         )
@@ -525,7 +525,7 @@ class ROI:
         import numba as nb
 
         def reduce_channels(
-            stack: Array, red_func: str, ex: Union[List[str], Series] = None
+            stack: Array, red_func: str, ex: Union[List[bool], Series] = None
         ):
             ex = [False] * stack.shape[0] if ex is None else ex
             m = np.asarray([g(f(x)) for i, x in enumerate(stack) if not ex[i]])
@@ -556,7 +556,7 @@ class ROI:
                 f = g = _idenv
             elif sum(self.channel_labels.values == channel) == 1:
                 label = channel
-                if channel in self.channel_exclude:
+                if channel in excluded:
                     print(excluded_message.format(channel, label))
                 arr = stack[self.channel_labels == channel]
             else:
@@ -564,10 +564,7 @@ class ROI:
                 if match.any():
                     label = ", ".join(self.channel_labels[match])
                     if match.sum() == 1:
-                        if (
-                            self.channel_labels[match].squeeze()
-                            in self.channel_exclude[self.channel_exclude]
-                        ):
+                        if self.channel_labels[match].squeeze() in excluded:
                             print(excluded_message.format(channel, label))
                         arr = stack[match]
                     else:
