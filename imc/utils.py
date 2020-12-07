@@ -413,6 +413,7 @@ def mcd_to_dir(
     sample_name: str = None,
     partition_panels: bool = False,
     filter_full: bool = True,
+    export_panoramas: bool = True,
     keep_original_roi_names: bool = False,
     allow_empty_rois: bool = True,
     only_crops: bool = False,
@@ -501,16 +502,22 @@ def mcd_to_dir(
         }
     )
 
-    # Parse MCD
-    mcd = McdParser(mcd_file)
-    session = mcd.session
-
     if output_dir is None:
         output_dir = mcd_file.parent / "imc_dir"
     os.makedirs(output_dir, exist_ok=True)
     dirs = ["tiffs", "ilastik"]
     for _dir in dirs:
         os.makedirs(output_dir / _dir, exist_ok=True)
+
+    # Export panoramas
+    if export_panoramas:
+        get_panorama_images(
+            mcd_file, output_file_prefix=output_dir / "Panorama"
+        )
+
+    # Parse MCD
+    mcd = McdParser(mcd_file)
+    session = mcd.session
 
     if sample_name is None:
         sample_name = session.name
