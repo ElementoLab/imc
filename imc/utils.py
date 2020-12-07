@@ -408,6 +408,7 @@ def mcd_to_dir(
     pannel_csv: Path = None,
     ilastik_channels: List[str] = None,
     output_dir: Path = None,
+    output_format: str = "tiff",
     overwrite: bool = False,
     sample_name: str = None,
     partition_panels: bool = False,
@@ -512,7 +513,7 @@ def mcd_to_dir(
         os.makedirs(output_dir / _dir, exist_ok=True)
 
     if sample_name is None:
-        sample_name = mcd.meta.metaname
+        sample_name = session.name
 
     for i, ac_id in enumerate(session.acquisition_ids):
         print(ac_id)
@@ -535,7 +536,8 @@ def mcd_to_dir(
             )
 
         # Skip if not overwrite
-        if (prefix + "_full.tiff").exists() and not overwrite:
+        file_ending = "ome.tiff" if output_format == "ome-tiff" else "tiff"
+        if (prefix + "_full." + file_ending).exists() and not overwrite:
             print(
                 "TIFF images exist and overwrite is set to `False`. Continuing."
             )
@@ -563,11 +565,19 @@ def mcd_to_dir(
         # Filter hot pixels
         ac._image_data = np.asarray([clip_hot_pixels(x) for x in ac.image_data])
 
-        # Save full image as TIFF
+        # Save full image
         p = prefix + "_full."
-        ac.save_tiff(
-            p + "tiff", names=channel_labels.str.extract(r"\((.*)\)")[0]
-        )
+        if output_format == "tiff":
+            ac.save_tiff(
+                p + file_ending,
+                names=channel_labels.str.extract(r"\((.*)\)")[0],
+            )
+        elif output_format == "ome-tiff":
+            ac.save_ome_tiff(
+                p + file_ending,
+                names=channel_labels.str.extract(r"\((.*)\)")[0],
+                xml_metadata=mcd.get_mcd_xml(),
+            )
         # Save channel labels for the stack
         channel_labels.to_csv(p + "csv")
 
@@ -1011,16 +1021,18 @@ def filter_hot_pixels(img, n_bins=1000):
 
 
 @overload
-def get_slide_images(mcd_file: Path, output_file_prefix: Path) -> None:
+def get_panorama_images(mcd_file: Path, output_file_prefix: Path) -> None:
     ...
 
 
 @overload
-def get_slide_images(mcd_file: Path, output_file_prefix: None) -> List[Array]:
+def get_panorama_images(
+    mcd_file: Path, output_file_prefix: None
+) -> List[Array]:
     ...
 
 
-def get_slide_images(
+def get_panorama_images(
     mcd_file: Path, output_file_prefix: Path = None
 ) -> Optional[List[Array]]:
     import imageio
@@ -1038,7 +1050,7 @@ def get_slide_images(
         img = mcd._get_buffer(start + byteoffset, end + byteoffset)
         if output_file_prefix is None:
             imgs.append(imageio.imread(img))
-        with open(f"{output_file_prefix}_{slide['ID']}.tiff", "wb") as f:
+        with open(f"{output_file_prefix}_{slide['ID']}.png", "wb") as f:
             f.write(img)
     if output_file_prefix is None:
         return imgs
