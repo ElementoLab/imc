@@ -7,6 +7,7 @@ import os
 import re
 import json
 from typing import (
+    Tuple,
     Union,
     List,
     Optional,
@@ -45,7 +46,7 @@ from sklearn.linear_model import LinearRegression
 import tifffile
 from tqdm import tqdm
 
-import imctools.io.mcdparser
+from imctools.io.mcd.mcdparser import McdParser
 
 from imc.types import DataFrame, Series, Array, Path, GenericType
 
@@ -71,6 +72,15 @@ def filter_kwargs_by_callable(
         for k, v in kwargs.items()
         if (k in args) and k not in (exclude or [])
     }
+
+
+def build_channel_name(
+    labels: Dict[int, Tuple[str, Optional[str]]],
+    metals: Dict[int, Tuple[str, Optional[str]]],
+) -> Series:
+    return (
+        cleanup_channel_names(pd.Series(labels)) + "(" + pd.Series(metals) + ")"
+    ).rename("channel")
 
 
 def cleanup_channel_names(series: Series) -> Series:
@@ -411,8 +421,8 @@ def mcd_to_dir(
 ) -> None:
     def get_dataframe_from_channels(mcd):
         return pd.DataFrame(
-            [mcd.get_acquisition_channels(x) for x in mcd.acquisition_ids],
-            index=mcd.acquisition_ids,
+            [mcd.get_acquisition_channels(x) for x in session.acquisition_ids],
+            index=session.acquisition_ids,
         )
 
     def all_channels_equal(mcd):
@@ -435,15 +445,7 @@ def mcd_to_dir(
                     partitions[p] = partitions[p].union(set([row.name]))
         return partitions.values()
 
-    def build_channel_name(ac):
-        return (
-            cleanup_channel_names(pd.Series(ac.channel_labels))
-            + "("
-            + pd.Series(ac.channel_metals)
-            + ")"
-        ).rename("channel")
-
-    def clip_hot_pixels(img, hp_filter_shape=(3, 3), hp_threshold=50):
+    def clip_hot_pixels(img, hp_filter_shape=(3, 3), hp_threshold=0.0001):
         if hp_filter_shape[0] % 2 != 1 or hp_filter_shape[1] % 2 != 1:
             raise ValueError(
                 "Invalid hot pixel filter shape: %s" % str(hp_filter_shape)
@@ -499,23 +501,24 @@ def mcd_to_dir(
     )
 
     # Parse MCD
-    mcd = imctools.io.mcdparser.McdParser(mcd_file)
+    mcd = McdParser(mcd_file)
+    session = mcd.session
 
     if output_dir is None:
         output_dir = mcd_file.parent / "imc_dir"
     os.makedirs(output_dir, exist_ok=True)
     dirs = ["tiffs", "ilastik"]
-    for d in dirs:
-        os.makedirs(output_dir / d, exist_ok=True)
+    for _dir in dirs:
+        os.makedirs(output_dir / _dir, exist_ok=True)
 
     if sample_name is None:
         sample_name = mcd.meta.metaname
 
-    for i, ac_id in enumerate(mcd.acquisition_ids):
+    for i, ac_id in enumerate(session.acquisition_ids):
         print(ac_id)
         try:
-            ac = mcd.get_imc_acquisition(ac_id)
-        except imctools.io.abstractparserbase.AcquisitionError as e:
+            ac = mcd.get_acquisition_data(ac_id)
+        except Exception as e:  # imctools.io.abstractparserbase.AcquisitionError
             if allow_empty_rois:
                 print(e)
                 continue
@@ -524,9 +527,7 @@ def mcd_to_dir(
         # Get output prefix
         if keep_original_roi_names:
             prefix = (
-                output_dir
-                / "tiffs"
-                / (ac.image_description.replace(" ", "_") + "_ac")
+                output_dir / "tiffs" / (session.name.replace(" ", "_") + "_ac")
             )
         else:
             prefix = (
@@ -541,11 +542,12 @@ def mcd_to_dir(
             continue
 
         # Filter channels
-        channel_labels = build_channel_name(ac)
+        channel_labels = build_channel_name(ac.channel_labels, ac.channel_names)
         to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-        to_exp_ind = ac.get_metal_indices(
-            list(map(lambda x: x[1].split(")")[0], to_exp.str.split("(")))
-        )
+        to_exp_ind = [
+            ac.channel_masses.index(y)
+            for y in to_exp.str.extract(r".*\(..(\d+)\)")[0]
+        ]
         assert to_exp_ind == to_exp.index.tolist()
 
         if filter_full:
@@ -559,65 +561,53 @@ def mcd_to_dir(
             ].reset_index(drop=True)
 
         # Filter hot pixels
-        ac._data = np.asarray([clip_hot_pixels(x) for x in ac.data])
+        ac._image_data = np.asarray([clip_hot_pixels(x) for x in ac.image_data])
 
-        good = ~channel_labels.str.contains("EMPTY|BCKG|80ArAr|129Xe")
-        nuc = channel_labels.str.contains("DNA|Histone")
-        nuclear = np.asarray([False] * 3 + (good & nuc).values.tolist())
-        cytopla = np.asarray([False] * 3 + (good & ~nuc).values.tolist())
-
-        std = lambda d: (d - d.min()) / (d.max() - d.min())
-        f_nuc = (
-            std(np.asarray(list(map(std, ac.data[nuclear]))).sum(0)) * 256
-        ).astype("uint8")
-        f_cyt = (
-            std(np.asarray(list(map(std, ac.data[cytopla]))).sum(0)) * 256
-        ).astype("uint8")
-
-        # check
-        fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
-        ax[0].imshow(f_nuc, cmap="viridis")
-        ax[1].imshow(f_cyt, cmap="viridis")
-
-        # resize
-        s = tuple(x * 2 for x in ac.shape[:-1])
-        full = np.moveaxis(
-            np.asarray([resize(f_nuc, s), resize(f_cyt, s), resize(f_cyt, s)]),
-            0,
-            -1,
+        # Save full image as TIFF
+        p = prefix + "_full."
+        ac.save_tiff(
+            p + "tiff", names=channel_labels.str.extract(r"\((.*)\)")[0]
         )
+        # Save channel labels for the stack
+        channel_labels.to_csv(p + "csv")
+
+        # # check
+        # good = ~channel_labels.str.contains("EMPTY|BCKG|80ArAr|129Xe")
+        # nuc = channel_labels.str.contains("DNA|Histone")
+        # nuclear = np.asarray([False] * 3 + (good & nuc).values.tolist())
+        # cytopla = np.asarray([False] * 3 + (good & ~nuc).values.tolist())
+
+        # f_nuc = np.asarray([minmax_scale(eq(x)) for x in ac.data[nuclear]]).mean(0)
+        # f_cyt = minmax_scale(eq(np.asarray([minmax_scale(eq(x)) for x in ac.data[cytopla]]).mean(0)))
+        # f_bck = 1 - minmax_scale(f_nuc + f_cyt)
+
+        # fig, ax = plt.subplots(1, 4, sharex=True, sharey=True)
+        # ax[0].imshow(f_nuc)
+        # ax[1].imshow(f_cyt)
+        # ax[2].imshow(f_bck)
+        # ax[3].imshow(np.moveaxis(np.asarray([f_nuc, f_cyt, f_bck]), 0, -1))
 
         # Make input for ilastik training
-        to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-        to_exp_ind = (
-            np.array(
-                ac.get_metal_indices(
-                    list(
-                        map(lambda x: x[1].split(")")[0], to_exp.str.split("("))
-                    )
-                )
-            )
-            + 3
-        )
-        # assert to_exp_ind == to_exp.index.tolist()
-
         # # zoom 2x
-        s = tuple(x * 2 for x in ac.shape[:-1])
+        s = tuple(x * 2 for x in ac.image_data.shape[1:])
         full = np.moveaxis(
-            np.asarray([resize(x, s) for x in ac.data[to_exp_ind]]), 0, -1
+            np.asarray([resize(x, s) for x in ac.image_data[to_exp_ind]]), 0, -1
         )
 
-        # Save input for ilastik prediction
+        # # Save input for ilastik prediction
         with h5py.File(prefix + "_ilastik_s2.h5", mode="w") as handle:
             d = handle.create_dataset("stacked_channels", data=full)
             d.attrs["axistags"] = H5_YXC_AXISTAG
 
         # # random crops
         iprefix = (
-            output_dir
-            / "ilastik"
-            / (ac.image_description.replace(" ", "_") + "_ac")
+            output_dir / "ilastik" / (session.name.replace(" ", "_") + "_ac")
         )
+        # # # make sure height/width are smaller or equal to acquisition dimensions
+        if (full.shape[1] < crop_width) or (full.shape[0] < crop_height):
+            msg = "Image is smaller than the requested crop size for ilastik training."
+            print(msg)
+            continue
         for _ in range(n_crops):
             x = np.random.choice(range(s[0] - crop_width))
             y = np.random.choice(range(s[1] - crop_height))
@@ -632,13 +622,6 @@ def mcd_to_dir(
         if only_crops:
             continue
 
-        # Save full image as TIFF
-        p = prefix + "_full."
-        ac.save_image(
-            p + "tiff", metals=channel_labels.str.extract(r"\((.*)\)")[0]
-        )
-        channel_labels.to_csv(p + "csv")
-
     mcd.close()
 
     # all_channels_equal(mcd)
@@ -649,222 +632,214 @@ def mcd_to_dir(
     #         ac.save_image(pjoin(output_dir, f"partition_{partition_id}", ""))
 
 
-def mcd_to_dir_two_color(
-    mcd_file: Path,
-    pannel_csv: Path = None,
-    ilastik_channels: List[str] = None,
-    output_dir: Path = None,
-    overwrite: bool = False,
-    sample_name: str = None,
-    partition_panels: bool = False,
-    filter_full: bool = True,
-    keep_original_roi_names: bool = False,
-    allow_empty_rois: bool = True,
-    only_crops: bool = False,
-    n_crops: int = 5,
-    crop_width: int = 500,
-    crop_height: int = 500,
-) -> None:
-    def get_dataframe_from_channels(mcd):
-        return pd.DataFrame(
-            [mcd.get_acquisition_channels(x) for x in mcd.acquisition_ids],
-            index=mcd.acquisition_ids,
-        )
+# def mcd_to_dir_two_color(
+#     mcd_file: Path,
+#     pannel_csv: Path = None,
+#     ilastik_channels: List[str] = None,
+#     output_dir: Path = None,
+#     overwrite: bool = False,
+#     sample_name: str = None,
+#     partition_panels: bool = False,
+#     filter_full: bool = True,
+#     keep_original_roi_names: bool = False,
+#     allow_empty_rois: bool = True,
+#     only_crops: bool = False,
+#     n_crops: int = 5,
+#     crop_width: int = 500,
+#     crop_height: int = 500,
+# ) -> None:
+#     def get_dataframe_from_channels(mcd):
+#         return pd.DataFrame(
+#             [mcd.get_acquisition_channels(x) for x in session.acquisition_ids],
+#             index=session.acquisition_ids,
+#         )
 
-    def all_channels_equal(mcd):
-        chs = get_dataframe_from_channels(mcd)
-        return all(
-            [
-                (chs[c].value_counts() == mcd.n_acquisitions).all()
-                for c in chs.columns
-            ]
-        )
+#     def all_channels_equal(mcd):
+#         chs = get_dataframe_from_channels(mcd)
+#         return all(
+#             [
+#                 (chs[c].value_counts() == mcd.n_acquisitions).all()
+#                 for c in chs.columns
+#             ]
+#         )
 
-    def get_panel_partitions(mcd):
-        chs = get_dataframe_from_channels(mcd)
+#     def get_panel_partitions(mcd):
+#         chs = get_dataframe_from_channels(mcd)
 
-        partitions = {k: set(k) for k in chs.drop_duplicates().index}
-        for p in partitions:
-            for _, row in chs.iterrows():
-                print(p, row.name)
-                if (row == chs.loc[list(partitions[p])[0]]).all():
-                    partitions[p] = partitions[p].union(set([row.name]))
-        return partitions.values()
+#         partitions = {k: set(k) for k in chs.drop_duplicates().index}
+#         for p in partitions:
+#             for _, row in chs.iterrows():
+#                 print(p, row.name)
+#                 if (row == chs.loc[list(partitions[p])[0]]).all():
+#                     partitions[p] = partitions[p].union(set([row.name]))
+#         return partitions.values()
 
-    def build_channel_name(ac):
-        return (
-            cleanup_channel_names(pd.Series(ac.channel_labels))
-            + "("
-            + pd.Series(ac.channel_metals)
-            + ")"
-        ).rename("channel")
+#     def clip_hot_pixels(img, hp_filter_shape=(3, 3), hp_threshold=50):
+#         if hp_filter_shape[0] % 2 != 1 or hp_filter_shape[1] % 2 != 1:
+#             raise ValueError(
+#                 "Invalid hot pixel filter shape: %s" % str(hp_filter_shape)
+#             )
+#         hp_filter_footprint = np.ones(hp_filter_shape)
+#         hp_filter_footprint[
+#             int(hp_filter_shape[0] / 2), int(hp_filter_shape[1] / 2)
+#         ] = 0
+#         max_img = ndi.maximum_filter(
+#             img, footprint=hp_filter_footprint, mode="reflect"
+#         )
+#         hp_mask = img - max_img > hp_threshold
+#         img = img.copy()
+#         img[hp_mask] = max_img[hp_mask]
+#         return img
 
-    def clip_hot_pixels(img, hp_filter_shape=(3, 3), hp_threshold=50):
-        if hp_filter_shape[0] % 2 != 1 or hp_filter_shape[1] % 2 != 1:
-            raise ValueError(
-                "Invalid hot pixel filter shape: %s" % str(hp_filter_shape)
-            )
-        hp_filter_footprint = np.ones(hp_filter_shape)
-        hp_filter_footprint[
-            int(hp_filter_shape[0] / 2), int(hp_filter_shape[1] / 2)
-        ] = 0
-        max_img = ndi.maximum_filter(
-            img, footprint=hp_filter_footprint, mode="reflect"
-        )
-        hp_mask = img - max_img > hp_threshold
-        img = img.copy()
-        img[hp_mask] = max_img[hp_mask]
-        return img
+#     if partition_panels:
+#         raise NotImplementedError(
+#             "Partitioning sample per panel is not implemented yet."
+#         )
 
-    if partition_panels:
-        raise NotImplementedError(
-            "Partitioning sample per panel is not implemented yet."
-        )
+#     if pannel_csv is None and ilastik_channels is None:
+#         raise ValueError(
+#             "One of `pannel_csv` or `ilastik_channels` must be given!"
+#         )
+#     if ilastik_channels is None and pannel_csv is not None:
+#         panel = pd.read_csv(pannel_csv, index_col=0)
+#         ilastik_channels = panel.query("ilastik == 1").index.tolist()
 
-    if pannel_csv is None and ilastik_channels is None:
-        raise ValueError(
-            "One of `pannel_csv` or `ilastik_channels` must be given!"
-        )
-    if ilastik_channels is None and pannel_csv is not None:
-        panel = pd.read_csv(pannel_csv, index_col=0)
-        ilastik_channels = panel.query("ilastik == 1").index.tolist()
+#     H5_YXC_AXISTAG = json.dumps(
+#         {
+#             "axes": [
+#                 {
+#                     "key": "y",
+#                     "typeFlags": 2,
+#                     "resolution": 0,
+#                     "description": "",
+#                 },
+#                 {
+#                     "key": "x",
+#                     "typeFlags": 2,
+#                     "resolution": 0,
+#                     "description": "",
+#                 },
+#                 {
+#                     "key": "c",
+#                     "typeFlags": 1,
+#                     "resolution": 0,
+#                     "description": "",
+#                 },
+#             ]
+#         }
+#     )
 
-    H5_YXC_AXISTAG = json.dumps(
-        {
-            "axes": [
-                {
-                    "key": "y",
-                    "typeFlags": 2,
-                    "resolution": 0,
-                    "description": "",
-                },
-                {
-                    "key": "x",
-                    "typeFlags": 2,
-                    "resolution": 0,
-                    "description": "",
-                },
-                {
-                    "key": "c",
-                    "typeFlags": 1,
-                    "resolution": 0,
-                    "description": "",
-                },
-            ]
-        }
-    )
+#     # Parse MCD
+#     mcd = McdParser(mcd_file)
 
-    # Parse MCD
-    mcd = imctools.io.mcdparser.McdParser(mcd_file)
+#     if output_dir is None:
+#         output_dir = mcd_file.parent / "imc_dir"
+#     os.makedirs(output_dir, exist_ok=True)
+#     dirs = ["tiffs", "ilastik"]
+#     for d in dirs:
+#         os.makedirs(output_dir / d, exist_ok=True)
 
-    if output_dir is None:
-        output_dir = mcd_file.parent / "imc_dir"
-    os.makedirs(output_dir, exist_ok=True)
-    dirs = ["tiffs", "ilastik"]
-    for d in dirs:
-        os.makedirs(output_dir / d, exist_ok=True)
+#     if sample_name is None:
+#         sample_name = mcd.meta.metaname
 
-    if sample_name is None:
-        sample_name = mcd.meta.metaname
+#     for i, ac_id in enumerate(session.acquisition_ids):
+#         print(ac_id)
+#         try:
+#             ac = mcd.get_imc_acquisition(ac_id)
+#         except imctools.io.abstractparserbase.AcquisitionError as e:
+#             if allow_empty_rois:
+#                 print(e)
+#                 continue
+#             raise e
 
-    for i, ac_id in enumerate(mcd.acquisition_ids):
-        print(ac_id)
-        try:
-            ac = mcd.get_imc_acquisition(ac_id)
-        except imctools.io.abstractparserbase.AcquisitionError as e:
-            if allow_empty_rois:
-                print(e)
-                continue
-            raise e
+#         # Get output prefix
+#         if keep_original_roi_names:
+#             prefix = (
+#                 output_dir
+#                 / "tiffs"
+#                 / (ac.image_description.replace(" ", "_") + "_ac")
+#             )
+#         else:
+#             prefix = (
+#                 output_dir / "tiffs" / (sample_name + "-" + str(i + 1).zfill(2))
+#             )
 
-        # Get output prefix
-        if keep_original_roi_names:
-            prefix = (
-                output_dir
-                / "tiffs"
-                / (ac.image_description.replace(" ", "_") + "_ac")
-            )
-        else:
-            prefix = (
-                output_dir / "tiffs" / (sample_name + "-" + str(i + 1).zfill(2))
-            )
+#         # Skip if not overwrite
+#         if (prefix + "_full.tiff").exists() and not overwrite:
+#             print(
+#                 "TIFF images exist and overwrite is set to `False`. Continuing."
+#             )
+#             continue
 
-        # Skip if not overwrite
-        if (prefix + "_full.tiff").exists() and not overwrite:
-            print(
-                "TIFF images exist and overwrite is set to `False`. Continuing."
-            )
-            continue
+#         # Filter channels
+#         channel_labels = build_channel_name(ac.channel_labels, ac.channel_names)
+#         to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
+#         to_exp_ind = ac.get_metal_indices(
+#             list(map(lambda x: x[1].split(")")[0], to_exp.str.split("(")))
+#         )
+#         assert to_exp_ind == to_exp.index.tolist()
 
-        # Filter channels
-        channel_labels = build_channel_name(ac)
-        to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-        to_exp_ind = ac.get_metal_indices(
-            list(map(lambda x: x[1].split(")")[0], to_exp.str.split("(")))
-        )
-        assert to_exp_ind == to_exp.index.tolist()
+#         # Filter hot pixels
+#         ac._data = np.asarray([clip_hot_pixels(x) for x in ac.data])
 
-        # Filter hot pixels
-        ac._data = np.asarray([clip_hot_pixels(x) for x in ac.data])
+#         # Separate and merge nuclei and cytoplasmatic channels
+#         good = ~channel_labels.str.contains("EMPTY|BCKG|80ArAr|129Xe")
+#         nuc = channel_labels.str.contains("DNA|Histone")
+#         nuclear = np.asarray([False] * 3 + (good & nuc).values.tolist())
+#         cytopla = np.asarray([False] * 3 + (good & ~nuc).values.tolist())
 
-        # Separate and merge nuclei and cytoplasmatic channels
-        good = ~channel_labels.str.contains("EMPTY|BCKG|80ArAr|129Xe")
-        nuc = channel_labels.str.contains("DNA|Histone")
-        nuclear = np.asarray([False] * 3 + (good & nuc).values.tolist())
-        cytopla = np.asarray([False] * 3 + (good & ~nuc).values.tolist())
+#         std = lambda d: (d - d.min()) / (d.max() - d.min())
+#         f_nuc = std(np.asarray(list(map(std, ac.data[nuclear]))).sum(0))
+#         f_cyt = std(np.asarray(list(map(std, ac.data[cytopla]))).sum(0))
 
-        std = lambda d: (d - d.min()) / (d.max() - d.min())
-        f_nuc = std(np.asarray(list(map(std, ac.data[nuclear]))).sum(0))
-        f_cyt = std(np.asarray(list(map(std, ac.data[cytopla]))).sum(0))
+#         # # check
+#         # fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
+#         # ax[0].imshow(f_nuc, cmap="viridis")
+#         # ax[1].imshow(f_cyt, cmap="viridis")
 
-        # # check
-        # fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
-        # ax[0].imshow(f_nuc, cmap="viridis")
-        # ax[1].imshow(f_cyt, cmap="viridis")
+#         # # zoom 2x
+#         # resize
+#         s = tuple(x * 2 for x in ac.shape[:-1])
+#         full = np.moveaxis(
+#             np.asarray([resize(f_nuc, s), resize(f_cyt, s)]) * 256, 0, -1
+#         ).astype(int)
 
-        # # zoom 2x
-        # resize
-        s = tuple(x * 2 for x in ac.shape[:-1])
-        full = np.moveaxis(
-            np.asarray([resize(f_nuc, s), resize(f_cyt, s)]) * 256, 0, -1
-        ).astype(int)
+#         # Save input for ilastik prediction
+#         with h5py.File(
+#             prefix + "_ilastik_s2.two_channels.h5", mode="w"
+#         ) as handle:
+#             d = handle.create_dataset("stacked_channels", data=full)
+#             d.attrs["axistags"] = H5_YXC_AXISTAG
 
-        # Save input for ilastik prediction
-        with h5py.File(
-            prefix + "_ilastik_s2.two_channels.h5", mode="w"
-        ) as handle:
-            d = handle.create_dataset("stacked_channels", data=full)
-            d.attrs["axistags"] = H5_YXC_AXISTAG
+#         # # random crops
+#         iprefix = (
+#             output_dir
+#             / "ilastik"
+#             / (ac.image_description.replace(" ", "_") + "_ac")
+#         )
+#         for _ in range(n_crops):
+#             x = np.random.choice(range(s[0] - crop_width))
+#             y = np.random.choice(range(s[1] - crop_height))
+#             crop = full[x : (x + crop_width), y : (y + crop_height), :]
+#             assert crop.shape == (crop_width, crop_height, 2)
+#             with h5py.File(
+#                 iprefix
+#                 + f"_ilastik_x{x}_y{y}_w{crop_width}_h{crop_height}.two_channels.h5",
+#                 mode="w",
+#             ) as handle:
+#                 d = handle.create_dataset("stacked_channels", data=crop)
+#                 d.attrs["axistags"] = H5_YXC_AXISTAG
+#         if only_crops:
+#             continue
 
-        # # random crops
-        iprefix = (
-            output_dir
-            / "ilastik"
-            / (ac.image_description.replace(" ", "_") + "_ac")
-        )
-        for _ in range(n_crops):
-            x = np.random.choice(range(s[0] - crop_width))
-            y = np.random.choice(range(s[1] - crop_height))
-            crop = full[x : (x + crop_width), y : (y + crop_height), :]
-            assert crop.shape == (crop_width, crop_height, 2)
-            with h5py.File(
-                iprefix
-                + f"_ilastik_x{x}_y{y}_w{crop_width}_h{crop_height}.two_channels.h5",
-                mode="w",
-            ) as handle:
-                d = handle.create_dataset("stacked_channels", data=crop)
-                d.attrs["axistags"] = H5_YXC_AXISTAG
-        if only_crops:
-            continue
+#         # Save full image as TIFF
+#         p = prefix + "_full.two_channels."
+#         ac.save_image(
+#             p + "tiff", metals=channel_labels.str.extract(r"\((.*)\)")[0]
+#         )
+#         channel_labels.to_csv(p + "csv")
 
-        # Save full image as TIFF
-        p = prefix + "_full.two_channels."
-        ac.save_image(
-            p + "tiff", metals=channel_labels.str.extract(r"\((.*)\)")[0]
-        )
-        channel_labels.to_csv(p + "csv")
-
-    mcd.close()
+#     mcd.close()
 
 
 def get_mean_expression_per_cluster(a: AnnData) -> DataFrame:
@@ -876,14 +851,16 @@ def get_mean_expression_per_cluster(a: AnnData) -> DataFrame:
     return mean_expr
 
 
-@overload
-def z_score(x: Array, axis: Union[Literal[0], Literal[1]]) -> Array:
-    ...
+# @overload
+# def z_score(x: Literal[Array], axis: Union[Literal[0], Literal[1]]) -> Array:
+#     ...
 
 
-@overload
-def z_score(x: DataFrame, axis: Union[Literal[0], Literal[1]]) -> DataFrame:
-    ...
+# @overload
+# def z_score(
+#     x: Literal[DataFrame], axis: Union[Literal[0], Literal[1]]
+# ) -> DataFrame:
+#     ...
 
 
 def z_score(
@@ -1033,26 +1010,40 @@ def filter_hot_pixels(img, n_bins=1000):
 #     mod.x_name.value = "filepath"
 
 
-def get_slide_image(
-    mcd_file: Path, output_file: Path = None
-) -> Optional[Array]:
-    import imctools.io.mcdparser
-    import imctools.io.mcdxmlparser as mcdmeta
+@overload
+def get_slide_images(mcd_file: Path, output_file_prefix: Path) -> None:
+    ...
+
+
+@overload
+def get_slide_images(mcd_file: Path, output_file_prefix: None) -> List[Array]:
+    ...
+
+
+def get_slide_images(
+    mcd_file: Path, output_file_prefix: Path = None
+) -> Optional[List[Array]]:
     import imageio
 
     byteoffset = 161
 
-    mcd = imctools.io.mcdparser.McdParser(mcd_file)
+    mcd = McdParser(mcd_file)
 
-    # the 'Slide' object is not useful, but an image of the slide is the first panorama
-    slide = mcd.meta.properties["Panorama"][0]
-    start, end = int(slide["ImageStartOffset"]), int(slide["ImageEndOffset"])
-    img = mcd._get_buffer(start + byteoffset, end + byteoffset)
-    if output_file is None:
-        return imageio.imread(img)
-    with open(output_file, "wb") as f:
-        f.write(img)
-    return None
+    imgs = list()
+    for slide in mcd.session.metadata["Panorama"]:
+        start, end = (
+            int(slide["ImageStartOffset"]),
+            int(slide["ImageEndOffset"]),
+        )
+        img = mcd._get_buffer(start + byteoffset, end + byteoffset)
+        if output_file_prefix is None:
+            imgs.append(imageio.imread(img))
+        with open(f"{output_file_prefix}_{slide['ID']}.tiff", "wb") as f:
+            f.write(img)
+    if output_file_prefix is None:
+        return imgs
+    else:
+        return None
 
 
 # def draw_roi():
@@ -1060,7 +1051,7 @@ def get_slide_image(
 #     fig, ax = plt.subplots(1, 1)
 
 #     metas = dict()
-#     for roi in mcd.acquisition_ids:
+#     for roi in session.acquisition_ids:
 #         ac_meta = mcd.meta.get_acquisition_meta(roi)
 #         metas[roi] = ac_meta
 #         sx, sy = float(ac_meta['ROIStartXPosUm']), float(ac_meta['ROIStartYPosUm'])
