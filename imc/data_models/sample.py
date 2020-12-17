@@ -414,6 +414,7 @@ class IMCSample:
             gridspec_kw=dict(wspace=0.05),
             sharex="row",
             sharey="row",
+            squeeze=False,
         )
         fig.suptitle(self.name)
         for i, roi in enumerate(self.rois):

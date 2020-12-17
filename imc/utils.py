@@ -83,7 +83,7 @@ def build_channel_name(
     ).rename("channel")
 
 
-def cleanup_channel_names(series: Series) -> Series:
+def cleanup_channel_names(series: Union[Series, list]) -> Series:
     """Standardize channel naming using a set of defined rules."""
     to_replace = [
         ("-", ""),
@@ -94,6 +94,8 @@ def cleanup_channel_names(series: Series) -> Series:
         ("pHistone", "pH"),
         ("cmycp67", "cMYCp67"),
     ]
+    if isinstance(series, list):
+        series = pd.Series(series)
     for k, v in to_replace:
         series = series.str.replace(k, v)
     series = series.replace("", np.nan).fillna("<EMPTY>")
@@ -888,7 +890,7 @@ def z_score(
 
     Parameters
     ----------
-    x: 
+    x:
         A numpy array or pandas DataFrame.
 
     axis : int
