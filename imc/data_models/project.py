@@ -5,6 +5,7 @@ A class to model a imaging mass cytometry project.
 """
 
 import os
+import pathlib
 from typing import Tuple, List, Optional, Union, Iterator  # , cast
 
 import numpy as np  # type: ignore
@@ -60,19 +61,21 @@ ROI_SINGLE_CELL_DIR = Path("single_cell")
 class Project:
     """
     A class to model a IMC project.
+    """
 
+    """
     Parameters
     ----------
+    metadata : :obj:`str`
+        Path to CSV metadata sheet.
     name : :obj:`str`
         Project name. Defaults to "project".
-    csv_metadata : :obj:`str`
-        Path to CSV metadata sheet.
 
     Attributes
     ----------
     name : :obj:`str`
         Project name
-    csv_metadata : :obj:`str`
+    metadata : :obj:`str`
         Path to CSV metadata sheet.
     metadata : :class:`pandas.DataFrame`
         Metadata dataframe
@@ -97,7 +100,7 @@ class Project:
         self.name = name
         self.metadata = (
             pd.read_csv(metadata)
-            if isinstance(metadata, (str, Path))
+            if isinstance(metadata, (str, pathlib.Path, Path))
             else metadata
         )
         self.samples: List["IMCSample"] = list()
@@ -301,6 +304,24 @@ class Project:
         }
         dir_, suffix = to_read[input_type]
         return self.results_dir / dir_ / (self.name + suffix)
+
+    def get_samples(self, sample_names: Union[str, List[str]]):
+        if isinstance(sample_names, str):
+            sample_names = [sample_names]
+        samples = [s for s in self.samples if s.name in sample_names]
+        if samples:
+            return samples[0] if len(samples) == 1 else samples
+        else:
+            ValueError(f"Sample '{sample_names}' couldn't be found.")
+
+    def get_rois(self, roi_names: Union[str, List[str]]):
+        if isinstance(roi_names, str):
+            roi_names = [roi_names]
+        rois = [r for r in self.rois if r.name in roi_names]
+        if rois:
+            return rois[0] if len(rois) == 1 else rois
+        else:
+            ValueError(f"Sample '{roi_names}' couldn't be found.")
 
     def plot_channels(
         self,
