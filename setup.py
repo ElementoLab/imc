@@ -23,6 +23,11 @@ README_FILE = "README.md"
 # Requirements
 requirements = parse_requirements(REQUIREMENTS_FILE)
 requirements_dev = parse_requirements(DEV_REQUIREMENTS_FILE)
+requirements_extra = {
+    "stardist": ["stardist==0.6.0,<1.0.0"],
+    "deepcell": ["DeepCell==0.8.3,<1.0.0"],
+    "cellpose": ["cellpose>=0.1.0.1,<1.0.0"],
+}
 
 # Description
 long_description = open(README_FILE).read()
@@ -36,12 +41,11 @@ setup(
         "write_to": "imc/_version.py",
         "write_to_template": '__version__ = "{version}"\n',
     },
-    # entry_points={
-    #     "console_scripts": [
-    #         "imcrunner = imcpipeline.runner:main",
-    #         "imcpipeline = imcpipeline.pipeline:main",
-    #     ]
-    # },
+    entry_points={
+        "console_scripts": [
+            "imc = imc.cli:main",
+        ]
+    },
     description="A pipeline and utils for IMC data analysis.",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -76,7 +80,7 @@ setup(
     setup_requires=["setuptools_scm"],
     install_requires=requirements,
     tests_require=requirements_dev,
-    extras_require={"dev": requirements_dev},
+    extras_require={"dev": requirements_dev, **requirements_extra},
     # package_data={"imc": ["config/*.yaml", "templates/*.html", "_models/*"]},
     data_files=[
         REQUIREMENTS_FILE,

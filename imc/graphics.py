@@ -1,5 +1,6 @@
-#!/usr/bin/env python
-
+"""
+Plotting functions and utilities to handle images.
+"""
 from typing import (
     Dict,
     Tuple,
