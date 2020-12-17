@@ -25,7 +25,11 @@ except ImportError:
 StarDistModel = Union[stardist.models.model2d.StarDist2D]
 
 try:
-    from deepcell.applications import MultiplexSegmentation
+    from deepcell.applications import (
+        MultiplexSegmentation,
+        NuclearSegmentation,
+        CytoplasmSegmentation,
+    )
 except ImportError:
     pass
 
@@ -36,7 +40,7 @@ def prepare_stack(
     compartment: str = "nuclear",
     channel_exclude: Series = None,
 ) -> Array:
-    assert compartment in ["nuclear", "whole-cell", "both"]
+    assert compartment in ["nuclear", "cytoplasm", "both"]
 
     if channel_exclude is not None:
         stack = stack[~channel_exclude]
@@ -51,8 +55,8 @@ def prepare_stack(
     # Get cytoplasmatic channels
     cyto_chs = ~channel_labels.str.contains("DNA|Ki67|SMA")
     cyto = np.asarray([eq(x) for x in stack[~cyto_chs]]).mean(0)
-    if compartment == "whole-cell":
-        return nucl
+    if compartment == "cytoplasm":
+        return cyto
 
     # Combined together and expand to 4D
     return np.stack((nucl, cyto))
@@ -84,12 +88,23 @@ def deepcell_resize_to_predict_shape(image: Array) -> Array:
 
 
 def deepcell_segment(image: Array, compartment: str = None) -> Array:
-    app = MultiplexSegmentation()
     if compartment is None:
         # If image has more than one channel i.e. CYX
         # assume segmentation of both compartments, otherwise nuclear
         compartment = "both" if image.shape[-1] > 1 else "nuclear"
-    pred = app.predict(image, compartment=compartment).squeeze()
+
+    if compartment == "nuclear":
+        app = NuclearSegmentation()
+        pred = app.predict(image).squeeze()
+
+    if compartment == "cytoplasm":
+        app = CytoplasmSegmentation()
+        pred = app.predict(image).squeeze()
+
+    if compartment == "both":
+        app = MultiplexSegmentation()
+        pred = app.predict(image, compartment=compartment).squeeze()
+
     if len(pred.shape) == 4:
         pred = resize(pred, image.shape[1:])
     return pred
@@ -111,8 +126,8 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     fig, axes = plt.subplots(
         1, cols, figsize=(4 * cols, 4), sharex=True, sharey=True
     )
+    axes[0].imshow(image, rasterized=True)
     for ax in axes:
-        ax.imshow(image, rasterized=True)
         ax.axis("off")
     for i, comp in enumerate(mask_dict):
         ax = axes[1 + i]
@@ -120,6 +135,7 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
         ax.set(title=f"{comp.capitalize()} mask")
     for i, comp in enumerate(mask_dict):
         ax = axes[1 + len(mask_dict) + i]
+        ax.imshow(image, rasterized=True)
         cs = ax.contour(mask_dict[comp], cmap="Reds")
         # important to rasterize contours
         for c in cs.collections:
@@ -134,11 +150,29 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
 def segment_roi(
     roi: "ROI",
     model: Union[Literal["deepcell", "stardist"]] = "deepcell",
-    compartment: str = "both",
+    compartment: str = "nuclear",
     save: bool = True,
     overwrite: bool = True,
     plot_segmentation: bool = True,
 ) -> Array:
+    """
+    Segment an stack of an ROI.
+
+    Parameters
+    ----------
+    roi: ROI
+        ROI object to process.
+    model: str
+        One of ``deepcell`` or ``stardist``.
+    compartment: str
+        One of ``nuclear``, ``cytoplasm``, or ``both``.
+    save: bool
+        Whether to save the outputs to disk.
+    overwrite: bool
+        Whether to overwrite files when ``save`` is True.
+    plot_segmentation: bool
+        Whether to make a figure illustrating the segmentation.
+    """
     assert model in ["deepcell", "stardist"]
 
     image = prepare_stack(
@@ -163,7 +197,7 @@ def segment_roi(
             mask_dict[comp] = mask[..., i]
     elif compartment == "nuclear":
         mask_dict["nuclei"] = mask
-    elif compartment == "whole-cel":
+    elif compartment == "cytoplasm":
         mask_dict["cell"] = mask
 
     if save:
