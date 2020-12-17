@@ -14,25 +14,6 @@ import tifffile
 
 from imc.types import Array, Figure, Path, Series
 
-try:
-    import stardist
-    from stardist.models import StarDist2D
-    from stardist import random_label_cmap
-    from csbdeep.utils import normalize
-except ImportError:
-    pass
-
-StarDistModel = Union[stardist.models.model2d.StarDist2D]
-
-try:
-    from deepcell.applications import (
-        MultiplexSegmentation,
-        NuclearSegmentation,
-        CytoplasmSegmentation,
-    )
-except ImportError:
-    pass
-
 
 def prepare_stack(
     stack: Array,
@@ -62,17 +43,13 @@ def prepare_stack(
     return np.stack((nucl, cyto))
 
 
-def stardist_get_model(model_str: str = "2D_versatile_fluo") -> StarDistModel:
-    return StarDist2D.from_pretrained(model_str)
+def stardist_segment_nuclei(
+    image: Array, model_str: str = "2D_versatile_fluo"
+) -> Array:
+    from stardist.models import StarDist2D
 
-
-def stardist_segment_nuclei(image: Array, model=None) -> Array:
-    if model is None:
-        model = stardist_get_model()
-
-    x = normalize(image.squeeze(), 1, 99, clip=True)
-    mask, _ = model.predict_instances(x)
-    # return np.ma.masked_array(mask, mask=mask == 0)
+    model = StarDist2D.from_pretrained(model_str)
+    mask, _ = model.predict_instances(eq(image))
     return mask
 
 
@@ -88,6 +65,12 @@ def deepcell_resize_to_predict_shape(image: Array) -> Array:
 
 
 def deepcell_segment(image: Array, compartment: str = None) -> Array:
+    from deepcell.applications import (
+        MultiplexSegmentation,
+        NuclearSegmentation,
+        CytoplasmSegmentation,
+    )
+
     if compartment is None:
         # If image has more than one channel i.e. CYX
         # assume segmentation of both compartments, otherwise nuclear
