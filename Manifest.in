@@ -1,3 +1,6 @@
 README.md
-requirements.txt
-requirements.dev.txt
+requirements/requirements.txt
+requirements/requirements.dev.txt
+requirements/requirements.deepcell.txt
+requirements/requirements.stardist.txt
+requirements/requirements.cellpose.txt

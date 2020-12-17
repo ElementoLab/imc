@@ -185,17 +185,17 @@ def segment_roi(
 
     if save:
         for comp in mask_dict:
-            out = roi._get_input_filename(comp + "_mask")
-            if overwrite or (not overwrite and not out.exists()):
-                tifffile.imwrite(out, mask_dict[comp])
+            mask_file = roi._get_input_filename(comp + "_mask")
+            if overwrite or (not overwrite and not mask_file.exists()):
+                tifffile.imwrite(mask_file, mask_dict[comp])
 
     if plot_segmentation:
         fig = plot_image_and_mask(image, mask_dict)
         if save:
-            out = roi._get_input_filename("cell_mask").replace_(
-                "_mask.tiff", "_segmentation.svg"
+            fig_file = roi._get_input_filename("stack").replace_(
+                ".tiff", "_segmentation.svg"
             )
-            if overwrite or (not overwrite and not out.exists()):
-                fig.savefig(out, dpi=300, bbox_inches="tight")
+            if overwrite or (not overwrite and not fig_file.exists()):
+                fig.savefig(fig_file, dpi=300, bbox_inches="tight")
 
     return mask

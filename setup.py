@@ -1,36 +1,35 @@
 #! /usr/bin/env python
 
 """
-Installer script for the ``imc`` library and the ``imcpipeline`` pipeline.
+Installer script for the ``imc`` package.
 
 Install with ``pip install .``.
 """
 
 from setuptools import setup, find_packages
+from pathlib import Path
 
 
 def parse_requirements(req_file):
     """Parse requirements.txt files."""
     reqs = open(req_file).read().strip().split("\n")
     reqs = [r for r in reqs if not r.startswith("#")]
-    return [r for r in reqs if "#egg=" not in r]
+    return [r for r in reqs if ("#egg=" not in r) and (r != "")]
 
-
-REQUIREMENTS_FILE = "requirements.txt"
-DEV_REQUIREMENTS_FILE = "requirements.dev.txt"
-README_FILE = "README.md"
 
 # Requirements
-requirements = parse_requirements(REQUIREMENTS_FILE)
-requirements_dev = parse_requirements(DEV_REQUIREMENTS_FILE)
-requirements_extra = {
-    "stardist": ["stardist==0.6.0,<1.0.0"],
-    "deepcell": ["DeepCell==0.8.3,<1.0.0"],
-    "cellpose": ["cellpose>=0.1.0.1,<1.0.0"],
-}
+reqs_dir = Path("requirements")
+reqs = dict()
+for f in reqs_dir.iterdir():
+    pkgs = parse_requirements(f)
+    if "." in f.stem:
+        k = f.stem.split(".")[-1]
+        reqs[k] = pkgs
+    else:
+        reqs["base"] = pkgs
 
 # Description
-long_description = open(README_FILE).read()
+long_description = open("README.md").read()
 
 
 # setup
@@ -46,7 +45,7 @@ setup(
             "imc = imc.cli:main",
         ]
     },
-    description="A pipeline and utils for IMC data analysis.",
+    description="A framework for IMC data analysis.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     classifiers=[
@@ -78,12 +77,9 @@ setup(
     author_email="andre.rendeiro@pm.me",
     license="GPL3",
     setup_requires=["setuptools_scm"],
-    install_requires=requirements,
-    tests_require=requirements_dev,
-    extras_require={"dev": requirements_dev, **requirements_extra},
+    install_requires=reqs["base"],
+    tests_require=reqs["dev"],
+    extras_require={k: v for k, v in reqs.items() if k not in ["base", "dev"]},
     # package_data={"imc": ["config/*.yaml", "templates/*.html", "_models/*"]},
-    data_files=[
-        REQUIREMENTS_FILE,
-        # "requirements/requirements.test.txt",
-    ],
+    # data_files=[("requirements", reqs.values())],
 )

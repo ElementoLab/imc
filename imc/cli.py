@@ -14,6 +14,7 @@ import pandas as pd
 from imc.types import Path
 from imc.scripts.inspect_mcds import main as inspect
 from imc.scripts.prepare_mcds import main as prepare
+from imc.scripts.segment_stacks import main as segment
 from imc.utils import mcd_to_dir
 
 
@@ -25,15 +26,18 @@ def main(cli: List[str] = None) -> int:
         inspect(cmd_args)
     elif main_args.command == "prepare":
         prepare(cmd_args)
+    elif main_args.command == "segment":
+        segment(cmd_args)
     return 0
 
 
 def get_args() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", required=True)
     inspect_parser = subparsers.add_parser("inspect", add_help=False)
     prepare_parser = subparsers.add_parser("prepare", add_help=False)
+    segment_parser = subparsers.add_parser("segment", add_help=False)
 
     return parser
 
