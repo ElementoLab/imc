@@ -1,16 +1,12 @@
-#!/usr/bin/env python
-
 """
-Types used in the library as defined here.
-
-See https://docs.python.org/3/library/typing.html
-for more information.
+Specific types or type aliases used in the library.
 """
 
 from __future__ import annotations
 import os
 from typing import Union, TypeVar
 import pathlib
+import argparse
 
 import matplotlib  # type: ignore
 import pandas  # type: ignore
@@ -53,6 +49,7 @@ class Path(pathlib.Path):
 GenericType = TypeVar("GenericType")
 
 # type aliasing (done with Union to distinguish from other declared variables)
+Args = Union[argparse.Namespace]
 Array = Union[numpy.ndarray]
 Series = Union[pandas.Series]
 MultiIndexSeries = Union[pandas.Series]
