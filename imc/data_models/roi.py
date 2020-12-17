@@ -16,6 +16,11 @@ from typing import (
     overload,
 )  # , cast
 
+try:
+    from typing import Literal
+except ImportError:
+    from typing_extensions import Literal  # 3.7
+
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 import scipy  # type: ignore
@@ -57,6 +62,7 @@ FIG_KWS = dict(dpi=300, bbox_inches="tight")
 # processed directory structure
 SUBFOLDERS_PER_SAMPLE = True
 DEFAULT_ROI_NAME = "roi"
+DEFAULT_MASK_LAYER = "cell"
 ROI_STACKS_DIR = Path("tiffs")
 ROI_MASKS_DIR = Path("tiffs")
 ROI_UNCERTAINTY_DIR = Path("uncertainty")
@@ -111,6 +117,7 @@ class ROI:
         masks_dir: Optional[Path] = ROI_MASKS_DIR,
         single_cell_dir: Optional[Path] = ROI_SINGLE_CELL_DIR,
         sample: Optional["IMCSample"] = None,
+        mask_layer: str = DEFAULT_MASK_LAYER,
         **kwargs,
     ):
         # attributes
@@ -126,6 +133,7 @@ class ROI:
             if isinstance(channel_labels, (str, Path))
             else None
         )
+        self.mask_layer = mask_layer
         # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
         self._channel_labels: Optional[Series] = (
             pd.read_csv(channel_labels, index_col=0, squeeze=True)
@@ -143,6 +151,7 @@ class ROI:
         self._area: Optional[int] = None
         self._channel_number: Optional[int] = None
         self._probabilities: Optional[Array] = None
+        self._nuclei_mask_o: Optional[Array] = None
         self._nuclei_mask: Optional[Array] = None
         self._cell_mask_o: Optional[Array] = None
         self._cell_mask: Optional[Array] = None
@@ -243,6 +252,13 @@ class ROI:
         return mtx
 
     @property
+    def stack_eq(self):
+        """Same as `stack` but equalized per channel."""
+        if self._stack_eq is not None:
+            return self._stack_eq
+        return np.asarray([eq(x) for x in self.stack])
+
+    @property
     def xstack(self):
         import xarray
 
@@ -294,11 +310,22 @@ class ROI:
         return res[:3, :, :]  # return only first 3 labels
 
     @property
+    def nuclei_mask_o(self) -> Array:
+        """An array with unique integers for each cell."""
+        if self._nuclei_mask_o is not None:
+            return self._nuclei_mask_o
+        self._nuclei_mask_o = self.read_input(
+            "nuclei_mask", set_attribute=False
+        )
+        return self._nuclei_mask_o
+
+    @property
     def nuclei_mask(self) -> Array:
         """An array with unique integers for each cell."""
         if self._nuclei_mask is not None:
             return self._nuclei_mask
-        return clear_border(self.read_input("nuclei_mask", set_attribute=False))
+        self._nuclei_mask = clear_border(self.nuclei_mask_o)
+        return self._nuclei_mask
 
     @property
     def cell_mask_o(self) -> Array:
@@ -318,7 +345,11 @@ class ROI:
 
     @property
     def mask(self) -> Array:
-        return self.cell_mask
+        if self.mask_layer == "cell":
+            return self.cell_mask
+        if self.mask_layer == "nuclei":
+            return self.nuclei_mask
+        raise ValueError("")
 
     @property
     def clusters(self):
@@ -545,6 +576,7 @@ class ROI:
         f = np.log1p if log else _idenv
         g = eq if equalize else _idenv
         h = minmax_scale if minmax else _idenv
+        excluded = self.channel_exclude[self.channel_exclude]
 
         if isinstance(channel, int):
             label = self.channel_labels.iloc[channel]
@@ -1000,7 +1032,9 @@ class ROI:
             _axes = axes
         _axes[0].set_ylabel(self.name)
         _axes[0].set_title("Channel mean")
-        _axes[0].imshow(self.get_mean_all_channels())
+        _axes[0].imshow(
+            self._get_channel("mean", equalize=True, minmax=True)[1]
+        )
         _axes[1].set_title(dna_label)
         _axes[1].imshow(eq(dna))
         _axes[2].set_title("Probabilities")
@@ -1040,14 +1074,14 @@ class ROI:
             ).values
         return quantify_cell_intensity(
             self._get_input_filename("stack"),
-            self._get_input_filename("cell_mask"),
+            self._get_input_filename(self.mask_layer + "_mask"),
             **kwargs,
         ).rename(columns=self.channel_labels)
 
     def quantify_cell_morphology(self, **kwargs) -> DataFrame:
         """QUantify shape attributes of each cell."""
         return quantify_cell_morphology(
-            self._get_input_filename("cell_mask"), **kwargs
+            self._get_input_filename(self.mask_layer + "_mask"), **kwargs
         )
 
     def set_clusters(self, clusters: Optional[Series] = None) -> None:

@@ -156,7 +156,10 @@ def _correlate_channels__roi(
 #     return get_adjacency_graph(roi.stack, roi.mask, roi.clusters, output_prefix, **kwargs)
 
 
-def quantify_cell_intensity_rois(rois: List["ROI"], **kwargs,) -> DataFrame:
+def quantify_cell_intensity_rois(
+    rois: List["ROI"],
+    **kwargs,
+) -> DataFrame:
     """
     Measure the intensity of each channel in each single cell.
     """
@@ -165,7 +168,10 @@ def quantify_cell_intensity_rois(rois: List["ROI"], **kwargs,) -> DataFrame:
     )
 
 
-def quantify_cell_morphology_rois(rois: List["ROI"], **kwargs,) -> DataFrame:
+def quantify_cell_morphology_rois(
+    rois: List["ROI"],
+    **kwargs,
+) -> DataFrame:
     """
     Measure the shape parameters of each single cell.
     """
