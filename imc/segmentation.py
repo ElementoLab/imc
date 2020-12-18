@@ -3,7 +3,7 @@ Segmentation of image stacks using pretrained deep learning models
 such as Stardist and DeepCell.
 """
 
-from typing import Union, Literal, Dict
+from typing import Union, Literal, Dict, Tuple
 from functools import partial
 
 import numpy as np
@@ -64,7 +64,58 @@ def deepcell_resize_to_predict_shape(image: Array) -> Array:
     raise ValueError("Image with unknown shape.")
 
 
-def deepcell_segment(image: Array, compartment: str = None) -> Array:
+def split_image_into_tiles(
+    image, tile_shape=(256, 256)
+) -> Dict[Tuple[int, int], Array]:
+    shape = np.asarray(image.shape)
+    x, y = np.asarray(tile_shape)
+
+    n, m = shape // tile_shape + 2
+
+    tiles = dict()
+    for i in range(m):
+        for j in range(n):
+            cur_pos = (i * x, j * y)
+            next_pos = ((i + 1) * x, (j + 1) * y)
+            tile = image[cur_pos[0] : next_pos[0], cur_pos[1] : next_pos[1]]
+            tiles[cur_pos] = tile
+    return tiles
+
+
+def join_tiles_to_image(tiles: Dict[Tuple[int, int], Array]):
+    grid = np.asarray(list(tiles.keys()))
+
+    image_shape = np.array([0, 0])
+    first_row_value = grid[0][0]
+    for pos, tile in tiles.items():
+        if pos[0] != first_row_value:
+            continue
+        image_shape[1] += tile.shape[0]
+    first_col_value = grid[0][1]
+    for pos, tile in tiles.items():
+        if pos[1] != first_col_value:
+            continue
+        image_shape[0] += tile.shape[1]
+
+    rec = np.zeros(image_shape, dtype=tile.dtype)
+    for (i, j), arr in tiles.items():
+        x, y = arr.shape
+        rec[i : i + x, j : j + y] = arr
+        rec[i : i + x, j : j + y] = arr
+
+    # clip
+    rec = rec[:, rec.sum(0) > 0]
+    rec = rec[rec.sum(1) > 0, :]
+
+    return rec
+
+
+def deepcell_segment(
+    image: Array,
+    compartment: str = None,
+    image_mpp: float = None,
+    use_tilling: bool = False,
+) -> Array:
     from deepcell.applications import (
         MultiplexSegmentation,
         NuclearSegmentation,
@@ -76,17 +127,29 @@ def deepcell_segment(image: Array, compartment: str = None) -> Array:
         # assume segmentation of both compartments, otherwise nuclear
         compartment = "both" if image.shape[-1] > 1 else "nuclear"
 
+    kwargs = dict()
     if compartment == "nuclear":
         app = NuclearSegmentation()
-        pred = app.predict(image).squeeze()
-
     if compartment == "cytoplasm":
         app = CytoplasmSegmentation()
-        pred = app.predict(image).squeeze()
-
     if compartment == "both":
         app = MultiplexSegmentation()
-        pred = app.predict(image, compartment=compartment).squeeze()
+        kwargs = dict(compartment=compartment)
+
+    if not use_tilling:
+        pred = app.predict(image, image_mpp=image_mpp, **kwargs).squeeze()
+    else:
+        tiles = split_image_into_tiles(image.squeeze())
+        preds = dict()
+        for pos, tile in tiles.items():
+            print([pos])
+            if tile.sum() == 0:
+                preds[pos] = tile
+                continue
+            preds[pos] = app.predict(
+                tile[np.newaxis, ..., np.newaxis], image_mpp=1
+            ).squeeze()
+        pred = join_tiles_to_image(preds)
 
     if len(pred.shape) == 4:
         pred = resize(pred, image.shape[1:])
@@ -194,6 +257,24 @@ def cellpose_postprocessing(image, mask, flow):
         ax.text(perf.loc[algo, "sum"], perf.loc[algo, "ratio"], s=algo)
 
     return seg_t > 0.5
+
+
+def inflection_point(curve):
+    """Return the index of the inflection point of a curve"""
+    from numpy.matlib import repmat
+
+    n_points = len(curve)
+    all_coord = np.vstack((range(n_points), curve)).T
+    line_vec = all_coord[-1] - all_coord[0]
+    line_vec_norm = line_vec / np.sqrt(np.sum(line_vec ** 2))
+    vec_from_first = all_coord - all_coord[0]
+    scalar_product = np.sum(
+        vec_from_first * repmat(line_vec_norm, n_points, 1), axis=1
+    )
+    vec_to_line = vec_from_first - np.outer(scalar_product, line_vec_norm)
+    return np.argmax(np.sqrt(np.sum(vec_to_line ** 2, axis=1)))
+
+
 def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     cols = 1 + len(mask_dict) * 2
 
@@ -240,7 +321,7 @@ def segment_roi(
     plot_segmentation: bool = True,
 ) -> Array:
     """
-    Segment an stack of an ROI.
+    Segment the stack of an ROI.
 
     Parameters
     ----------
@@ -269,7 +350,10 @@ def segment_roi(
 
     elif model == "deepcell":
         input_image = deepcell_resize_to_predict_shape(image)
-        mask = deepcell_segment(input_image, compartment=compartment)
+        image_mpp = (np.asarray(image.shape) / 256).mean()
+        mask = deepcell_segment(
+            input_image, compartment=compartment, image_mpp=image_mpp
+        )
         if len(image.shape) == 2:
             mask = resize(mask, image.shape[:2])
         if len(image.shape) == 3:
