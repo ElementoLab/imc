@@ -93,6 +93,107 @@ def deepcell_segment(image: Array, compartment: str = None) -> Array:
     return pred
 
 
+def cellpose_segment(image, compartment="nuclear"):
+    from cellpose import models
+
+    assert compartment in ["nuclear", "cytoplasm"]
+
+    comp = {"nuclear": "nuclei", "cytoplasm": "cyto"}
+    if compartment == "nuclear":
+        channels = [0, 0]
+    elif compartment == "cytoplasm":
+        raise NotImplementedError
+        channels = [1, 2]
+    model = models.Cellpose(gpu=False, model_type=comp[compartment])
+    masks, flows, styles, diams = model.eval(
+        [image],
+        normalize=False,
+        diameter=None,
+        channels=channels,
+    )
+    return masks[0]
+
+
+def plot_cellpose_output(image, masks, flows) -> Figure:
+    n = len(masks)
+
+    fig, axes = plt.subplots(
+        n, 5, figsize=(5 * 4, n * 4), sharex=True, sharey=True, squeeze=False
+    )
+    for i in range(n):
+        axes[i][0].imshow(image)
+        m = np.ma.masked_array(masks[i], masks[i] == 0)
+        axes[i][1].imshow(m)
+        f = resize(flows[i][2], image.shape)
+        axes[i][2].imshow(f)
+        f = resize(flows[i][0], image.shape)
+        axes[i][3].imshow(f)
+        f = resize(flows[i][0].mean(-1), image.shape)
+        axes[i][4].imshow(f)
+    for ax in axes.flat:
+        ax.axis("off")
+    labs = [
+        "Original image",
+        "Predicted mask",
+        "Flows1",
+        "Flows2",
+        "mean(Flows2)",
+    ]
+    for ax, lab in zip(axes[0], labs):
+        ax.set(title=lab)
+    return fig
+
+
+def cellpose_postprocessing(image, mask, flow):
+    from skimage import filters
+
+    flo = flow[0].mean(-1)
+    flo = flo / flo.max()
+
+    image2 = resize(image, flo.shape)
+    mask2 = resize(mask > 0, flo.shape)
+    mask2 = np.ma.masked_array(mask2, mask2 == 0)
+
+    algos = ["li", "mean", "minimum", "otsu", "triangle", "yen", "isodata"]
+
+    segs = dict()
+    _perf = dict()
+    fig, axes = plt.subplots(3, 5, sharex=True, sharey=True)
+    axes[0][0].imshow(image2)
+    axes[1][0].imshow(mask2)
+    axes[2][0].imshow(flo)  # np.ma.masked_array(mask, mask==0)
+    for algo, ax in zip(algos, axes[:, 1:].flat):
+        f = getattr(filters, f"threshold_{algo}")
+        t = f(flo)
+        segs[algo] = flo > t
+        s = flo[segs[algo]].sum()
+        r = s / segs[algo].sum()
+        n = ndi.label(segs[algo])[1]
+        _perf[algo] = (s, r, n)
+        ax.imshow(segs[algo])
+        ax.set(title=f"{algo}:\nsum = {s:.1f}, ratio = {r:.2f}, n = {n}")
+
+    perf = pd.DataFrame(_perf, index=["sum", "ratio", "objs"]).T
+    perf["objs"] = 5 + (2 ** np.log1p(perf["objs"]))
+    perf["sum_norm"] = perf["sum"] / perf["sum"].sum()
+    perf["ratio_norm"] = perf["ratio"] / perf["ratio"].sum()
+    perf["weight"] = perf[["sum_norm", "ratio_norm"]].mean(1)
+
+    seg = np.asarray(list(segs.values()))
+    seg_t = np.average(seg, axis=0, weights=perf["weight"])  #  > 0.5
+    axes[-1][-2].imshow(seg_t)
+    axes[-1][-2].set(title="Mean of thresholding algorightms")
+    axes[-1][-1].imshow(seg_t > 0.5)
+    axes[-1][-1].set(title="Threshold of mean")
+    for ax in axes.flat:
+        ax.axis("off")
+
+    fig, ax = plt.subplots()
+    ax.scatter(*perf.T.values)
+    for algo in perf.index:
+        ax.text(perf.loc[algo, "sum"], perf.loc[algo, "ratio"], s=algo)
+
+    return seg_t > 0.5
 def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     cols = 1 + len(mask_dict) * 2
 
@@ -156,7 +257,7 @@ def segment_roi(
     plot_segmentation: bool
         Whether to make a figure illustrating the segmentation.
     """
-    assert model in ["deepcell", "stardist"]
+    assert model in ["deepcell", "stardist", "cellpose"]
 
     image = prepare_stack(
         roi.stack, roi.channel_labels, compartment, roi.channel_exclude
@@ -173,6 +274,8 @@ def segment_roi(
             mask = resize(mask, image.shape[:2])
         if len(image.shape) == 3:
             mask = resize(mask, image.shape[1:3] + (2,))
+    elif model == "cellpose":
+        mask = cellpose_segment(image)
 
     mask_dict = dict()
     if compartment == "both":
