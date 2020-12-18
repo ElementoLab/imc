@@ -83,7 +83,9 @@ def main(cli: List[str] = None) -> int:
         )
         if args.save:
             add = "nuc" if args.compartment == "nuclear" else ""
-            mask_file = roi.stack_file.replace_(".tiff", f"_{add}mask.tiff")
+            mask_file = roi.stack_file.replace_(
+                ".tiff", f"_{add}mask{args.output_mask_suffix}.tiff"
+            )
             if args.overwrite or (not mask_file.exists()):
                 tifffile.imwrite(mask_file, mask)
 
@@ -119,6 +121,7 @@ def get_args() -> argparse.ArgumentParser:
     )
     _help = "Comma-delimited list of channels to exclude from stack."
     parser.add_argument("-e", "--channel-exclude", default="")
+    parser.add_argument("--output-mask-suffix", default="")
     parser.add_argument("--no-save", dest="save", action="store_false")
     parser.add_argument("--overwrite", dest="overwrite", action="store_true")
     parser.add_argument("--no-plot", dest="plot", action="store_false")

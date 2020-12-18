@@ -408,6 +408,7 @@ def get_canny_edge_image(
 def mcd_to_dir(
     mcd_file: Path,
     pannel_csv: Path = None,
+    ilastik_output: bool = True,
     ilastik_channels: List[str] = None,
     output_dir: Path = None,
     output_format: str = "tiff",
@@ -506,15 +507,17 @@ def mcd_to_dir(
 
     if output_dir is None:
         output_dir = mcd_file.parent / "imc_dir"
-    os.makedirs(output_dir, exist_ok=True)
-    dirs = ["tiffs", "ilastik"]
+    output_dir.mkdir(exist_ok=True, parents=True)
+    dirs = ["tiffs"] + (["ilastik"] if ilastik_output else [])
     for _dir in dirs:
-        os.makedirs(output_dir / _dir, exist_ok=True)
+        (output_dir / _dir).mkdir(exist_ok=True)
 
     # Export panoramas
     if export_panoramas:
         get_panorama_images(
-            mcd_file, output_file_prefix=output_dir / "Panorama"
+            mcd_file,
+            output_file_prefix=output_dir / "Panorama",
+            overwrite=overwrite,
         )
 
     # Parse MCD
@@ -525,7 +528,7 @@ def mcd_to_dir(
         sample_name = session.name
 
     for i, ac_id in enumerate(session.acquisition_ids):
-        print(ac_id)
+        print(ac_id, end="\t")
         try:
             ac = mcd.get_acquisition_data(ac_id)
         except Exception as e:  # imctools.io.abstractparserbase.AcquisitionError
@@ -575,36 +578,27 @@ def mcd_to_dir(
         ac._image_data = np.asarray([clip_hot_pixels(x) for x in ac.image_data])
 
         # Save full image
-        p = prefix + "_full."
-        if output_format == "tiff":
-            ac.save_tiff(
-                p + file_ending,
-                names=channel_labels.str.extract(r"\((.*)\)")[0],
-            )
-        elif output_format == "ome-tiff":
-            ac.save_ome_tiff(
-                p + file_ending,
-                names=channel_labels.str.extract(r"\((.*)\)")[0],
-                xml_metadata=mcd.get_mcd_xml(),
-            )
+        if not only_crops:
+            p = prefix + "_full."
+            if output_format == "tiff":
+                if (overwrite) or not (p + file_ending).exists():
+                    ac.save_tiff(
+                        p + file_ending,
+                        names=channel_labels.str.extract(r"\((.*)\)")[0],
+                    )
+            elif output_format == "ome-tiff":
+                if (overwrite) or not (p + file_ending).exists():
+                    ac.save_ome_tiff(
+                        p + file_ending,
+                        names=channel_labels.str.extract(r"\((.*)\)")[0],
+                        xml_metadata=mcd.get_mcd_xml(),
+                    )
         # Save channel labels for the stack
-        channel_labels.to_csv(p + "csv")
+        if (overwrite) or not (p + "csv").exists():
+            channel_labels.to_csv(p + "csv")
 
-        # # check
-        # good = ~channel_labels.str.contains("EMPTY|BCKG|80ArAr|129Xe")
-        # nuc = channel_labels.str.contains("DNA|Histone")
-        # nuclear = np.asarray([False] * 3 + (good & nuc).values.tolist())
-        # cytopla = np.asarray([False] * 3 + (good & ~nuc).values.tolist())
-
-        # f_nuc = np.asarray([minmax_scale(eq(x)) for x in ac.data[nuclear]]).mean(0)
-        # f_cyt = minmax_scale(eq(np.asarray([minmax_scale(eq(x)) for x in ac.data[cytopla]]).mean(0)))
-        # f_bck = 1 - minmax_scale(f_nuc + f_cyt)
-
-        # fig, ax = plt.subplots(1, 4, sharex=True, sharey=True)
-        # ax[0].imshow(f_nuc)
-        # ax[1].imshow(f_cyt)
-        # ax[2].imshow(f_bck)
-        # ax[3].imshow(np.moveaxis(np.asarray([f_nuc, f_cyt, f_bck]), 0, -1))
+        if not ilastik_output:
+            continue
 
         # Make input for ilastik training
         # # zoom 2x
@@ -620,7 +614,7 @@ def mcd_to_dir(
 
         # # random crops
         iprefix = (
-            output_dir / "ilastik" / (session.name.replace(" ", "_") + "_ac")
+            output_dir / "ilastik" / (sample_name.replace(" ", "_") + "_ac")
         )
         # # # make sure height/width are smaller or equal to acquisition dimensions
         if (full.shape[1] < crop_width) or (full.shape[0] < crop_height):
@@ -638,9 +632,8 @@ def mcd_to_dir(
             ) as handle:
                 d = handle.create_dataset("stacked_channels", data=crop)
                 d.attrs["axistags"] = H5_YXC_AXISTAG
-        if only_crops:
-            continue
 
+    print("")  # add a newline to the tabs
     mcd.close()
 
     # all_channels_equal(mcd)
@@ -1030,19 +1023,21 @@ def filter_hot_pixels(img, n_bins=1000):
 
 
 @overload
-def get_panorama_images(mcd_file: Path, output_file_prefix: Path) -> None:
+def get_panorama_images(
+    mcd_file: Path, output_file_prefix: Path, overwrite: bool
+) -> None:
     ...
 
 
 @overload
 def get_panorama_images(
-    mcd_file: Path, output_file_prefix: None
+    mcd_file: Path, output_file_prefix: None, overwrite: bool
 ) -> List[Array]:
     ...
 
 
 def get_panorama_images(
-    mcd_file: Path, output_file_prefix: Path = None
+    mcd_file: Path, output_file_prefix: Path = None, overwrite: bool = False
 ) -> Optional[List[Array]]:
     import imageio
 
@@ -1057,10 +1052,19 @@ def get_panorama_images(
             int(slide["ImageEndOffset"]),
         )
         img = mcd._get_buffer(start + byteoffset, end + byteoffset)
-        if output_file_prefix is None:
-            imgs.append(imageio.imread(img))
-        with open(f"{output_file_prefix}_{slide['ID']}.png", "wb") as f:
-            f.write(img)
+        if len(img) == 0:  # empty image
+            continue
+        if output_file_prefix is not None:
+            output_file = output_file_prefix + f"_{slide['ID']}.png"
+            if overwrite or (not output_file.exists()):
+                with open(output_file, "wb") as f:
+                    f.write(img)
+        else:
+            try:
+                imgs.append(imageio.imread(img))
+            except ValueError:
+                continue
+    mcd.close()
     if output_file_prefix is None:
         return imgs
     else:

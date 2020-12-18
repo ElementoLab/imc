@@ -19,12 +19,33 @@ def main(cli: List[str] = None) -> int:
     parser = get_args()
     args = parser.parse_args(cli)
 
+    if len(args.pannel_csvs) == 1:
+        args.pannel_csvs = args.pannel_csvs * len(args.mcd_files)
+    else:
+        assert len(args.mcd_files) == len(args.pannel_csvs)
+
+    if len(args.mcd_files) != len(args.sample_names):
+        args.sample_names = [None] * len(args.mcd_files)
+
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
     print(f"Starting analysis of {len(args.mcd_files)} MCD files: {fs}!")
 
-    for mcd_file in args.mcd_files:
+    for mcd_file, pannel_csv, sample_name in zip(
+        args.mcd_files, args.pannel_csvs, args.sample_names
+    ):
+        sargs = args.__dict__.copy()
+        del sargs["mcd_files"]
+        del sargs["pannel_csvs"]
+        del sargs["root_output_dir"]
+        del sargs["sample_names"]
+        sargs["mcd_file"] = mcd_file
+        sargs["pannel_csv"] = pannel_csv
+        sargs["sample_name"] = sample_name
+        sargs["output_dir"] = args.root_output_dir / mcd_file.stem
+        sargs = {k: v for k, v in sargs.items() if v is not None}
+
         print(f"Started analyzing '{mcd_file}'.")
-        mcd_to_dir(**{k: v for k, v in args.__dict__.items() if v is not None})
+        mcd_to_dir(**sargs)
         print(f"Finished processing '{mcd_file}'.")
 
     print("Finished with all files!")
@@ -32,17 +53,35 @@ def main(cli: List[str] = None) -> int:
 
 
 def get_args() -> argparse.ArgumentParser:
+    _help = "MCD files to process."
     parser = argparse.ArgumentParser()
-    parser.add_argument(dest="mcd_files", nargs="+", type=Path)
-    parser.add_argument(dest="pannel_csv", type=Path)
-    parser.add_argument("-o", "--output-dir", dest="output_dir", type=Path)
-    parser.add_argument("-n", "--sample-name", dest="sample_name", type=str)
+    parser.add_argument(dest="mcd_files", nargs="+", type=Path, help=_help)
+    _help = "Either one file or one for each MCD file."
     parser.add_argument(
-        "-p", "--partition-panels", dest="partition_panels", action="store_true"
+        "-p",
+        "--panel-csv",
+        dest="pannel_csvs",
+        nargs="+",
+        type=Path,
+        help=_help,
+    )
+    parser.add_argument(
+        "-o",
+        "--root-output-dir",
+        dest="root_output_dir",
+        default="processed",
+        type=Path,
+    )
+    parser.add_argument(
+        "-n", "--sample-name", dest="sample_names", nargs="+", type=str
+    )
+    parser.add_argument(
+        "--partition-panels", dest="partition_panels", action="store_true"
     )
     parser.add_argument(
         "--filter-full", dest="filter_full", action="store_true"
     )
+    parser.add_argument("--ilastik", dest="ilastik_output", action="store_true")
     parser.add_argument("--overwrite", dest="overwrite", action="store_true")
     parser.add_argument(
         "--no-empty-rois", dest="allow_empty_rois", action="store_false"
