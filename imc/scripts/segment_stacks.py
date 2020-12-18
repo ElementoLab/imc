@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 
 from imc.types import Path, Series, Array
 from imc.segmentation import segment_roi
+from imc.scripts import cli_config
 
 
 @dataclass
@@ -107,7 +108,7 @@ def main(cli: List[str] = None) -> int:
 
 
 def get_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(**cli_config["subcommands"]["segment"])  # type: ignore[index]
     _help = "TIFF files with array stack."
     parser.add_argument(dest="tiffs", nargs="+", type=Path, help=_help)
     parser.add_argument(

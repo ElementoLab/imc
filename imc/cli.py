@@ -16,6 +16,7 @@ from imc.scripts.inspect_mcds import main as inspect
 from imc.scripts.prepare_mcds import main as prepare
 from imc.scripts.segment_stacks import main as segment
 from imc.utils import mcd_to_dir
+from imc.scripts import cli_config
 
 
 def main(cli: List[str] = None) -> int:
@@ -32,13 +33,12 @@ def main(cli: List[str] = None) -> int:
 
 
 def get_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(**cli_config["main"])  # type: ignore[index]
 
     subparsers = parser.add_subparsers(dest="command", required=True)
-    inspect_parser = subparsers.add_parser("inspect", add_help=False)
-    prepare_parser = subparsers.add_parser("prepare", add_help=False)
-    segment_parser = subparsers.add_parser("segment", add_help=False)
 
+    for cmd in cli_config["subcommands"]:
+        subparsers.add_parser(cmd, add_help=False)
     return parser
 
 

@@ -17,6 +17,7 @@ from imctools.io.mcd.mcdparser import McdParser
 
 from imc.types import Path, DataFrame, Args
 from imc.utils import cleanup_channel_names, build_channel_name
+from imc.scripts import cli_config
 
 
 def main(cli: List[str] = None) -> int:
@@ -67,7 +68,7 @@ def main(cli: List[str] = None) -> int:
 
 
 def get_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(**cli_config["subcommands"]["inspect"])  # type: ignore[index]
     parser.add_argument(dest="mcd_files", nargs="+", type=Path)
     parser.add_argument("--no-write", dest="no_write", action="store_true")
     parser.add_argument(

@@ -13,6 +13,7 @@ import pandas as pd
 
 from imc.types import Path
 from imc.utils import mcd_to_dir
+from imc.scripts import cli_config
 
 
 def main(cli: List[str] = None) -> int:
@@ -54,7 +55,7 @@ def main(cli: List[str] = None) -> int:
 
 def get_args() -> argparse.ArgumentParser:
     _help = "MCD files to process."
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(**cli_config["subcommands"]["prepare"])  # type: ignore[index]
     parser.add_argument(dest="mcd_files", nargs="+", type=Path, help=_help)
     _help = "Either one file or one for each MCD file."
     parser.add_argument(
