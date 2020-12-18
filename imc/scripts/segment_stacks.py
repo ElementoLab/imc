@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 from imc.types import Path, Series, Array
 from imc.segmentation import segment_roi
-from imc.scripts import cli_config
+from imc.scripts import build_cli
 
 
 @dataclass
@@ -42,7 +42,7 @@ class ROI_mock:
 
 
 def main(cli: List[str] = None) -> int:
-    parser = get_args()
+    parser = build_cli("segment")
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
@@ -105,28 +105,6 @@ def main(cli: List[str] = None) -> int:
 
     print("Finished with all files!")
     return 0
-
-
-def get_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(**cli_config["subcommands"]["segment"])  # type: ignore[index]
-    _help = "TIFF files with array stack."
-    parser.add_argument(dest="tiffs", nargs="+", type=Path, help=_help)
-    parser.add_argument(
-        "-m", "--model", choices=["stardist", "deepcell"], default="stardist"
-    )
-    parser.add_argument(
-        "-c",
-        "--compartment",
-        choices=["nuclear", "cytoplasm", "both"],
-        default="nuclear",
-    )
-    _help = "Comma-delimited list of channels to exclude from stack."
-    parser.add_argument("-e", "--channel-exclude", default="")
-    parser.add_argument("--output-mask-suffix", default="")
-    parser.add_argument("--no-save", dest="save", action="store_false")
-    parser.add_argument("--overwrite", dest="overwrite", action="store_true")
-    parser.add_argument("--no-plot", dest="plot", action="store_false")
-    return parser
 
 
 if __name__ == "__main__":

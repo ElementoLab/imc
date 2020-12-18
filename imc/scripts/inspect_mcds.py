@@ -17,11 +17,11 @@ from imctools.io.mcd.mcdparser import McdParser
 
 from imc.types import Path, DataFrame, Args
 from imc.utils import cleanup_channel_names, build_channel_name
-from imc.scripts import cli_config
+from imc.scripts import build_cli
 
 
 def main(cli: List[str] = None) -> int:
-    parser = get_args()
+    parser = build_cli("inspect")
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
@@ -65,20 +65,6 @@ def main(cli: List[str] = None) -> int:
 
     print("Finished with all files!")
     return 0
-
-
-def get_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(**cli_config["subcommands"]["inspect"])  # type: ignore[index]
-    parser.add_argument(dest="mcd_files", nargs="+", type=Path)
-    parser.add_argument("--no-write", dest="no_write", action="store_true")
-    parser.add_argument(
-        "-o",
-        "--output-prefix",
-        dest="output_prefix",
-        default="mcd_files",
-        type=Path,
-    )
-    return parser
 
 
 def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
