@@ -102,16 +102,24 @@ cli_config = {
                 "kwargs": {"dest": "filter_full", "action": "store_true"},
             },
             {
-                "args": ["--ilastik"],
-                "kwargs": {"dest": "ilastik_output", "action": "store_true"},
-            },
-            {
                 "args": ["--overwrite"],
                 "kwargs": {"dest": "overwrite", "action": "store_true"},
             },
             {
                 "args": ["--no-empty-rois"],
                 "kwargs": {"dest": "allow_empty_rois", "action": "store_false"},
+            },
+            {
+                "args": ["--ilastik"],
+                "kwargs": {"dest": "ilastik_output", "action": "store_true"},
+            },
+            {
+                "args": ["--ilastik-compartment"],
+                "kwargs": {
+                    "dest": "ilastik_compartment",
+                    "choices": ["nuclear", "cytoplasm", "both"],
+                    "default": None,
+                },
             },
             {
                 "args": ["--only-crops"],
@@ -144,6 +152,13 @@ cli_config = {
                     "nargs": "+",
                     "type": Path,
                     "help": "TIFF files with array stack.",
+                },
+            },
+            {
+                "args": ["-p", "--from-probabilities"],
+                "kwargs": {
+                    "dest": "from_probabilities",
+                    "action": "store_true",
                 },
             },
             {

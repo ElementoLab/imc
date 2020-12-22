@@ -9,6 +9,7 @@ import argparse
 from typing import List, Optional
 from dataclasses import dataclass
 
+import numpy as np
 import pandas as pd
 import tifffile
 import matplotlib.pyplot as plt
@@ -29,6 +30,8 @@ class ROI_mock:
 
     name: Optional[str] = None
 
+    probabilities_file: Optional[Path] = None
+
     def __repr__(self):
         return self.name
 
@@ -39,6 +42,10 @@ class ROI_mock:
     @property
     def channel_labels(self) -> Series:
         return pd.read_csv(self.channel_labels_file, index_col=0, squeeze=True)
+
+    @property
+    def probabilities(self) -> Array:
+        return np.moveaxis(tifffile.imread(self.probabilities_file), -1, 0)
 
 
 def main(cli: List[str] = None) -> int:
@@ -62,6 +69,9 @@ def main(cli: List[str] = None) -> int:
         roi = ROI_mock(
             tiff, channel_labels_file, name=tiff.stem.replace("_full", "")
         )
+        roi.probabilities_file = roi.stack_file.replace_(
+            "_full.tiff", "_Probabilities.tiff"
+        )
 
         # convert string given at CLI to channel_exclude Series
         exc = pd.Series(index=roi.channel_labels, dtype=bool)
@@ -76,6 +86,7 @@ def main(cli: List[str] = None) -> int:
         print(f"Started segmentation of '{roi} with shape: '{roi.stack.shape}'")
         mask = segment_roi(
             roi,
+            args.from_probabilities,
             args.model,
             args.compartment,
             False,

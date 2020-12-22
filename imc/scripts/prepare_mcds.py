@@ -20,7 +20,9 @@ def main(cli: List[str] = None) -> int:
     parser = build_cli("prepare")
     args = parser.parse_args(cli)
 
-    if len(args.pannel_csvs) == 1:
+    if not args.pannel_csvs:
+        args.pannel_csvs = [None] * len(args.mcd_files)
+    elif len(args.pannel_csvs) == 1:
         args.pannel_csvs = args.pannel_csvs * len(args.mcd_files)
     else:
         assert len(args.mcd_files) == len(args.pannel_csvs)

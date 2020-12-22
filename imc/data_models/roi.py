@@ -49,6 +49,7 @@ from imc.graphics import (
     numbers_to_rgb_colors,
     merge_channels,
     rainbow_text,
+    get_random_label_cmap,
 )
 
 from imc.exceptions import (
@@ -1042,10 +1043,12 @@ class ROI:
         i = 0
         if nuclei:
             _axes[3 + i].set_title("Nuclei")
-            _axes[3 + i].imshow(self.nuclei_mask > 0, cmap="binary")
+            _axes[3 + i].imshow(
+                self.nuclei_mask > 0, cmap=get_random_label_cmap()
+            )
             i += 1
         _axes[3 + i].set_title("Cells")
-        _axes[3 + i].imshow(self.cell_mask > 0, cmap="binary")
+        _axes[3 + i].imshow(self.cell_mask > 0, cmap=get_random_label_cmap())
         if add_scale:
             _add_scale(_axes[3 + i])
         # To plot jointly

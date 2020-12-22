@@ -7,12 +7,32 @@ from typing import Union, Literal, Dict, Tuple
 from functools import partial
 
 import numpy as np
+import scipy.ndimage as ndi
 import matplotlib.pyplot as plt
 from skimage.exposure import equalize_hist as eq
 from skimage.transform import resize
 import tifffile
 
 from imc.types import Array, Figure, Path, Series
+from imc.graphics import random_label_cmap
+from imc.utils import minmax_scale
+
+
+def normalize(image, mode="cyx"):
+    if len(image.shape) == 2:
+        return minmax_scale(eq(image))
+    elif len(image.shape) == 3:
+        if mode == "cyx":
+            return np.asarray([minmax_scale(eq(x)) for x in image])
+        elif mode == "yxc":
+            return np.stack(
+                [
+                    minmax_scale(eq(image[..., i]))
+                    for i in range(image.shape[-1])
+                ],
+                axis=-1,
+            )
+    raise ValueError("Unknown image shape.")
 
 
 def prepare_stack(
@@ -29,13 +49,13 @@ def prepare_stack(
 
     # Get nuclear channels
     nuclear_chs = channel_labels.str.contains("DNA")
-    nucl = np.asarray([eq(x) for x in stack[nuclear_chs]]).mean(0)
+    nucl = normalize(stack[nuclear_chs]).mean(0)
     if compartment == "nuclear":
         return nucl
 
     # Get cytoplasmatic channels
     cyto_chs = ~channel_labels.str.contains("DNA|Ki67|SMA")
-    cyto = np.asarray([eq(x) for x in stack[~cyto_chs]]).mean(0)
+    cyto = normalize(stack[~cyto_chs]).mean(0)
     if compartment == "cytoplasm":
         return cyto
 
@@ -49,8 +69,55 @@ def stardist_segment_nuclei(
     from stardist.models import StarDist2D
 
     model = StarDist2D.from_pretrained(model_str)
-    mask, _ = model.predict_instances(eq(image))
+    mask, output = model.predict_instances(image)
+    mask = model.predict(image)
     return mask
+    # # visualize probs
+    # mask2 = np.zeros(mask.shape, dtype=float)
+    # for c, p in zip(np.unique(mask)[1:], output['prob']):
+    #     mask2[mask == c] = p
+
+    # # to change thresholds without training
+    # from attmap import AttMap
+    # model._thresholds = AttMap(dict(
+    #     prob = model.thresholds.prob,
+    #     nms  = model.thresholds.nms
+    # ))
+
+    # # to re-train thresholds
+    # from imc import Project
+
+    # # covidimc = Project(processed_dir="~/projects/covid-imc/processed")
+    # covidimc.samples = [
+    #     s for s in covidimc.samples if "20200708_COVID_21_LATE" in s.name
+    # ]
+    # X = [
+    #     prepare_stack(roi.stack, roi.channel_labels, "nuclear")
+    #     for roi in covidimc.rois
+    # ]
+    # Y = [roi.mask for roi in covidimc.rois]
+    # Y = [(roi.mask > 0).astype(int) for roi in covidimc.rois]
+    # # model.optimize_thresholds(X[:1], Y[:1])
+    # model.optimize_thresholds(X, Y)
+    # thres = {"prob": 0.5328677624109023, "nms": 0.5}  # 20 ROIs, labels
+    # thres = {"prob": 0.4871256780834209, "nms": 0.5}  # 2 ROIs, labels
+    # thres = {"prob": 0.46877386118214825, "nms": 0.3}  # 2 ROIs, > 0, int
+    # thres = {"prob": 0.4742475427753275, "nms": 0.3}  # 20 ROIs, > 0, int
+    # thres = {'prob': 0.46877386118214825, 'nms': 0.3}  #  2 ROIS, > 0, int from scratch
+
+    # from attmap import AttMap
+
+    # model._thresholds = AttMap(thres)
+    # mask, output = model.predict(X[0])
+    # plot_image_and_mask(X[0], {"nuclear": resize(Y[0], X[0].shape)})
+    # plot_image_and_mask(X[0], {"nuclear": resize(mask, X[0].shape)})
+    # plot_image_and_mask(X[0], {"nuclear": resize(normalize(mask), X[0].shape)})
+
+    # lungdev = Project(processed_dir="~/projects/lung-dev/processed")
+    # roi = lungdev.rois[0]
+    # image = prepare_stack(roi.stack, roi.channel_labels, "nuclear")
+    # mask, output = model.predict(image)
+    # plot_image_and_mask(image, {"nuclear": resize(mask, image.shape)}).show()
 
 
 def deepcell_resize_to_predict_shape(image: Array) -> Array:
@@ -65,24 +132,43 @@ def deepcell_resize_to_predict_shape(image: Array) -> Array:
 
 
 def split_image_into_tiles(
-    image, tile_shape=(256, 256)
+    image, tile_shape=(256, 256), overlap=(0, 0), pad_to_tile_shape=False
 ) -> Dict[Tuple[int, int], Array]:
     shape = np.asarray(image.shape)
     x, y = np.asarray(tile_shape)
 
+    r1, r2 = shape / tile_shape
     n, m = shape // tile_shape + 2
+    n += int(r1)
+    m += int(r2)
 
     tiles = dict()
     for i in range(m):
         for j in range(n):
-            cur_pos = (i * x, j * y)
-            next_pos = ((i + 1) * x, (j + 1) * y)
-            tile = image[cur_pos[0] : next_pos[0], cur_pos[1] : next_pos[1]]
-            tiles[cur_pos] = tile
+            offsets = overlap[0] * i, overlap[1] * j
+            start = (max(i * x - offsets[0], 0), max(j * y - offsets[1], 0))
+            end = (
+                ((i + 1) * x - offsets[0])
+                if (i + 2) < n
+                else shape[0] - start[0],
+                ((j + 1) * y - offsets[1])
+                if (j + 2) < m
+                else shape[1] - start[1],
+            )
+            tile = image[start[0] : end[0], start[1] : end[1]]
+            if pad_to_tile_shape:
+                diff = np.asarray(tile.shape) - tile_shape
+                if not (diff > 0).all():
+                    tile = np.pad(tile, ((0, abs(diff[0])), (0, abs(diff[1]))))
+            if (min(tile.shape) > 0) and tile.sum() > 0:
+                tiles[start] = tile
+
     return tiles
 
 
-def join_tiles_to_image(tiles: Dict[Tuple[int, int], Array]):
+def join_tiles_to_image(
+    tiles: Dict[Tuple[int, int], Array], trim_all_zeros=True
+):
     grid = np.asarray(list(tiles.keys()))
 
     image_shape = np.array([0, 0])
@@ -104,8 +190,9 @@ def join_tiles_to_image(tiles: Dict[Tuple[int, int], Array]):
         rec[i : i + x, j : j + y] = arr
 
     # clip
-    rec = rec[:, rec.sum(0) > 0]
-    rec = rec[rec.sum(1) > 0, :]
+    if trim_all_zeros:
+        rec = rec[:, rec.sum(0) > 0]
+        rec = rec[rec.sum(1) > 0, :]
 
     return rec
 
@@ -140,16 +227,23 @@ def deepcell_segment(
         pred = app.predict(image, image_mpp=image_mpp, **kwargs).squeeze()
     else:
         tiles = split_image_into_tiles(image.squeeze())
-        preds = dict()
-        for pos, tile in tiles.items():
-            print([pos])
-            if tile.sum() == 0:
-                preds[pos] = tile
-                continue
-            preds[pos] = app.predict(
-                tile[np.newaxis, ..., np.newaxis], image_mpp=1
-            ).squeeze()
-        pred = join_tiles_to_image(preds)
+
+        # together as batches
+        a = np.asarray(list(tiles.values()))[..., np.newaxis]
+        preds = app.predict(a, image_mpp=image_mpp, **kwargs).squeeze()
+        pred = join_tiles_to_image(dict(zip(tiles.keys(), preds)))
+
+        # # one by one
+        # preds = dict()
+        # for pos, tile in tiles.items():
+        #     print([pos])
+        #     if tile.sum() == 0:
+        #         preds[pos] = tile
+        #         continue
+        #     preds[pos] = app.predict(
+        #         tile[np.newaxis, ..., np.newaxis], image_mpp=1
+        #     ).squeeze()
+        # pred = join_tiles_to_image(preds)
 
     if len(pred.shape) == 4:
         pred = resize(pred, image.shape[1:])
@@ -296,7 +390,7 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
         ax.axis("off")
     for i, comp in enumerate(mask_dict):
         ax = axes[1 + i]
-        ax.imshow(mask_dict[comp])
+        ax.imshow(mask_dict[comp], cmap=random_label_cmap())
         ax.set(title=f"{comp.capitalize()} mask")
     for i, comp in enumerate(mask_dict):
         ax = axes[1 + len(mask_dict) + i]
@@ -312,8 +406,28 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     return fig
 
 
+def deepcell_segment_probabilities(cyx_image):
+    """"""
+    from deepcell.applications import MultiplexSegmentation
+
+    app = MultiplexSegmentation()
+    pred = app.predict(
+        np.moveaxis(normalize(cyx_image[:-1, ...]), 0, -1)[np.newaxis, ...],
+        image_mpp=1,
+    ).squeeze()
+
+    # from deepcell.applications import NuclearSegmentation
+    # app = NuclearSegmentation()
+    # pred2 = app.predict(
+    #     normalize(cyx_image, mode="xyc")[np.newaxis, ..., 0][..., np.newaxis],
+    #     image_mpp=1,
+    # ).squeeze()
+    return pred
+
+
 def segment_roi(
     roi: "ROI",
+    from_probabilities: bool = False,
     model: Union[Literal["deepcell", "stardist"]] = "deepcell",
     compartment: str = "nuclear",
     save: bool = True,
@@ -321,12 +435,16 @@ def segment_roi(
     plot_segmentation: bool = True,
 ) -> Array:
     """
-    Segment the stack of an ROI.
+    Segment the area of an ROI.
 
     Parameters
     ----------
     roi: ROI
         ROI object to process.
+    from_probabilities: bool
+        Whether to use the probability array instead of the channel stack.
+        If true, only the "deepcell" ``model`` can be used and the ``compartment``
+        must be "cytoplasm".
     model: str
         One of ``deepcell`` or ``stardist``.
     compartment: str
@@ -338,28 +456,35 @@ def segment_roi(
     plot_segmentation: bool
         Whether to make a figure illustrating the segmentation.
     """
-    assert model in ["deepcell", "stardist", "cellpose"]
-
     image = prepare_stack(
         roi.stack, roi.channel_labels, compartment, roi.channel_exclude
     )
 
-    if model == "stardist":
-        assert compartment == "nuclear"
-        mask = stardist_segment_nuclei(image)
-
-    elif model == "deepcell":
-        input_image = deepcell_resize_to_predict_shape(image)
-        image_mpp = (np.asarray(image.shape) / 256).mean()
-        mask = deepcell_segment(
-            input_image, compartment=compartment, image_mpp=image_mpp
+    if from_probabilities:
+        assert model in ["deepcell"]
+        assert compartment in ["cytoplasm"]
+        mask = deepcell_segment_probabilities(
+            resize(roi.probabilities, (3,) + image.shape[:2])
         )
-        if len(image.shape) == 2:
-            mask = resize(mask, image.shape[:2])
-        if len(image.shape) == 3:
-            mask = resize(mask, image.shape[1:3] + (2,))
-    elif model == "cellpose":
-        mask = cellpose_segment(image)
+        # mask = ndi.label((mask, image.shape) > 0)
+    else:
+        assert model in ["deepcell", "stardist", "cellpose"]
+        if model == "stardist":
+            assert compartment == "nuclear"
+            mask = stardist_segment_nuclei(image)
+
+        elif model == "deepcell":
+            input_image = deepcell_resize_to_predict_shape(image)
+            image_mpp = (np.asarray(image.shape) / 256).mean()
+            mask = deepcell_segment(
+                input_image, compartment=compartment, image_mpp=image_mpp
+            )
+            if len(image.shape) == 2:
+                mask = resize(mask, image.shape[:2])
+            if len(image.shape) == 3:
+                mask = resize(mask, image.shape[1:3] + (2,))
+        elif model == "cellpose":
+            mask = cellpose_segment(image)
 
     mask_dict = dict()
     if compartment == "both":
@@ -386,3 +511,87 @@ def segment_roi(
                 fig.savefig(fig_file, dpi=300, bbox_inches="tight")
 
     return mask
+
+
+# def _segment_probabilities(
+#     min_distance=10,
+#     detection_threshold=0.1,
+#     distance_threshold=0.01,
+#     exclude_border=False,
+#     small_objects_threshold=0
+# ):
+#     from skimage.feature import peak_local_max
+#     from skimage.measure import label
+#     from skimage.morphology import (
+#         watershed,
+#         remove_small_objects,
+#         h_maxima,
+#         disk,
+#         square,
+#         dilation,
+#     )
+#     from skimage.segmentation import relabel_sequential
+#     from deepcell_toolbox.utils import erode_edges, fill_holes
+
+#     probs = normalize(probs, "yxc")
+
+#     inner_distance = probs[..., 0]
+#     outer_distance = probs[..., 1]
+
+#     coords = peak_local_max(
+#         inner_distance,
+#         min_distance=min_distance,
+#         threshold_abs=detection_threshold,
+#         exclude_border=exclude_border,
+#     )
+
+#     markers = np.zeros(inner_distance.shape)
+#     markers[coords[:, 0], coords[:, 1]] = 1
+#     markers = label(markers)
+#     label_image = watershed(
+#         -outer_distance, markers, mask=outer_distance > distance_threshold
+#     )
+#     label_image = erode_edges(label_image, 1)
+
+#     # Remove small objects
+#     label_image = remove_small_objects(
+#         label_image, min_size=small_objects_threshold
+#     )
+
+#     # Relabel the label image
+#     label_image, _, _ = relabel_sequential(label_image)
+
+#     label_images.append(label_image)
+
+
+#     interior_model_smooth = 1
+
+#     interior_batch = probs[..., 0]
+#     interior_batch = nd.gaussian_filter(interior_batch, interior_model_smooth)
+
+#     if pixel_expansion is not None:
+#         interior_batch = dilation(interior_batch, selem=square(pixel_expansion * 2 + 1))
+
+#     maxima_batch = maxima_predictions[batch, ..., 0]
+#     maxima_batch = nd.gaussian_filter(maxima_batch, maxima_model_smooth)
+
+#     markers = h_maxima(image=maxima_batch,
+#                        h=maxima_threshold,
+#                        selem=disk(radius))
+
+#     markers = label(markers)
+
+#     label_image = watershed(-interior_batch,
+#                             markers,
+#                             mask=interior_batch > interior_threshold,
+#                             watershed_line=0)
+
+#     # Remove small objects
+#     label_image = remove_small_objects(label_image, min_size=small_objects_threshold)
+
+#     # fill in holes that lie completely within a segmentation label
+#     if fill_holes_threshold > 0:
+#         label_image = fill_holes(label_image, size=fill_holes_threshold)
+
+#     # Relabel the label image
+#     label_image, _, _ = relabel_sequential(label_image)

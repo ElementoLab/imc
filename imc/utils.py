@@ -410,6 +410,7 @@ def mcd_to_dir(
     pannel_csv: Path = None,
     ilastik_output: bool = True,
     ilastik_channels: List[str] = None,
+    ilastik_compartment: str = None,
     output_dir: Path = None,
     output_format: str = "tiff",
     overwrite: bool = False,
@@ -472,11 +473,21 @@ def mcd_to_dir(
             "Partitioning sample per panel is not implemented yet."
         )
 
-    if pannel_csv is None and ilastik_channels is None:
+    if (
+        pannel_csv is None
+        and ilastik_channels is None
+        and ilastik_compartment is None
+    ):
         raise ValueError(
-            "One of `pannel_csv` or `ilastik_channels` must be given!"
+            "One of `pannel_csv`, `ilastik_channels` or `ilastik_compartment` must be given!"
         )
-    if ilastik_channels is None and pannel_csv is not None:
+
+    #
+    if (
+        ilastik_compartment is None
+        and pannel_csv is not None
+        and ilastik_channels is None
+    ):
         panel = pd.read_csv(pannel_csv, index_col=0)
         ilastik_channels = panel.query("ilastik == 1").index.tolist()
 
@@ -513,7 +524,7 @@ def mcd_to_dir(
         (output_dir / _dir).mkdir(exist_ok=True)
 
     # Export panoramas
-    if export_panoramas:
+    if not only_crops and export_panoramas:
         get_panorama_images(
             mcd_file,
             output_file_prefix=output_dir / "Panorama",
@@ -557,13 +568,6 @@ def mcd_to_dir(
 
         # Filter channels
         channel_labels = build_channel_name(ac.channel_labels, ac.channel_names)
-        to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-        to_exp_ind = [
-            ac.channel_masses.index(y)
-            for y in to_exp.str.extract(r".*\(..(\d+)\)")[0]
-        ]
-        assert to_exp_ind == to_exp.index.tolist()
-
         if filter_full:
             # remove background and empty channels
             # TODO: find way to do this more systematically
@@ -578,8 +582,8 @@ def mcd_to_dir(
         ac._image_data = np.asarray([clip_hot_pixels(x) for x in ac.image_data])
 
         # Save full image
+        p = prefix + "_full."
         if not only_crops:
-            p = prefix + "_full."
             if output_format == "tiff":
                 if (overwrite) or not (p + file_ending).exists():
                     ac.save_tiff(
@@ -593,19 +597,40 @@ def mcd_to_dir(
                         names=channel_labels.str.extract(r"\((.*)\)")[0],
                         xml_metadata=mcd.get_mcd_xml(),
                     )
+
         # Save channel labels for the stack
-        if (overwrite) or not (p + "csv").exists():
+        if not only_crops and ((overwrite) or not (p + "csv").exists()):
             channel_labels.to_csv(p + "csv")
 
         if not ilastik_output:
             continue
 
+        # Prepare ilastik data
+        if ilastik_compartment is None:
+            # Get index of ilastik channels
+            to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
+            to_exp_ind = [
+                ac.channel_masses.index(y)
+                for y in to_exp.str.extract(r".*\(..(\d+)\)")[0]
+            ]
+            assert to_exp_ind == to_exp.index.tolist()
+            full = ac.image_data[to_exp_ind]
+            nchannels = len(to_exp)
+        else:
+            # Or nuclear/cytoplasmic
+            from imc.segmentation import prepare_stack
+
+            full = prepare_stack(
+                ac.image_data, channel_labels, ilastik_compartment
+            )
+            if len(full.shape) == 2:
+                full = full[np.newaxis, ...]
+            nchannels = 2 if ilastik_compartment == "both" else 1
+
         # Make input for ilastik training
         # # zoom 2x
         s = tuple(x * 2 for x in ac.image_data.shape[1:])
-        full = np.moveaxis(
-            np.asarray([resize(x, s) for x in ac.image_data[to_exp_ind]]), 0, -1
-        )
+        full = np.moveaxis(np.asarray([resize(x, s) for x in full]), 0, -1)
 
         # # Save input for ilastik prediction
         with h5py.File(prefix + "_ilastik_s2.h5", mode="w") as handle:
@@ -625,7 +650,7 @@ def mcd_to_dir(
             x = np.random.choice(range(s[0] - crop_width))
             y = np.random.choice(range(s[1] - crop_height))
             crop = full[x : (x + crop_width), y : (y + crop_height), :]
-            assert crop.shape == (crop_width, crop_height, len(to_exp))
+            assert crop.shape == (crop_width, crop_height, nchannels)
             with h5py.File(
                 iprefix + f"_ilastik_x{x}_y{y}_w{crop_width}_h{crop_height}.h5",
                 mode="w",

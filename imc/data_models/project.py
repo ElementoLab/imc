@@ -122,8 +122,8 @@ class Project:
 
         self.toggle = toggle
         self.subfolder_per_sample = subfolder_per_sample
-        self.processed_dir = Path(processed_dir).absolute()
-        self.results_dir = Path(results_dir).absolute()
+        self.processed_dir = Path(processed_dir).expanduser().absolute()
+        self.results_dir = Path(results_dir).expanduser().absolute()
         self.results_dir.mkdir()
         self.quantification: Optional[DataFrame] = None
         self._clusters: Optional[
@@ -733,9 +733,10 @@ class Project:
         fn.parent.mkdir()
         if clusters is None:
             clusters = (
-                pd.read_csv(fn, dtype={"sample": str, "roi": str},).set_index(
-                    id_cols
-                )
+                pd.read_csv(
+                    fn,
+                    dtype={"sample": str, "roi": str},
+                ).set_index(id_cols)
             )[
                 "cluster"
             ]  # .astype(str)

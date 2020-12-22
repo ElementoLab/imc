@@ -13,7 +13,7 @@ from typing import (
 )  # , Literal
 import warnings
 from functools import wraps
-
+import colorsys
 
 import numpy as np
 import pandas as pd
@@ -252,6 +252,21 @@ def get_transparent_cmaps(
         for p in sns.color_palette(from_palette, n)
     ]
 
+
+def get_random_label_cmap(n=2 ** 16, h=(0, 1), l=(0.4, 1), s=(0.2, 0.8)):
+    h, l, s = (
+        np.random.uniform(*h, n),
+        np.random.uniform(*l, n),
+        np.random.uniform(*s, n),
+    )
+    cols = np.stack(
+        [colorsys.hls_to_rgb(_h, _l, _s) for _h, _l, _s in zip(h, l, s)], axis=0
+    )
+    cols[0] = 0
+    return matplotlib.colors.ListedColormap(cols)
+
+
+random_label_cmap = get_random_label_cmap
 
 # TODO: see if function can be sped up e.g. with Numba
 def cell_labels_to_mask(mask: Array, labels: Union[Series, Dict]) -> Array:
