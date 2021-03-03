@@ -12,7 +12,7 @@ from typing import List
 import pandas as pd
 
 from imc.types import Path
-from imc.utils import mcd_to_dir
+from imc.utils import mcd_to_dir, plot_panoramas_rois
 from imc.scripts import build_cli
 
 
@@ -27,7 +27,9 @@ def main(cli: List[str] = None) -> int:
     else:
         assert len(args.mcd_files) == len(args.pannel_csvs)
 
-    if len(args.mcd_files) != len(args.sample_names):
+    if (args.sample_names is None) or (
+        len(args.mcd_files) != len(args.sample_names)
+    ):
         args.sample_names = [None] * len(args.mcd_files)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
@@ -49,6 +51,18 @@ def main(cli: List[str] = None) -> int:
 
         print(f"Started analyzing '{mcd_file}'.")
         mcd_to_dir(**sargs)
+
+        # Plot ROI positions on panoramas and slide
+        plot_panoramas_rois(
+            yaml_spec=mcd_file.replace_(".mcd", ".session_metadata.yaml"),
+            output_prefix=args.root_output_dir / mcd_file.stem / mcd_file.stem
+            + ".",
+            panorama_image_prefix=args.root_output_dir
+            / mcd_file.stem
+            / "Panorama_",
+            save_roi_arrays=False,
+        )
+
         print(f"Finished processing '{mcd_file}'.")
 
     print("Finished with all files!")

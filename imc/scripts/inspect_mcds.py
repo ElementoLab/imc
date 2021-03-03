@@ -86,15 +86,34 @@ def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
     ac_ids = session.acquisition_ids
     labels = pd.DataFrame(
         {
+            # ac_id: pd.Series(cleanup_channel_names(
+            #     session.acquisitions[ac_id].channel_labels
+            # ).values, index=session.acquisitions[ac_id].channel_masses)
             ac_id: cleanup_channel_names(
                 session.acquisitions[ac_id].channel_labels
             )
             for ac_id in ac_ids
         }
     )
+    # the below fails if ROIs have different lengths of metals
+    # metals = pd.DataFrame(
+    #     {ac_id: session.acquisitions[ac_id].channel_names for ac_id in ac_ids}
+    # )
     metals = pd.DataFrame(
-        {ac_id: session.acquisitions[ac_id].channel_names for ac_id in ac_ids}
-    )
+        [
+            pd.Series(session.acquisitions[ac_id].channel_names, name=ac_id)
+            for ac_id in ac_ids
+        ]
+    ).T
+    if metals.isnull().any().any():
+        print(
+            "Some ROIs have less metals than the others. "
+            "Keeping only ROIs with most metals."
+        )
+        metals = metals.loc[:, ~metals.isnull().any()]
+
+    labels = labels.reindex(metals.columns, axis=1)
+
     channel_names = labels.replace({None: "<EMPTY>"}) + "(" + metals + ")"
 
     same_channels = bool(

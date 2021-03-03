@@ -52,9 +52,15 @@ docs:  ## Build the documentation
 test:  ## Run the tests
 	python -m pytest $(NAME)/ -m "not slow"
 
-sync:
+backup_time:
+	echo "Last backup: " `date` >> _backup_time
+	chmod 700 _backup_time
+
+_sync:
 	rsync --copy-links --progress -r \
 	. afr4001@pascal.med.cornell.edu:projects/$(NAME)
 
+sync: _sync backup_time ## [dev] Sync data/code to SCU server
+
 .PHONY : clean_build clean_dist clean_eggs clean_mypy clean_docs clean_tests \
-clean _install install clean_docs docs test sync
+clean _install install clean_docs docs test backup_time _sync sync

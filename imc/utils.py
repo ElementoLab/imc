@@ -417,6 +417,8 @@ def mcd_to_dir(
     sample_name: str = None,
     partition_panels: bool = False,
     filter_full: bool = True,
+    min_area: int = 10000,
+    export_stacks: bool = True,
     export_panoramas: bool = True,
     keep_original_roi_names: bool = False,
     allow_empty_rois: bool = True,
@@ -425,6 +427,9 @@ def mcd_to_dir(
     crop_width: int = 500,
     crop_height: int = 500,
 ) -> None:
+    """"""
+    # TODO: add optional rotation of images if y > x
+
     def get_dataframe_from_channels(mcd):
         return pd.DataFrame(
             [mcd.get_acquisition_channels(x) for x in session.acquisition_ids],
@@ -452,6 +457,9 @@ def mcd_to_dir(
         return partitions.values()
 
     def clip_hot_pixels(img, hp_filter_shape=(3, 3), hp_threshold=0.0001):
+        """
+        From https://github.com/BodenmillerGroup/ImcPluginsCP/blob/master/plugins/smoothmultichannel.py#L416
+        """
         if hp_filter_shape[0] % 2 != 1 or hp_filter_shape[1] % 2 != 1:
             raise ValueError(
                 "Invalid hot pixel filter shape: %s" % str(hp_filter_shape)
@@ -519,9 +527,6 @@ def mcd_to_dir(
     if output_dir is None:
         output_dir = mcd_file.parent / "imc_dir"
     output_dir.mkdir(exist_ok=True, parents=True)
-    dirs = ["tiffs"] + (["ilastik"] if ilastik_output else [])
-    for _dir in dirs:
-        (output_dir / _dir).mkdir(exist_ok=True)
 
     # Export panoramas
     if not only_crops and export_panoramas:
@@ -536,7 +541,7 @@ def mcd_to_dir(
     session = mcd.session
 
     if sample_name is None:
-        sample_name = session.name
+        sample_name = session.name.replace(" ", "_")
 
     for i, ac_id in enumerate(session.acquisition_ids):
         print(ac_id, end="\t")
@@ -548,15 +553,20 @@ def mcd_to_dir(
                 continue
             raise e
 
+        if ac.image_data is None:
+            continue
+
+        if np.multiply(*ac.image_data.shape[1:]) < min_area:
+            print(
+                f"\nROI {ac_id} has less than the minimum area: {min_area}. Skipping.\n"
+            )
+            continue
+
         # Get output prefix
         if keep_original_roi_names:
-            prefix = (
-                output_dir / "tiffs" / (session.name.replace(" ", "_") + "_ac")
-            )
+            prefix = Path(session.name.replace(" ", "_") + "_ac")
         else:
-            prefix = (
-                output_dir / "tiffs" / (sample_name + "-" + str(i + 1).zfill(2))
-            )
+            prefix = Path(sample_name + "-" + str(i + 1).zfill(2))
 
         # Skip if not overwrite
         file_ending = "ome.tiff" if output_format == "ome-tiff" else "tiff"
@@ -582,8 +592,9 @@ def mcd_to_dir(
         ac._image_data = np.asarray([clip_hot_pixels(x) for x in ac.image_data])
 
         # Save full image
-        p = prefix + "_full."
-        if not only_crops:
+        p = output_dir / "tiffs" / prefix + "_full."
+        if (not only_crops) and export_stacks:
+            (output_dir / "tiffs").mkdir()
             if output_format == "tiff":
                 if (overwrite) or not (p + file_ending).exists():
                     ac.save_tiff(
@@ -599,7 +610,11 @@ def mcd_to_dir(
                     )
 
         # Save channel labels for the stack
-        if not only_crops and ((overwrite) or not (p + "csv").exists()):
+        if (
+            not only_crops
+            and ((overwrite) or not (p + "csv").exists())
+            and export_stacks
+        ):
             channel_labels.to_csv(p + "csv")
 
         if not ilastik_output:
@@ -633,26 +648,28 @@ def mcd_to_dir(
         full = np.moveaxis(np.asarray([resize(x, s) for x in full]), 0, -1)
 
         # # Save input for ilastik prediction
-        with h5py.File(prefix + "_ilastik_s2.h5", mode="w") as handle:
+        with h5py.File(
+            output_dir / "tiffs" / prefix + "_ilastik_s2.h5", mode="w"
+        ) as handle:
             d = handle.create_dataset("stacked_channels", data=full)
             d.attrs["axistags"] = H5_YXC_AXISTAG
 
         # # random crops
-        iprefix = (
-            output_dir / "ilastik" / (sample_name.replace(" ", "_") + "_ac")
-        )
         # # # make sure height/width are smaller or equal to acquisition dimensions
         if (full.shape[1] < crop_width) or (full.shape[0] < crop_height):
             msg = "Image is smaller than the requested crop size for ilastik training."
             print(msg)
             continue
+
+        (output_dir / "ilastik").mkdir()
         for _ in range(n_crops):
             x = np.random.choice(range(s[0] - crop_width))
             y = np.random.choice(range(s[1] - crop_height))
             crop = full[x : (x + crop_width), y : (y + crop_height), :]
             assert crop.shape == (crop_width, crop_height, nchannels)
             with h5py.File(
-                iprefix + f"_ilastik_x{x}_y{y}_w{crop_width}_h{crop_height}.h5",
+                output_dir / "ilastik" / prefix
+                + f"_ilastik_x{x}_y{y}_w{crop_width}_h{crop_height}.h5",
                 mode="w",
             ) as handle:
                 d = handle.create_dataset("stacked_channels", data=crop)
@@ -673,7 +690,7 @@ def plot_panoramas_rois(
     yaml_spec: Path,
     output_prefix: Path,
     panorama_image_prefix: Optional[Path] = None,
-    save_arrays: bool = True,
+    save_roi_arrays: bool = False,
 ) -> None:
     """
     Plot the location of panoramas and ROIs of a IMC sample.
@@ -681,10 +698,10 @@ def plot_panoramas_rois(
     yaml_spec: Union[str, pathlib.Path]
         Path to YAML file containing the spec of the acquired sample.
     output_prefix: Union[str, pathlib.Path]
-        Prefix path to output the joint image and arrays if `save_arrays` is `True`.
+        Prefix path to output the joint image and arrays if `save_roi_arrays` is `True`.
     panorama_image_prefix: Union[str, pathlib.Path]
         Prefix of images of panoramas captured by the Hyperion instrument.
-    save_arrays: bool
+    save_roi_arrays: bool
         Whether to output arrays containing the images captured by the Hyperion instrument
         in the locations of the ROIs.
     """
@@ -717,7 +734,7 @@ def plot_panoramas_rois(
         height = max(y1, y2) - y
         return tuple(map(int, [x, y, width, height]))
 
-    if save_arrays:
+    if save_roi_arrays:
         assert (
             panorama_image_prefix is not None
         ), "If `save_arrays`, provide a `panorama_image_prefix`."
@@ -790,7 +807,7 @@ def plot_panoramas_rois(
             color=colors[j],
         )
 
-        if not save_arrays:
+        if not save_roi_arrays:
             continue
 
         # Export ROI in panorama image

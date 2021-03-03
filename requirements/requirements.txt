@@ -13,6 +13,7 @@ python-louvain
 networkx
 parmap
 joblib
+outdated
 
 napari
 xarray

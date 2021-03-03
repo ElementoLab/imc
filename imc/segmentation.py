@@ -370,7 +370,7 @@ def inflection_point(curve):
 
 
 def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
-    cols = 1 + len(mask_dict) * 2
+    cols = 1 + len(mask_dict)
 
     # Make RGB if multi channel
     if len(image.shape) == 3 and image.shape[0] == 2:
@@ -386,23 +386,26 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
         1, cols, figsize=(4 * cols, 4), sharex=True, sharey=True
     )
     axes[0].imshow(image, rasterized=True)
+    axes[0].set(title=f"Original signal")
     for ax in axes:
         ax.axis("off")
     for i, comp in enumerate(mask_dict):
         ax = axes[1 + i]
-        ax.imshow(mask_dict[comp], cmap=random_label_cmap())
+        ax.imshow(
+            mask_dict[comp], cmap=random_label_cmap(), interpolation="none"
+        )
         ax.set(title=f"{comp.capitalize()} mask")
-    for i, comp in enumerate(mask_dict):
-        ax = axes[1 + len(mask_dict) + i]
-        ax.imshow(image, rasterized=True)
-        cs = ax.contour(mask_dict[comp], cmap="Reds")
-        # important to rasterize contours
-        for c in cs.collections:
-            try:
-                c.set_rasterized(True)
-            except Exception:
-                pass
-        ax.set(title=f"{comp.capitalize()} mask")
+    # for i, comp in enumerate(mask_dict):
+    #     ax = axes[1 + len(mask_dict) + i]
+    #     ax.imshow(image, rasterized=True)
+    #     cs = ax.contour(mask_dict[comp], cmap="Reds")
+    #     # important to rasterize contours
+    #     for c in cs.collections:
+    #         try:
+    #             c.set_rasterized(True)
+    #         except Exception:
+    #             pass
+    #     ax.set(title=f"{comp.capitalize()} mask")
     return fig
 
 
@@ -511,6 +514,125 @@ def segment_roi(
                 fig.savefig(fig_file, dpi=300, bbox_inches="tight")
 
     return mask
+
+
+def segment_decomposition():
+    """Some experiments with tensor decomposition"""
+    import tensorly as tl
+    from tensorly.decomposition import tucker, non_negative_tucker, parafac
+
+    from imc.demo import generate_disk_masks, generate_stack
+
+    # Synthetic data
+    Y = np.asarray([generate_disk_masks()[np.newaxis, ...] for _ in range(100)])
+    X = np.asarray([generate_stack(m.squeeze()) for m in Y])
+
+    fig, axes = plt.subplots(1, 3)
+    for ax, a in zip(axes, X[0]):
+        ax.imshow(a)
+
+    core, factors = tucker(X[0], [1, 128, 128])
+    core, factors = non_negative_tucker(X[0], [1, 128, 128])
+    reconstruction = tl.tucker_to_tensor((core, factors))
+
+    fig, axes = plt.subplots(1, 5)
+    for ax, a in zip(axes, X[0]):
+        ax.imshow(a)
+    q = factors[1] @ factors[2].T
+    axes[-2].imshow(q)
+    axes[-1].imshow(q > 1)
+
+    factors[0]  # samples
+    factors[1]  # channels
+
+    # if decomposing in more than one factor:
+    fig, axes = plt.subplots(1, 4)
+    for ax, dim in zip(axes, factors):
+        ax.scatter(*dim.T, s=2, alpha=0.5)
+
+    fig, axes = plt.subplots(1, 4)
+    for ax, dim in zip(axes, factors):
+        ax.plot(dim)
+
+    # Real data
+    r = prj.rois[50]
+
+    exc = r.channel_exclude.index.str.contains("EMPTY|80|129")
+    stack = normalize(r.stack[~exc])
+
+    core, factors = tucker(stack, [3] + list(r.shape[1:]))
+    reconstruction = tl.tucker_to_tensor((core, factors))
+
+    fig, axes = plt.subplots(2, 2, sharex=True, sharey=True)
+    axes[0][0].imshow(stack.mean(0))
+    axes[0][1].imshow(reconstruction.mean(0))
+    axes[1][0].imshow(stack[-1])
+    v = np.absolute(reconstruction[-1]).max()
+    axes[1][1].imshow(
+        reconstruction[-1], cmap="RdBu_r", vmin=-v, vmax=v
+    )  # .clip(min=0))
+
+    channel_imp = pd.Series(factors[0].squeeze(), index=r.channel_labels[~exc])
+    channel_mean = pd.Series(stack.mean((1, 2)), index=r.channel_labels[~exc])
+
+    plt.scatter(channel_mean, channel_imp)
+
+    fig, axes = plt.subplots(1, 8)
+    for ax, a in zip(axes, X[0]):
+        ax.imshow(a)
+    q = factors[1] @ factors[2].T
+    axes[-2].imshow(q)
+    axes[-1].imshow(q > 1)
+
+    probs = zoom(r.probabilities, (1, 0.5, 0.5))
+    probs = probs / probs.max()
+    core, factors = tucker(probs, [3] + list(r.shape[1:]))
+    reconstruction = tl.tucker_to_tensor((core, factors))
+
+    fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+    axes[0].imshow(np.moveaxis(probs, 0, -1))
+    axes[1].imshow(np.moveaxis(reconstruction, 0, -1))
+
+    weights, factors = parafac(probs, rank=50, init="random", tol=10e-6)
+    cp_reconstruction = tl.cp_to_tensor((weights, factors))
+
+    plt.imshow(np.moveaxis(minmax_scale(cp_reconstruction), 0, -1))
+
+    def PCA2D_2D(samples, row_top, col_top):
+        """samples are 2d matrices"""
+        size = samples[0].shape
+        # m*n matrix
+        mean = np.zeros(size)
+
+        for s in samples:
+            mean = mean + s
+
+        # get the mean of all samples
+        mean /= float(len(samples))
+
+        # n*n matrix
+        cov_row = np.zeros((size[1], size[1]))
+        for s in samples:
+            diff = s - mean
+            cov_row = cov_row + np.dot(diff.T, diff)
+        cov_row /= float(len(samples))
+        row_eval, row_evec = np.linalg.eig(cov_row)
+        # select the top t evals
+        sorted_index = np.argsort(row_eval)
+        # using slice operation to reverse
+        X = row_evec[:, sorted_index[: -row_top - 1 : -1]]
+
+        # m*m matrix
+        cov_col = np.zeros((size[0], size[0]))
+        for s in samples:
+            diff = s - mean
+            cov_col += np.dot(diff, diff.T)
+        cov_col /= float(len(samples))
+        col_eval, col_evec = np.linalg.eig(cov_col)
+        sorted_index = np.argsort(col_eval)
+        Z = col_evec[:, sorted_index[: -col_top - 1 : -1]]
+
+        return X, Z
 
 
 # def _segment_probabilities(

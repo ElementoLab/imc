@@ -82,7 +82,16 @@ def main(cli: List[str] = None) -> int:
         rois.append(roi)
 
     # Run segmentation
+    add = "nuc" if args.compartment == "nuclear" else ""
+
     for roi in rois:
+        mask_file = roi.stack_file.replace_(
+            ".tiff", f"_{add}mask{args.output_mask_suffix}.tiff"
+        )
+        if mask_file.exists() and not args.overwrite:
+            print(f"Mask for '{roi}' already exists, skipping...")
+            continue
+
         print(f"Started segmentation of '{roi} with shape: '{roi.stack.shape}'")
         mask = segment_roi(
             roi,
@@ -94,10 +103,6 @@ def main(cli: List[str] = None) -> int:
             args.plot,
         )
         if args.save:
-            add = "nuc" if args.compartment == "nuclear" else ""
-            mask_file = roi.stack_file.replace_(
-                ".tiff", f"_{add}mask{args.output_mask_suffix}.tiff"
-            )
             if args.overwrite or (not mask_file.exists()):
                 tifffile.imwrite(mask_file, mask)
 

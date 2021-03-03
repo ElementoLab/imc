@@ -117,13 +117,22 @@ cli_config = {
                 "args": ["--ilastik-compartment"],
                 "kwargs": {
                     "dest": "ilastik_compartment",
-                    "choices": ["nuclear", "cytoplasm", "both"],
+                    "choices": ["nuclear", "cytoplasm", "both", None],
                     "default": None,
+                    "help": "Whether to prepare a ilastik image stack based on cellular compartments. If given, the values in '--panel-csv' will be ignored.",
                 },
             },
             {
                 "args": ["--only-crops"],
                 "kwargs": {"dest": "only_crops", "action": "store_true"},
+            },
+            {
+                "args": ["--no-stacks"],
+                "kwargs": {"dest": "export_stacks", "action": "store_false"},
+            },
+            {
+                "args": ["--no-panoramas"],
+                "kwargs": {"dest": "export_panoramas", "action": "store_false"},
             },
             {
                 "args": ["--n-crops"],
