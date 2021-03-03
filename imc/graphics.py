@@ -29,19 +29,20 @@ from imc.utils import minmax_scale
 
 DEFAULT_PIXEL_UNIT_NAME = r"$\mu$m"
 
+DEFAULT_CHANNEL_COLORS = plt.get_cmap("tab10")(np.linspace(0, 1, 10))
 
-DEFAULT_CHANNEL_COLORS = [
-    "red",
-    "green",
-    "blue",
-    "orange",
-    "purple",
-    "brown",
-    "pink",
-    "olive",
-    "cyan",
-    "gray",
-]
+
+def close_plots(func) -> Callable:
+    """
+    Decorator to close all plots on function exit.
+    """
+
+    @wraps(func)
+    def close(*args, **kwargs) -> None:
+        func(*args, **kwargs)
+        plt.close("all")
+
+    return close
 
 
 def add_scale(
@@ -128,7 +129,7 @@ def saturize(arr: Array) -> Array:
 
 def merge_channels(
     arr: Array,
-    output_colors: Optional[List[str]] = None,
+    target_colors: Optional[List[Tuple[float, float, float]]] = None,
     return_colors: bool = False,
 ) -> Union[Array, Tuple[Array, List[Tuple[float, float, float]]]]:
     """
@@ -137,20 +138,20 @@ def merge_channels(
     """
     # defaults = list(matplotlib.colors.TABLEAU_COLORS.values())
     n_channels = arr.shape[0]
-    if output_colors is None:
+    if target_colors is None:
         target_colors = [
             matplotlib.colors.to_rgb(col)
             for col in DEFAULT_CHANNEL_COLORS[:n_channels]
         ]
 
-    if (n_channels == 3) and output_colors is None:
+    if (n_channels == 3) and target_colors is None:
         m = np.moveaxis(np.asarray([eq(x) for x in arr]), 0, -1)
         res = (m - m.min((0, 1))) / (m.max((0, 1)) - m.min((0, 1)))
         return res if not return_colors else (res, target_colors)
 
-    elif isinstance(output_colors, (list, tuple)):
-        assert len(output_colors) == n_channels
-        target_colors = [matplotlib.colors.to_rgb(col) for col in output_colors]
+    elif isinstance(target_colors, (list, tuple)):
+        assert len(target_colors) == n_channels
+        target_colors = [matplotlib.colors.to_rgb(col) for col in target_colors]
 
     # work in int space to avoid float underflow
     if arr.min() >= 0 and arr.max() <= 1:
@@ -206,10 +207,11 @@ def rainbow_text(
         # Need to draw to update the text position.
         text.draw(canvas.get_renderer())
         ex = text.get_window_extent()
+
         if orientation == "horizontal":
-            t = text.get_transform() + Affine2D().translate(ex.width, 0)
+            t = text.get_transform() + Affine2D().translate(ex.width * 0.5, 0)
         else:
-            t = text.get_transform() + Affine2D().translate(0, ex.height)
+            t = text.get_transform() + Affine2D().translate(0, ex.height * 0.5)
 
 
 def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
@@ -412,11 +414,10 @@ def rasterize_scanpy(fig: Figure) -> None:
     Rasterize figure containing Scatter plots of single cells
     such as PCA and UMAP plots drawn by Scanpy.
     """
-    # TODO: avoid rasterization of matplotlib.offsetbox.VPacker at least
     import warnings
 
     with warnings.catch_warnings(record=False) as w:
-        warnings.simplefilter("error")
+        warnings.simplefilter("ignore")
         clss = (
             matplotlib.text.Text,
             matplotlib.axis.XAxis,
@@ -428,5 +429,40 @@ def rasterize_scanpy(fig: Figure) -> None:
                     if not __c.get_children():
                         __c.set_rasterized(True)
                     for _cc in __c.get_children():
-                        if not isinstance(__c, clss):
+                        if not isinstance(_cc, clss):
                             _cc.set_rasterized(True)
+
+
+def add_centroids(a, ax=None, res=None, column=None, algo="umap"):
+    """
+
+    a: AnnData
+    ax: matplotlib.Axes.axes
+    res: resolution of clusters to label
+    """
+    from numpy_groupies import aggregate
+
+    if ax is None:
+        ax = plt.gca()
+
+    if column is None:
+        # try to guess the clustering key_added
+        if res is None:
+            try:
+                lab = a.obs.columns[a.obs.columns.str.contains("cluster_")][0]
+            except:
+                lab = a.obs.columns[a.obs.columns.str.contains("leiden")][0]
+        else:
+            lab = f"cluster_{res}"
+    else:
+        lab = column
+
+    # # # centroids:
+    cent = aggregate(
+        a.obs[lab].cat.codes,
+        a.obsm[f"X_{algo}"][:, :2],
+        func="mean",
+        axis=0,
+    )
+    for i, clust in enumerate(a.obs[lab].sort_values().unique()):
+        ax.text(*cent[i], s=clust)

@@ -740,7 +740,9 @@ class Project:
             )[
                 "cluster"
             ]  # .astype(str)
-        assert isinstance(clusters.index, pd.MultiIndex)
+        assert isinstance(
+            clusters.index, pd.MultiIndex
+        ), "Series index must be "
         assert clusters.index.names == id_cols
         self._clusters = clusters
         for sample in samples or self.samples:

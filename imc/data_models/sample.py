@@ -442,7 +442,7 @@ class IMCSample:
         set_attribute: bool = True,
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
-    ) -> Optional[DataFrame]:
+    ) -> DataFrame:
         """
         Measure the intensity of each channel in each single cell.
         """
@@ -451,13 +451,14 @@ class IMCSample:
         quantification = quantify_cells_rois(
             rois or self.rois, intensity, morphology
         )
-        if not set_attribute:
-            return quantification
-        self.quantification = quantification
-        return None
+        if set_attribute:
+            self.quantification = quantification
+        return quantification
 
     def quantify_cell_intensity(
-        self, rois: Optional[List["ROI"]] = None, **kwargs,
+        self,
+        rois: Optional[List["ROI"]] = None,
+        **kwargs,
     ) -> DataFrame:
         """
         Measure the intensity of each channel in each single cell.
@@ -467,7 +468,9 @@ class IMCSample:
         return quantify_cell_intensity_rois(rois or self.rois, **kwargs)
 
     def quantify_cell_morphology(
-        self, rois: Optional[List["ROI"]] = None, **kwargs,
+        self,
+        rois: Optional[List["ROI"]] = None,
+        **kwargs,
     ) -> DataFrame:
         """
         Measure the shape parameters of each single cell.

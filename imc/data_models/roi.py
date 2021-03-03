@@ -20,6 +20,7 @@ try:
     from typing import Literal
 except ImportError:
     from typing_extensions import Literal  # 3.7
+from functools import partial
 
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
@@ -31,6 +32,7 @@ import matplotlib.patches as mpatches  # type: ignore
 import seaborn as sns  # type: ignore
 
 import networkx as nx  # type: ignore
+from skimage.filters import gaussian  # type: ignore
 from skimage.exposure import equalize_hist as eq  # type: ignore
 from skimage.segmentation import clear_border  # type: ignore
 
@@ -511,6 +513,7 @@ class ROI:
         log: bool = False,
         equalize: bool = False,
         minmax: bool = False,
+        smooth: Optional[int] = None,
         dont_warn: bool = False,
     ) -> Tuple[str, Array, Tuple[float, float]]:
         """
@@ -577,6 +580,11 @@ class ROI:
         f = np.log1p if log else _idenv
         g = eq if equalize else _idenv
         h = minmax_scale if minmax else _idenv
+        j = (
+            partial(gaussian, sigma=smooth, mode="reflect")
+            if smooth is not None
+            else _idenv
+        )
         excluded = self.channel_exclude[self.channel_exclude]
 
         if isinstance(channel, int):
@@ -620,7 +628,7 @@ class ROI:
                     # # LOGGER.error(msg)
                     raise ValueError(msg)
         vminmax = arr.min(), arr.max()
-        arr = h(g(f((arr))))
+        arr = j(h(g(f((arr)))))
         return label, arr, vminmax
 
     def _get_channels(
@@ -649,6 +657,9 @@ class ROI:
         ax: Optional[Axis] = None,
         equalize: bool = True,
         log: bool = True,
+        minmax: bool = True,
+        smooth: Optional[int] = None,
+        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
         add_scale: bool = True,
         add_range: bool = True,
         **kwargs,
@@ -664,12 +675,15 @@ class ROI:
         """
         _ax = ax
         channel, p, _minmax = self._get_channel(
-            channel, log=log, equalize=equalize
+            channel, log=log, equalize=equalize, minmax=minmax
         )
+        p = p.squeeze()
 
         if _ax is None:
             _, _ax = plt.subplots(1, 1, figsize=(4, 4))
-        _ax.imshow(p.squeeze(), rasterized=True, **kwargs)
+        if position is not None:
+            p = p[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
+        _ax.imshow(p, rasterized=True, **kwargs)
         if add_scale:
             _add_scale(_ax)
         if add_range:
@@ -686,22 +700,33 @@ class ROI:
         equalize: bool = None,
         log: bool = True,
         minmax: bool = True,
+        smooth: Optional[int] = None,
+        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
         add_scale: bool = True,
         add_range: bool = True,
         share_axes: bool = True,
         **kwargs,
     ) -> Optional[Figure]:
-        """If axes is given it must be length channels"""
+        """
+
+        If axes is given it must be length channels
+
+        **kwargs: dict
+            Additional keyword arguments will be passed to imc.graphics.merge_channels.
+            Pass 'target_colors' to select colors to use when using `merged`.
+
+        """
         # TODO: optimize this by avoiding reading stack for every channel
         if channels is None:
             channels = self.channel_labels.index
 
         if axes is None:
             n, m = (1, 1) if merged else get_grid_dims(len(channels))
+            ar = self.shape[1] / self.shape[2]
             fig, _axes = plt.subplots(
                 n,
                 m,
-                figsize=(m * 4, n * 4),
+                figsize=(m * 4, n * 4 * ar),
                 squeeze=False,
                 sharex=share_axes,
                 sharey=share_axes,
@@ -717,11 +742,21 @@ class ROI:
                 equalize = True
 
             names, arr, minmaxes = self._get_channels(
-                list(channels), log=log, equalize=equalize, minmax=minmax
+                list(channels),
+                log=log,
+                equalize=equalize,
+                minmax=minmax,
+                smooth=smooth,
             )
             arr2, colors = merge_channels(arr, return_colors=True, **kwargs)
+
+            if position is not None:
+                arr2 = arr2[
+                    slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)
+                ]
+
             x, y, _ = arr2.shape
-            _axes[0].imshow(arr2 / arr2.max())
+            _axes[0].imshow(minmax_scale(arr2))
             x = x * 0.05
             y = y * 0.05
             bbox = dict(
@@ -735,7 +770,7 @@ class ROI:
                 names.split(","),
                 colors,
                 ax=_axes[0],
-                fontsize=3,
+                fontsize=6,
                 bbox=bbox,
             )
             if add_scale:
@@ -752,12 +787,15 @@ class ROI:
                     ax=_axes[i],
                     equalize=equalize,
                     log=log,
+                    position=position,
                     add_scale=add_scale,
                     add_range=add_range,
                     **kwargs,
                 )
         for _ax in _axes:  # [i + 1 :]
             _ax.axis("off")
+        if "fig" in locals():
+            fig.subplots_adjust(wspace=0.1, hspace=0.1)
         return fig if axes is None else None
 
     def stack_to_probabilities(self):
@@ -822,6 +860,7 @@ class ROI:
         palette: Optional[str] = "tab20",
         add_scale: bool = True,
         add_legend: bool = True,
+        legend_kwargs: Dict = {},
     ) -> Union[Figure, List[Patch]]:
         """
         If ax is given it must match number of `cell_type_combinations`.
@@ -842,9 +881,7 @@ class ROI:
             # that will help having consistent color across ROIs
             if not ns.isnull().any():
                 ns = ns.astype(int)
-                # ns.index = ns.values
                 clusters = clusters.replace(dict(zip(labels, ns)))
-                # clusters -= clusters.min()
             else:
                 ns = labels.index.to_series()
                 clusters = clusters.replace(
@@ -853,6 +890,9 @@ class ROI:
         else:
             labels = sorted(np.unique(clusters.values))
             ns = pd.Series(range(len(labels)))
+
+        if ns.min() == 0:
+            ns += 1
 
         # simply plot all cell types jointly
         # TODO: fix use of cell_type_combinations
@@ -896,7 +936,7 @@ class ROI:
             axes[i, 0].imshow(rgb)
             colors = (
                 pd.Series(sns.color_palette(palette, max(ns.values + 1)))
-                .reindex(ns - ns.min())
+                .reindex(ns - 1)
                 .values
             )
             patches += [
@@ -908,7 +948,7 @@ class ROI:
                 _add_scale(axes[i, 0])
 
         if add_legend:
-            _add_legend(patches, axes[-1, 0])
+            _add_legend(patches, axes[-1, 0], **legend_kwargs)  #
         return fig if ax is None else patches
 
     def get_distinct_marker_sets(
@@ -1048,7 +1088,13 @@ class ROI:
             )
             i += 1
         _axes[3 + i].set_title("Cells")
-        _axes[3 + i].imshow(self.cell_mask > 0, cmap=get_random_label_cmap())
+        mask = self.cell_mask
+        if mask.dtype == "bool":
+            mask = mask > 0
+        mask = np.ma.masked_array(mask, mask == 0)
+        _axes[3 + i].imshow(
+            mask, cmap=get_random_label_cmap(), interpolation="none"
+        )
         if add_scale:
             _add_scale(_axes[3 + i])
         # To plot jointly

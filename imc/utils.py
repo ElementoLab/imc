@@ -310,7 +310,22 @@ def write_image_to_file(
             )
 
 
-def minmax_scale(x):
+def minmax_scale(x, by_channel=True):
+    """
+    Scale array to 0-1 range.
+
+    x: np.ndarray
+        Array to scale
+    by_channel: bool
+        Whether to perform scaling by the smallest dimension (channel).
+        Defaults to `True`.
+    """
+    if by_channel and (x.ndim == 3):
+        i = np.argmin(x.shape)
+        if i != 0:
+            x = np.moveaxis(x, i, 0)
+        x = np.asarray([minmax_scale(y) for y in x])
+        return np.moveaxis(x, 0, i)
     with np.errstate(divide="ignore", invalid="ignore"):
         return (x - x.min()) / (x.max() - x.min())
 
