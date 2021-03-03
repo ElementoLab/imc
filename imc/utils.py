@@ -669,214 +669,177 @@ def mcd_to_dir(
     #         ac.save_image(pjoin(output_dir, f"partition_{partition_id}", ""))
 
 
-# def mcd_to_dir_two_color(
-#     mcd_file: Path,
-#     pannel_csv: Path = None,
-#     ilastik_channels: List[str] = None,
-#     output_dir: Path = None,
-#     overwrite: bool = False,
-#     sample_name: str = None,
-#     partition_panels: bool = False,
-#     filter_full: bool = True,
-#     keep_original_roi_names: bool = False,
-#     allow_empty_rois: bool = True,
-#     only_crops: bool = False,
-#     n_crops: int = 5,
-#     crop_width: int = 500,
-#     crop_height: int = 500,
-# ) -> None:
-#     def get_dataframe_from_channels(mcd):
-#         return pd.DataFrame(
-#             [mcd.get_acquisition_channels(x) for x in session.acquisition_ids],
-#             index=session.acquisition_ids,
-#         )
+def plot_panoramas_rois(
+    yaml_spec: Path,
+    output_prefix: Path,
+    panorama_image_prefix: Optional[Path] = None,
+    save_arrays: bool = True,
+) -> None:
+    """
+    Plot the location of panoramas and ROIs of a IMC sample.
 
-#     def all_channels_equal(mcd):
-#         chs = get_dataframe_from_channels(mcd)
-#         return all(
-#             [
-#                 (chs[c].value_counts() == mcd.n_acquisitions).all()
-#                 for c in chs.columns
-#             ]
-#         )
+    yaml_spec: Union[str, pathlib.Path]
+        Path to YAML file containing the spec of the acquired sample.
+    output_prefix: Union[str, pathlib.Path]
+        Prefix path to output the joint image and arrays if `save_arrays` is `True`.
+    panorama_image_prefix: Union[str, pathlib.Path]
+        Prefix of images of panoramas captured by the Hyperion instrument.
+    save_arrays: bool
+        Whether to output arrays containing the images captured by the Hyperion instrument
+        in the locations of the ROIs.
+    """
+    import yaml
+    import imageio
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import numpy as np
+    import pandas as pd
 
-#     def get_panel_partitions(mcd):
-#         chs = get_dataframe_from_channels(mcd)
+    def get_pano_coords(pan):
+        x1, y1 = float(pan["SlideX1PosUm"]), float(pan["SlideY1PosUm"])
+        x2, y2 = float(pan["SlideX2PosUm"]), float(pan["SlideY2PosUm"])
+        x3, y3 = float(pan["SlideX3PosUm"]), float(pan["SlideY3PosUm"])
+        x4, y4 = float(pan["SlideX4PosUm"]), float(pan["SlideY4PosUm"])
+        x = min(x1, x2, x3, x4)
+        y = min(y1, y2, y3, y4)
+        width = max(x1, x2, x3, x4) - x
+        height = max(y1, y2, y3, y4) - y
+        return tuple(map(int, [x, y, width, height]))
 
-#         partitions = {k: set(k) for k in chs.drop_duplicates().index}
-#         for p in partitions:
-#             for _, row in chs.iterrows():
-#                 print(p, row.name)
-#                 if (row == chs.loc[list(partitions[p])[0]]).all():
-#                     partitions[p] = partitions[p].union(set([row.name]))
-#         return partitions.values()
+    def get_roi_coords(roi):
+        # start positions are in a different unit for some reason
+        x1, x2 = float(acq["ROIStartXPosUm"]) / 1000, float(acq["ROIEndXPosUm"])
+        y1, y2 = float(acq["ROIStartYPosUm"]) / 1000, float(acq["ROIEndYPosUm"])
+        x = min(x1, x2)
+        y = min(y1, y2)
+        width = max(x2, x1) - x
+        height = max(y1, y2) - y
+        return tuple(map(int, [x, y, width, height]))
 
-#     def clip_hot_pixels(img, hp_filter_shape=(3, 3), hp_threshold=50):
-#         if hp_filter_shape[0] % 2 != 1 or hp_filter_shape[1] % 2 != 1:
-#             raise ValueError(
-#                 "Invalid hot pixel filter shape: %s" % str(hp_filter_shape)
-#             )
-#         hp_filter_footprint = np.ones(hp_filter_shape)
-#         hp_filter_footprint[
-#             int(hp_filter_shape[0] / 2), int(hp_filter_shape[1] / 2)
-#         ] = 0
-#         max_img = ndi.maximum_filter(
-#             img, footprint=hp_filter_footprint, mode="reflect"
-#         )
-#         hp_mask = img - max_img > hp_threshold
-#         img = img.copy()
-#         img[hp_mask] = max_img[hp_mask]
-#         return img
+    if save_arrays:
+        assert (
+            panorama_image_prefix is not None
+        ), "If `save_arrays`, provide a `panorama_image_prefix`."
 
-#     if partition_panels:
-#         raise NotImplementedError(
-#             "Partitioning sample per panel is not implemented yet."
-#         )
+    spec = yaml.safe_load(open(yaml_spec, "r"))
+    w, h = int(spec["Slide"][0]["WidthUm"]), int(spec["Slide"][0]["HeightUm"])
+    fkws = dict(bbox_inches="tight")
 
-#     if pannel_csv is None and ilastik_channels is None:
-#         raise ValueError(
-#             "One of `pannel_csv` or `ilastik_channels` must be given!"
-#         )
-#     if ilastik_channels is None and pannel_csv is not None:
-#         panel = pd.read_csv(pannel_csv, index_col=0)
-#         ilastik_channels = panel.query("ilastik == 1").index.tolist()
+    aspect_ratio = w / h
+    fig, ax = plt.subplots(figsize=(4 * aspect_ratio, 4))
 
-#     H5_YXC_AXISTAG = json.dumps(
-#         {
-#             "axes": [
-#                 {
-#                     "key": "y",
-#                     "typeFlags": 2,
-#                     "resolution": 0,
-#                     "description": "",
-#                 },
-#                 {
-#                     "key": "x",
-#                     "typeFlags": 2,
-#                     "resolution": 0,
-#                     "description": "",
-#                 },
-#                 {
-#                     "key": "c",
-#                     "typeFlags": 1,
-#                     "resolution": 0,
-#                     "description": "",
-#                 },
-#             ]
-#         }
-#     )
+    colors = sns.color_palette("tab20c")
 
-#     # Parse MCD
-#     mcd = McdParser(mcd_file)
+    pano_pos = dict()
+    pano_imgs = dict()
+    for i, pano in enumerate(spec["Panorama"]):
+        if pano["Description"] == "ROIs":
+            continue
 
-#     if output_dir is None:
-#         output_dir = mcd_file.parent / "imc_dir"
-#     os.makedirs(output_dir, exist_ok=True)
-#     dirs = ["tiffs", "ilastik"]
-#     for d in dirs:
-#         os.makedirs(output_dir / d, exist_ok=True)
+        x, y, width, height = get_pano_coords(pano)
+        # print(pano['ID'], x, y, width, height)
+        pano_pos[pano["ID"]] = (x, y, width, height)
 
-#     if sample_name is None:
-#         sample_name = mcd.meta.metaname
+        # Try to read panorama image
+        try:
+            pano_img = imageio.imread(f"{panorama_image_prefix}{i + 1}.png")
+            pano_imgs[pano["ID"]] = pano_img
+            print(f"Read image file for panorama '{i + 1}'")
+            ax.imshow(pano_img, extent=(x, x + width, y, y + height))
+        except FileNotFoundError:
+            # # First panorama is the slide (won't be available)
+            # # Last panorama is not a real one
+            print(f"Could not find image file for panorama '{i + 1}'")
+            pass
 
-#     for i, ac_id in enumerate(session.acquisition_ids):
-#         print(ac_id)
-#         try:
-#             ac = mcd.get_imc_acquisition(ac_id)
-#         except imctools.io.abstractparserbase.AcquisitionError as e:
-#             if allow_empty_rois:
-#                 print(e)
-#                 continue
-#             raise e
+        # Plot rectangles
+        rect = matplotlib.patches.Rectangle(
+            (x, y), width, height, facecolor="none", edgecolor=colors[i]
+        )
+        ax.add_patch(rect)
+        ax.text(
+            (x + width / 2),
+            (y + height + 500),
+            s=f"Panorama '{pano['ID']}'",
+            ha="center",
+            color=colors[i],
+        )
+        ax.scatter((x + width / 2), (y + height), marker="^", color=colors[i])
 
-#         # Get output prefix
-#         if keep_original_roi_names:
-#             prefix = (
-#                 output_dir
-#                 / "tiffs"
-#                 / (ac.image_description.replace(" ", "_") + "_ac")
-#             )
-#         else:
-#             prefix = (
-#                 output_dir / "tiffs" / (sample_name + "-" + str(i + 1).zfill(2))
-#             )
+    colors = sns.color_palette("tab10")
+    for j, acq in enumerate(spec["Acquisition"]):
+        x, y, width, height = get_roi_coords(acq)
+        # print(acq['ID'], x, y, width, height)
 
-#         # Skip if not overwrite
-#         if (prefix + "_full.tiff").exists() and not overwrite:
-#             print(
-#                 "TIFF images exist and overwrite is set to `False`. Continuing."
-#             )
-#             continue
+        # Plot rectangle around ROI
+        rect = matplotlib.patches.Rectangle(
+            (x, y),
+            width,
+            height,
+            facecolor="none",
+            edgecolor=colors[j],
+            linestyle="--",
+        )
+        ax.add_patch(rect)
+        ax.text(
+            x + width / 2,
+            y - height,
+            s=f"ROI '{acq['ID']}'",
+            ha="center",
+            color=colors[j],
+        )
 
-#         # Filter channels
-#         channel_labels = build_channel_name(ac.channel_labels, ac.channel_names)
-#         to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-#         to_exp_ind = ac.get_metal_indices(
-#             list(map(lambda x: x[1].split(")")[0], to_exp.str.split("(")))
-#         )
-#         assert to_exp_ind == to_exp.index.tolist()
+        if not save_arrays:
+            continue
 
-#         # Filter hot pixels
-#         ac._data = np.asarray([clip_hot_pixels(x) for x in ac.data])
+        # Export ROI in panorama image
+        ## Find panorama containing ROI
+        dists = pd.Series(dtype=float)
+        for i, pos in pano_pos.items():
+            d1 = pos[0] - x
+            d2 = (x + width) - (pos[0] + pos[2])
+            d3 = pos[1] - y
+            d4 = (y + height) - (pos[0] + pos[3])
+            dists[i] = abs(d1) + abs(d2) + abs(d3) + abs(d4)
+        pano_img = pano_imgs[dists.idxmin()]
+        px, py, pw, ph = pano_pos[dists.idxmin()]
+        ry = abs(y - py - pano_img.shape[0])
 
-#         # Separate and merge nuclei and cytoplasmatic channels
-#         good = ~channel_labels.str.contains("EMPTY|BCKG|80ArAr|129Xe")
-#         nuc = channel_labels.str.contains("DNA|Histone")
-#         nuclear = np.asarray([False] * 3 + (good & nuc).values.tolist())
-#         cytopla = np.asarray([False] * 3 + (good & ~nuc).values.tolist())
+        ## Plot ROI within panorama
+        fig2, ax2 = plt.subplots(figsize=(4, 4))
+        ax2.imshow(pano_img)
+        rect = matplotlib.patches.Rectangle(
+            (x - px, ry),
+            width,
+            -height,
+            facecolor="none",
+            edgecolor=colors[j],
+            linestyle="--",
+        )
+        ax2.add_patch(rect)
+        fig2.savefig(
+            output_prefix + f"panorama_ROI_{j + 1}.png",
+            dpi=1600,
+            **fkws,
+        )
 
-#         std = lambda d: (d - d.min()) / (d.max() - d.min())
-#         f_nuc = std(np.asarray(list(map(std, ac.data[nuclear]))).sum(0))
-#         f_cyt = std(np.asarray(list(map(std, ac.data[cytopla]))).sum(0))
+        roi_img = pano_img[ry - height : ry, x - px : x - px + width, ...]
 
-#         # # check
-#         # fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
-#         # ax[0].imshow(f_nuc, cmap="viridis")
-#         # ax[1].imshow(f_cyt, cmap="viridis")
+        ## Plot ROI on its own
+        fig3, ax3 = plt.subplots(figsize=(4, 4))
+        ax3.imshow(roi_img)
+        fig3.savefig(output_prefix + f"ROI_{j + 1}.png", dpi=600, **fkws)
 
-#         # # zoom 2x
-#         # resize
-#         s = tuple(x * 2 for x in ac.shape[:-1])
-#         full = np.moveaxis(
-#             np.asarray([resize(f_nuc, s), resize(f_cyt, s)]) * 256, 0, -1
-#         ).astype(int)
+        # Save as array
+        np.save(output_prefix + f"ROI_{j + 1}", roi_img, allow_pickle=False)
 
-#         # Save input for ilastik prediction
-#         with h5py.File(
-#             prefix + "_ilastik_s2.two_channels.h5", mode="w"
-#         ) as handle:
-#             d = handle.create_dataset("stacked_channels", data=full)
-#             d.attrs["axistags"] = H5_YXC_AXISTAG
-
-#         # # random crops
-#         iprefix = (
-#             output_dir
-#             / "ilastik"
-#             / (ac.image_description.replace(" ", "_") + "_ac")
-#         )
-#         for _ in range(n_crops):
-#             x = np.random.choice(range(s[0] - crop_width))
-#             y = np.random.choice(range(s[1] - crop_height))
-#             crop = full[x : (x + crop_width), y : (y + crop_height), :]
-#             assert crop.shape == (crop_width, crop_height, 2)
-#             with h5py.File(
-#                 iprefix
-#                 + f"_ilastik_x{x}_y{y}_w{crop_width}_h{crop_height}.two_channels.h5",
-#                 mode="w",
-#             ) as handle:
-#                 d = handle.create_dataset("stacked_channels", data=crop)
-#                 d.attrs["axistags"] = H5_YXC_AXISTAG
-#         if only_crops:
-#             continue
-
-#         # Save full image as TIFF
-#         p = prefix + "_full.two_channels."
-#         ac.save_image(
-#             p + "tiff", metals=channel_labels.str.extract(r"\((.*)\)")[0]
-#         )
-#         channel_labels.to_csv(p + "csv")
-
-#     mcd.close()
+    ax.axis("off")
+    fig.savefig(
+        output_prefix + "joint_slide_panorama_ROIs.png",
+        dpi=300,
+        **fkws,
+    )
 
 
 def get_mean_expression_per_cluster(a: AnnData) -> DataFrame:
