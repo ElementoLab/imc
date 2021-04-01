@@ -435,7 +435,6 @@ def rasterize_scanpy(fig: Figure) -> None:
 
 def add_centroids(a, ax=None, res=None, column=None, algo="umap"):
     """
-
     a: AnnData
     ax: matplotlib.Axes.axes
     res: resolution of clusters to label
@@ -458,9 +457,10 @@ def add_centroids(a, ax=None, res=None, column=None, algo="umap"):
         lab = column
 
     # # # centroids:
+    offset = 0 if algo != "diffmap" else 1
     cent = aggregate(
         a.obs[lab].cat.codes,
-        a.obsm[f"X_{algo}"][:, :2],
+        a.obsm[f"X_{algo}"][:, 0 + offset : 2 + offset],
         func="mean",
         axis=0,
     )

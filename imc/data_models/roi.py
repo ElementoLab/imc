@@ -635,7 +635,7 @@ class ROI:
         self, channels: List[Union[int, str]], **kwargs
     ) -> Tuple[str, Array, Array]:
         """
-        Convinience function to get signal from various channels.
+        Convenience function to get signal from various channels.
         """
         labels = list()
         arrays = list()
