@@ -168,7 +168,7 @@ def split_image_into_tiles(
 
 def join_tiles_to_image(
     tiles: Dict[Tuple[int, int], Array], trim_all_zeros=True
-):
+) -> Array:
     grid = np.asarray(list(tiles.keys()))
 
     image_shape = np.array([0, 0])
@@ -370,6 +370,12 @@ def inflection_point(curve):
 
 
 def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
+    """
+
+    image: np.ndarray
+
+    mask_dict: dict[str, np.ndarray]
+    """
     cols = 1 + len(mask_dict)
 
     # Make RGB if multi channel
@@ -409,23 +415,25 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     return fig
 
 
-def deepcell_segment_probabilities(cyx_image):
+def deepcell_segment_probabilities(
+    probabilities: Array, compartment: str
+) -> Array:
     """"""
     from deepcell.applications import MultiplexSegmentation
 
-    app = MultiplexSegmentation()
-    pred = app.predict(
-        np.moveaxis(normalize(cyx_image[:-1, ...]), 0, -1)[np.newaxis, ...],
-        image_mpp=1,
-    ).squeeze()
+    # translate compartments
+    imc2dc = {
+        "cell": "whole-cell",
+        "cytoplasm": "whole-cell",
+        "nuclear": "nuclear",
+        "both": "both",
+    }
 
-    # from deepcell.applications import NuclearSegmentation
-    # app = NuclearSegmentation()
-    # pred2 = app.predict(
-    #     normalize(cyx_image, mode="xyc")[np.newaxis, ..., 0][..., np.newaxis],
-    #     image_mpp=1,
-    # ).squeeze()
-    return pred
+    app = MultiplexSegmentation()
+    pred: Array = app.predict(
+        probabilities[np.newaxis, ..., :-1], compartment=imc2dc[compartment]
+    )
+    return pred.squeeze()
 
 
 def segment_roi(
@@ -436,7 +444,7 @@ def segment_roi(
     save: bool = True,
     overwrite: bool = True,
     plot_segmentation: bool = True,
-) -> Array:
+) -> Dict[str, Array]:
     """
     Segment the area of an ROI.
 
@@ -459,17 +467,18 @@ def segment_roi(
     plot_segmentation: bool
         Whether to make a figure illustrating the segmentation.
     """
+    # todo: move into else to remove preparation when using probabilities
     image = prepare_stack(
         roi.stack, roi.channel_labels, compartment, roi.channel_exclude
     )
 
     if from_probabilities:
         assert model in ["deepcell"]
-        assert compartment in ["cytoplasm"]
-        mask = deepcell_segment_probabilities(
-            resize(roi.probabilities, (3,) + image.shape[:2])
-        )
-        # mask = ndi.label((mask, image.shape) > 0)
+        # todo: assign prob to image
+        prob = roi.probabilities
+        prob = resize(prob / prob.max(), (3,) + image.shape[1:])
+        prob = np.moveaxis(prob, 0, -1)
+        mask = deepcell_segment_probabilities(prob, compartment)
     else:
         assert model in ["deepcell", "stardist", "cellpose"]
         if model == "stardist":
@@ -502,6 +511,7 @@ def segment_roi(
         for comp in mask_dict:
             mask_file = roi._get_input_filename(comp + "_mask")
             if overwrite or (not overwrite and not mask_file.exists()):
+                print(mask_file)
                 tifffile.imwrite(mask_file, mask_dict[comp])
 
     if plot_segmentation:
@@ -513,7 +523,7 @@ def segment_roi(
             if overwrite or (not overwrite and not fig_file.exists()):
                 fig.savefig(fig_file, dpi=300, bbox_inches="tight")
 
-    return mask
+    return mask_dict
 
 
 def segment_decomposition():

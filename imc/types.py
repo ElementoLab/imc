@@ -58,8 +58,9 @@ class Path(pathlib.Path):
 
     def mkdir(
         self, mode=0o777, parents: bool = True, exist_ok: bool = True
-    ) -> None:
+    ) -> Path:
         super().mkdir(mode=mode, parents=parents, exist_ok=exist_ok)
+        return self
 
 
 GenericType = TypeVar("GenericType")

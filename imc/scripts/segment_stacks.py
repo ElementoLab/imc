@@ -15,10 +15,11 @@ import tifffile
 import matplotlib.pyplot as plt
 
 from imc.types import Path, Series, Array
-from imc.segmentation import segment_roi
+from imc.segmentation import segment_roi, plot_image_and_mask
 from imc.scripts import build_cli
 
 
+# TODO: make obsolete by having an ROI class instantiated from a stack file
 @dataclass
 class ROI_mock:
     # CYX array
@@ -85,15 +86,28 @@ def main(cli: List[str] = None) -> int:
     add = "nuc" if args.compartment == "nuclear" else ""
 
     for roi in rois:
-        mask_file = roi.stack_file.replace_(
-            ".tiff", f"_{add}mask{args.output_mask_suffix}.tiff"
-        )
-        if mask_file.exists() and not args.overwrite:
+        if args.compartment == "both":
+            mask_files = {
+                "cell": roi.stack_file.replace_(
+                    ".tiff", f"_mask{args.output_mask_suffix}.tiff"
+                ),
+                "nuclei": roi.stack_file.replace_(
+                    ".tiff", f"_nucmask{args.output_mask_suffix}.tiff"
+                ),
+            }
+        else:
+            mask_files = {
+                args.compartment: roi.stack_file.replace_(
+                    ".tiff", f"_{add}mask{args.output_mask_suffix}.tiff"
+                )
+            }
+        exists = all([f.exists() for f in mask_files.values()])
+        if exists and not args.overwrite:
             print(f"Mask for '{roi}' already exists, skipping...")
             continue
 
         print(f"Started segmentation of '{roi} with shape: '{roi.stack.shape}'")
-        mask = segment_roi(
+        mask_dict = segment_roi(
             roi,
             args.from_probabilities,
             args.model,
@@ -103,20 +117,22 @@ def main(cli: List[str] = None) -> int:
             args.plot,
         )
         if args.save:
-            if args.overwrite or (not mask_file.exists()):
-                tifffile.imwrite(mask_file, mask)
-
-            if args.plot:
-                fig_file = roi.stack_file.replace_(
-                    "_full.tiff",
-                    f"_segmentation_{args.model}_{args.compartment}.svg",
-                )
+            for comp in mask_dict:
+                mask_file = mask_files[comp]
                 if args.overwrite or (
-                    not args.overwrite and not fig_file.exists()
+                    not args.overwrite and not mask_file.exists()
                 ):
-                    fig = plt.gca().figure
-                    print(fig, fig_file)
-                    fig.savefig(fig_file, dpi=300, bbox_inches="tight")
+                    print(mask_file)
+                    tifffile.imwrite(mask_file, mask_dict[comp])
+
+        if args.plot:
+            fig_file = roi.stack_file.replace_(
+                "_full.tiff",
+                f"_segmentation_{args.model}_{args.compartment}.svg",
+            )
+            fig = plt.gca().figure
+            fig.savefig(fig_file, dpi=300, bbox_inches="tight")
+
         print(f"Finished segmentation of '{roi}'.")
 
     print("Finished with all files!")
