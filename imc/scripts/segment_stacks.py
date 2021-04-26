@@ -14,39 +14,10 @@ import pandas as pd
 import tifffile
 import matplotlib.pyplot as plt
 
+from imc import ROI
 from imc.types import Path, Series, Array
 from imc.segmentation import segment_roi, plot_image_and_mask
 from imc.scripts import build_cli
-
-
-# TODO: make obsolete by having an ROI class instantiated from a stack file
-@dataclass
-class ROI_mock:
-    # CYX array
-    stack_file: Path
-    # Series where index are int, values are channel names
-    channel_labels_file: Path
-    # Series where index are channels, values are bool
-    channel_exclude: Optional[Series] = None
-
-    name: Optional[str] = None
-
-    probabilities_file: Optional[Path] = None
-
-    def __repr__(self):
-        return self.name
-
-    @property
-    def stack(self) -> Array:
-        return tifffile.imread(self.stack_file)
-
-    @property
-    def channel_labels(self) -> Series:
-        return pd.read_csv(self.channel_labels_file, index_col=0, squeeze=True)
-
-    @property
-    def probabilities(self) -> Array:
-        return np.moveaxis(tifffile.imread(self.probabilities_file), -1, 0)
 
 
 def main(cli: List[str] = None) -> int:
@@ -56,30 +27,11 @@ def main(cli: List[str] = None) -> int:
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
     print(f"Starting analysis of {len(args.tiffs)} TIFF files: {fs}!")
 
-    # Prepare mock ROI objects
+    # Prepare ROI objects
     rois = list()
     for tiff in args.tiffs:
-        channel_labels_file = tiff.replace_(".tiff", ".csv")
-        if not channel_labels_file.exists():
-            print(
-                "Stack file does not have accompaning "
-                f"channel labels CSV file: '{tiff}'"
-            )
-            continue
-
-        roi = ROI_mock(
-            tiff, channel_labels_file, name=tiff.stem.replace("_full", "")
-        )
-        roi.probabilities_file = roi.stack_file.replace_(
-            "_full.tiff", "_Probabilities.tiff"
-        )
-
-        # convert string given at CLI to channel_exclude Series
-        exc = pd.Series(index=roi.channel_labels, dtype=bool)
-        if args.channel_exclude != "":
-            for ch in args.channel_exclude.split(","):
-                exc.loc[exc.index.str.contains(ch)] = True
-        roi.channel_exclude = exc
+        roi = ROI.from_stack(tiff)
+        roi.set_channel_exclude(args.channel_exclude.split(","))
         rois.append(roi)
 
     # Run segmentation
@@ -88,17 +40,13 @@ def main(cli: List[str] = None) -> int:
     for roi in rois:
         if args.compartment == "both":
             mask_files = {
-                "cell": roi.stack_file.replace_(
-                    ".tiff", f"_mask{args.output_mask_suffix}.tiff"
-                ),
-                "nuclei": roi.stack_file.replace_(
-                    ".tiff", f"_nucmask{args.output_mask_suffix}.tiff"
-                ),
+                "cell": roi._get_input_filename("cell_mask"),
+                "nuclei": roi._get_input_filename("nuclei_mask"),
             }
         else:
             mask_files = {
-                args.compartment: roi.stack_file.replace_(
-                    ".tiff", f"_{add}mask{args.output_mask_suffix}.tiff"
+                args.compartment: roi._get_input_filename(
+                    args.compartment + "_mask"
                 )
             }
         exists = all([f.exists() for f in mask_files.values()])
@@ -107,32 +55,21 @@ def main(cli: List[str] = None) -> int:
             continue
 
         print(f"Started segmentation of '{roi} with shape: '{roi.stack.shape}'")
-        mask_dict = segment_roi(
-            roi,
-            args.from_probabilities,
-            args.model,
-            args.compartment,
-            False,
-            args.overwrite,
-            args.plot,
-        )
-        if args.save:
-            for comp in mask_dict:
-                mask_file = mask_files[comp]
-                if args.overwrite or (
-                    not args.overwrite and not mask_file.exists()
-                ):
-                    print(mask_file)
-                    tifffile.imwrite(mask_file, mask_dict[comp])
-
-        if args.plot:
-            fig_file = roi.stack_file.replace_(
-                "_full.tiff",
-                f"_segmentation_{args.model}_{args.compartment}.svg",
+        try:
+            mask_dict = segment_roi(
+                roi,
+                from_probabilities=args.from_probabilities,
+                model=args.model,
+                compartment=args.compartment,
+                postprocessing=args.postprocessing,
+                save=args.save,
+                overwrite=args.overwrite,
+                plot_segmentation=args.plot,
             )
-            fig = plt.gca().figure
-            fig.savefig(fig_file, dpi=300, bbox_inches="tight")
-
+        except ValueError as e:
+            print("Error segmenting stack. Perhaps XY shape is not compatible?")
+            print(e)
+            continue
         print(f"Finished segmentation of '{roi}'.")
 
     print("Finished with all files!")

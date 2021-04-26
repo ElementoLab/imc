@@ -171,7 +171,7 @@ class IMCSample:
             roi = ROI(
                 name=row[self.roi_name_atribute],
                 roi_number=row[self.roi_number_atribute] if has_numbers else i,
-                root_dir=self.root_dir,
+                root_dir=self.root_dir / "tiffs",
                 sample=self,
                 prj=self.prj,
                 **row.drop(

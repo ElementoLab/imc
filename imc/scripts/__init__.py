@@ -198,11 +198,27 @@ cli_config = {
             },
             {
                 "args": ["--overwrite"],
-                "kwargs": {"dest": "overwrite", "action": "store_true"},
+                "kwargs": {
+                    "dest": "overwrite",
+                    "action": "store_true",
+                    "help": "Whether to overwrite outputs.",
+                },
             },
             {
                 "args": ["--no-plot"],
-                "kwargs": {"dest": "plot", "action": "store_false"},
+                "kwargs": {
+                    "dest": "plot",
+                    "action": "store_false",
+                    "help": "Whether plots demonstrating segmentation should be made.",
+                },
+            },
+            {
+                "args": ["--no-post-processing"],
+                "kwargs": {
+                    "dest": "postprocessing",
+                    "action": "store_false",
+                    "help": "Whether postprocessing of DeepCell segmentation for compartment 'both' should not be performed.",
+                },
             },
         ],
     },

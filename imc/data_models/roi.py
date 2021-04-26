@@ -4,6 +4,7 @@
 A class to model a imaging mass cytometry acquired region of interest (ROI).
 """
 
+from __future__ import annotations
 import re
 from typing import (
     Dict,
@@ -26,6 +27,7 @@ import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 import scipy  # type: ignore
 import scipy.ndimage as ndi  # type: ignore
+
 
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.patches as mpatches  # type: ignore
@@ -175,17 +177,35 @@ class ROI:
             )
         )
 
+    @classmethod
+    def from_stack(self, stack_file: Union[Path, str], **kwargs) -> ROI:
+        import re
+
+        if isinstance(stack_file, str):
+            stack_file = Path(stack_file)
+        stack_file = stack_file.absolute()
+        reason = "Stack file must end with '_full.tiff' for the time being."
+        assert stack_file.endswith("_full.tiff"), reason
+        roi_numbers = re.findall(r".*-(\d+)", stack_file.as_posix())
+        reason = "Could not determine ROI number."
+        assert len(roi_numbers) == 1, reason
+        return ROI(
+            name=stack_file.stem.replace("_full", ""),
+            root_dir=stack_file.parent,
+            stacks_dir=stack_file.parent,
+            roi_number=roi_numbers[0],
+        )
+
+    # TODO: read from OME-TIFF
     @property
     def channel_labels(self) -> Series:
         """Return a Series with a string for each channel in the ROIs stack."""
         if self._channel_labels is not None:
             return self._channel_labels
-        sample = cast(self.sample)
 
         # read channel labels specifically for ROI
-        channel_labels_file = Path(
-            self.channel_labels_file
-            or sample.root_dir / self.stacks_dir / (self.name + "_full.csv")
+        channel_labels_file = self._get_input_filename("stack").replace_(
+            ".tiff", ".csv"
         )
         if not channel_labels_file.exists():
             msg = (
@@ -193,14 +213,14 @@ class ROI:
                 f"and '{channel_labels_file}' could not be found!"
             )
             raise FileNotFoundError(msg)
-        # self._channel_labels = pd.read_csv(channel_labels_file, header=None, squeeze=True)
+
         preview = pd.read_csv(channel_labels_file, header=None, squeeze=True)
         if isinstance(preview, pd.Series):
             order = preview.to_frame(name="ChannelName").set_index(
                 "ChannelName"
             )
             # read reference
-            ref: DataFrame = cast(sample.panel_metadata)
+            ref: DataFrame = self.sample.panel_metadata
             ref = ref.loc[
                 ref["AcquisitionID"].isin(
                     [self.roi_number, str(self.roi_number)]
@@ -213,7 +233,7 @@ class ROI:
             )
         else:
             preview = preview.dropna().set_index(0).squeeze().rename("channel")
-            preview.index = preview.index.astype(int)
+            preview.index = preview.index.astype(int).rename("index")
             self._channel_labels = preview
         return self._channel_labels
 
@@ -228,6 +248,10 @@ class ROI:
             return self._channel_exclude
 
     def set_channel_exclude(self, values: Union[List[str], Series]):
+        """
+        values: List | Series
+            Sequence of channels to exclude.
+        """
         self._channel_exclude = self.channel_labels.isin(values).set_axis(
             self.channel_labels
         )
@@ -392,7 +416,6 @@ class ROI:
             - "cell_mask": TIFF file with mask for cells
             - "cell_type_assignments": CSV file with cell type assignemts for each cell
         """
-        sample = cast(self.sample)
         to_read = {
             "stack": (self.stacks_dir, "_full.tiff"),
             # "features": (self.stacks_dir, "_ilastik_s2_Features.h5"),
@@ -411,7 +434,7 @@ class ROI:
             ),
         }
         dir_, suffix = to_read[input_type]
-        return cast(sample.root_dir) / cast(dir_) / (self.name + suffix)
+        return self.root_dir / (self.name + suffix)
 
     def get(self, attr):
         try:

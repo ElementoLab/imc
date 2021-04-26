@@ -379,8 +379,9 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     cols = 1 + len(mask_dict)
 
     # Make RGB if multi channel
-    if len(image.shape) == 3 and image.shape[0] == 2:
-        image = np.stack([image[0], image[1], np.zeros(image.shape[1:])])
+    if len(image.shape) == 3:
+        if image.shape[0] == 2:
+            image = np.stack([image[0], image[1], np.zeros(image.shape[1:])])
         image = np.moveaxis(image, 0, -1)
 
     for comp in mask_dict:
@@ -393,13 +394,12 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     )
     axes[0].imshow(image, rasterized=True)
     axes[0].set(title=f"Original signal")
+    cmap = random_label_cmap()
     for ax in axes:
         ax.axis("off")
     for i, comp in enumerate(mask_dict):
         ax = axes[1 + i]
-        ax.imshow(
-            mask_dict[comp], cmap=random_label_cmap(), interpolation="none"
-        )
+        ax.imshow(mask_dict[comp], cmap=cmap, interpolation="none")
         ax.set(title=f"{comp.capitalize()} mask")
     # for i, comp in enumerate(mask_dict):
     #     ax = axes[1 + len(mask_dict) + i]
@@ -436,11 +436,267 @@ def deepcell_segment_probabilities(
     return pred.squeeze()
 
 
+def deepcell_postprocess_both_compartments(
+    mask: Array,
+    dominant_nuclei_threshold: float = 0.8,
+    plot: bool = False,
+    roi: "ROI" = None,
+    fig_output_prefix: Path = None,
+    verbose: bool = False,
+) -> Array:
+    import pandas as pd
+    import seaborn as sns
+    from skimage.segmentation import find_boundaries
+
+    def inspect_mask_pair(
+        cell_mask: Array, nuclei_mask: Array
+    ) -> Tuple[int, list, dict]:
+        match = 0
+        unpaireds = list()
+        multiplets = dict()
+        for cell in np.unique(cell_mask)[1:]:
+            o = np.unique(nuclei_mask[cell_mask == cell])
+            o = [x for x in o if x != 0]
+            if not o:
+                # cells with no nucleus
+                unpaireds.append(cell)
+            elif len(o) == 1:
+                # cells with exactly one nucleus
+                match += 1
+            else:
+                # cells with more than one nucleus
+                t = (cell_mask == cell).sum()
+                fractions = dict()
+                for nuclei in o:
+                    m = (nuclei_mask == nuclei) & (cell_mask == cell)
+                    fractions[nuclei] = len(cell_mask[m]) / t
+                s = sum(fractions.values())
+                multiplets[cell] = {k: v / s for k, v in fractions.items()}
+        return match, unpaireds, multiplets
+
+    def apply_postprocess(
+        cell_mask: Array,
+        nuclei_mask: Array,
+        max_iter: int = 5,
+        complement_singlets: bool = True,
+        remove_border_from_complement: bool = False,
+        remove_ambigous: bool = True,
+    ) -> Tuple[Array, Array]:
+        it = 0
+        match, unpaireds, multiplets = inspect_mask_pair(cell_mask, nuclei_mask)
+        while not ((len(unpaireds) == 0) and (len(multiplets) == 0)):
+            if it == max_iter:
+                if verbose:
+                    print("Reached maximum number of iterations.")
+                break
+            match, unpaireds, multiplets = inspect_mask_pair(
+                cell_mask, nuclei_mask
+            )
+            # # 1. fix cells without nuclei
+            if complement_singlets:
+                # # # set nuclei to the whole mask minus one
+                max_c = nuclei_mask.max()
+                n_new = np.zeros(nuclei_mask.shape, dtype=int)
+                for i, cell in enumerate(unpaireds, 1):
+                    nuclei_mask[cell_mask == cell] = max_c + i
+                    n_new[cell_mask == cell] = max_c + i
+                # remove 1 pixel from border
+                if remove_border_from_complement:
+                    b = find_boundaries(n_new, 1, mode="inner", background=0)
+                    nuclei_mask[b] = 0
+                if verbose:
+                    print(f"Added {len(unpaireds)} nuclei.")
+
+            # # 2. fix cells overlaping more than one nuclei
+            # # # If the matching is above threshold (i.e. 80%) then remove non-dominant nuclei
+            # # # Else remove nuclei and cell
+            if remove_ambigous:
+                match, unpaireds, multiplets = inspect_mask_pair(
+                    cell_mask, nuclei_mask
+                )
+                n_removed = 0
+                for cell, props in multiplets.items():
+                    if max(props.values()) > dominant_nuclei_threshold:
+                        dominant = pd.Series(props).idxmax()
+                        nuclei_mask[
+                            (cell_mask == cell)
+                            & (nuclei_mask != dominant)
+                            & (nuclei_mask > 0)
+                        ] = dominant
+                    else:
+                        m = cell_mask == cell
+                        cell_mask[cell_mask == cell] = 0
+                        m = m | (np.isin(cell_mask, props.keys()))
+                        rem = np.unique(nuclei_mask[m])
+                        nuclei_mask[np.isin(nuclei_mask, rem)] = 0
+                        n_removed += 1
+                if verbose:
+                    print(
+                        f"Removed {n_removed} cells with ambiguous nuclei assignments."
+                    )
+            it += 1
+        return cell_mask, nuclei_mask
+
+    if (mask.ndim != 3) and (mask.shape[-1] != 2):
+        raise ValueError(
+            "Array must contain more than one segmentation layer of shape "
+            "(X,Y,2), the last dimension assumed to be cell and nuclei."
+        )
+
+    cell_mask, nuclei_mask = mask[..., 0].copy(), mask[..., 1].copy()
+
+    # Inspect cell-nuclei relationship
+    lc = len(np.unique(cell_mask)) - 1
+    ln = len(np.unique(nuclei_mask)) - 1
+    pre_match, pre_unpaireds, pre_multiplets = inspect_mask_pair(
+        cell_mask, nuclei_mask
+    )
+
+    print(f"Statistics prior postprocessing:")
+    print(f"\tSegmentation has {lc} cells and {ln} nuclei.")
+    print(f"\t{pre_match} exact matches between cells and nuclei.")
+    print(f"\t{len(pre_unpaireds)} cells without nuclei.")
+    print(f"\t{len(pre_multiplets)} cells overlaping more than one nuclei.")
+    fracts = np.asarray([max(v.values()) for k, v in pre_multiplets.items()])
+    print(
+        "Found mean overlap between cells and nuclei in "
+        f"multiplets to be {fracts.mean():.3f}(+/-){fracts.std():.3f}."
+    )
+
+    # Postprocess
+    print("Applying postprocessing to segmentation masks...")
+    cell_mask, nuclei_mask = apply_postprocess(
+        cell_mask, nuclei_mask, remove_border_from_complement=True
+    )
+    nuclei_mask, cell_mask = apply_postprocess(
+        nuclei_mask,
+        cell_mask,
+        complement_singlets=False,
+        remove_ambigous=True,
+        remove_border_from_complement=False,
+    )
+    cell_mask, nuclei_mask = apply_postprocess(
+        cell_mask, nuclei_mask, remove_border_from_complement=True
+    )
+
+    # Report postprocessed stats:
+    post_match, post_unpaireds, post_multiplets = inspect_mask_pair(
+        cell_mask, nuclei_mask
+    )
+    lc = len(np.unique(cell_mask)) - 1
+    ln = len(np.unique(nuclei_mask)) - 1
+    print("After postprocessing stats:")
+    print(f"\tSegmentation has {lc} cells and {ln} nuclei.")
+    print(f"\t{post_match} exact matches between cells and nuclei.")
+    print(f"\t{len(post_unpaireds)} cells without nuclei.")
+    print(f"\t{len(post_multiplets)} cells overlaping more than one nucleus.")
+
+    # Report postprocessed stats:
+    post_match, post_unpaireds, post_multiplets = inspect_mask_pair(
+        nuclei_mask, cell_mask
+    )
+    print(f"\t{post_match} exact matches between nuclei and cells.")
+    print(f"\t{len(post_unpaireds)} nuclei without cells.")
+    print(f"\t{len(post_multiplets)} nuclei overlaping more than one cell.")
+
+    # # 3. align nuclei and cell integer IDs
+    new_cell = np.zeros(cell_mask.shape, dtype="uint64")
+    # could probably downcast these
+    new_nuclei = np.zeros(cell_mask.shape, dtype="uint64")
+    for i, cell in enumerate(np.unique(cell_mask)[1:], 1):
+        new_cell[cell_mask == cell] = i
+        # # find out number of nuclei mask:
+        sel = np.unique(nuclei_mask[cell_mask == cell])
+        try:
+            old = [x for x in sel if x != 0][0]
+            new_nuclei[nuclei_mask == old] = i
+        except IndexError:
+            pass
+    cell_mask = new_cell
+    nuclei_mask = new_nuclei
+
+    if plot:
+        reason = "If `plot`, `fig_output_prefix` must be given!"
+        assert fig_output_prefix is not None, reason
+        rows = 3 if roi is None else 4
+        fig, axes = plt.subplots(
+            rows, 2, figsize=(2 * 4, rows * 4), sharex=True, sharey=True
+        )
+        cmap = random_label_cmap()
+        for i, (tmpmask, layer) in enumerate(
+            [(mask[..., 0], "Cell mask"), (mask[..., 1], "Nuclei mask")]
+        ):
+            tmpmask = np.ma.masked_array(tmpmask, mask=tmpmask == 0)
+            axes[0][i].imshow(tmpmask, cmap=cmap, interpolation="none")
+            axes[0][i].set(title=f"Prior: {layer}")
+
+        c_unpaired = mask[..., 0].copy()
+        c_unpaired[
+            ~np.isin(mask[..., 0], np.unique(np.asarray(pre_unpaireds)))
+        ] = 0
+        c_multiplets = mask[..., 0].copy()
+        c_multiplets[
+            ~np.isin(mask[..., 0], np.unique(list(pre_multiplets.keys())))
+        ] = 0
+        axes[1][0].imshow(c_multiplets, cmap=cmap, interpolation="none")
+        axes[1][0].set(title="Cells overlapping multiple nuclei")
+        axes[1][1].imshow(c_unpaired, cmap=cmap, interpolation="none")
+        axes[1][1].set(title="Cells without nuclei")
+
+        for i, (tmpmask, layer) in enumerate(
+            [(cell_mask, "Cell mask"), (nuclei_mask, "Nuclei mask")]
+        ):
+            tmpmask = np.ma.masked_array(tmpmask, mask=tmpmask == 0)
+            axes[2][i].imshow(tmpmask, cmap=cmap, interpolation="none")
+            axes[2][i].set(title=f"Post: {layer}")
+
+        if roi is not None:
+            try:
+                for ax, ch in zip(axes[3], ["DNA", "mean"]):
+                    ax.imshow(
+                        np.log1p(roi._get_channel(ch, dont_warn=True)[1]),
+                        interpolation="bilinear",
+                    )
+                    ax.set(title=ch)
+            except ValueError:
+                pass
+        for ax in axes.flat:
+            ax.axis("off")
+        fig.savefig(
+            fig_output_prefix + "deepcell.cell-nuclei_relationships.svg",
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close(fig)
+
+    # # Visualize fraction of cells with clear dominant vs ambiguous nuclei
+    if plot:
+        assert fig_output_prefix is not None, reason
+        fig, ax = plt.subplots()
+        sns.histplot(fracts, ax=ax)
+        ax.axvline(dominant_nuclei_threshold, color="grey", linestyle="--")
+        ax.set(
+            title="Cells overlapping more than one nuclei",
+            xlabel="Fraction of dominant nuclei in cell",
+            ylabel="Cell count",
+        )
+        fig.savefig(
+            fig_output_prefix
+            + "deepcell.cell-nuclei.dominant_nuclei_area_distribution.svg",
+            dpi=300,
+            bbox_inches="tight",
+        )
+        plt.close(fig)
+
+    return np.moveaxis(np.stack([cell_mask, nuclei_mask]), 0, -1)
+
+
 def segment_roi(
     roi: "ROI",
     from_probabilities: bool = False,
     model: Union[Literal["deepcell", "stardist"]] = "deepcell",
     compartment: str = "nuclear",
+    postprocessing: bool = True,
     save: bool = True,
     overwrite: bool = True,
     plot_segmentation: bool = True,
@@ -467,20 +723,28 @@ def segment_roi(
     plot_segmentation: bool
         Whether to make a figure illustrating the segmentation.
     """
-    # todo: move into else to remove preparation when using probabilities
-    image = prepare_stack(
-        roi.stack, roi.channel_labels, compartment, roi.channel_exclude
-    )
-
     if from_probabilities:
         assert model in ["deepcell"]
-        # todo: assign prob to image
-        prob = roi.probabilities
-        prob = resize(prob / prob.max(), (3,) + image.shape[1:])
-        prob = np.moveaxis(prob, 0, -1)
-        mask = deepcell_segment_probabilities(prob, compartment)
+        image = roi.probabilities
+        shape = tuple([int(x / 2) for x in image.shape[1:]])
+        image = resize(image / image.max(), (3,) + shape)
+        mask = deepcell_segment_probabilities(
+            np.moveaxis(image, 0, -1), compartment
+        )
+        if postprocessing:
+            mask = deepcell_postprocess_both_compartments(
+                mask,
+                plot=False,
+                roi=roi,
+                fig_output_prefix=roi._get_input_filename("stack").replace_(
+                    ".tiff", "_segmentation."
+                ),
+            )
     else:
         assert model in ["deepcell", "stardist", "cellpose"]
+        image = prepare_stack(
+            roi.stack, roi.channel_labels, compartment, roi.channel_exclude
+        )
         if model == "stardist":
             assert compartment == "nuclear"
             mask = stardist_segment_nuclei(image)
@@ -518,7 +782,8 @@ def segment_roi(
         fig = plot_image_and_mask(image, mask_dict)
         if save:
             fig_file = roi._get_input_filename("stack").replace_(
-                ".tiff", "_segmentation.svg"
+                ".tiff",
+                f"_segmentation_{model}_{compartment}.svg",
             )
             if overwrite or (not overwrite and not fig_file.exists()):
                 fig.savefig(fig_file, dpi=300, bbox_inches="tight")
