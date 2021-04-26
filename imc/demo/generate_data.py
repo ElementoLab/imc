@@ -3,13 +3,12 @@
 from typing import Tuple, List, Dict, Union
 import tempfile
 
-
 import numpy as np
 import scipy.ndimage as ndi
 import matplotlib.pyplot as plt
 import tifffile
 import pandas as pd
-
+import skimage
 
 from imc import Project
 from imc.types import Array, Figure, Path
@@ -26,11 +25,36 @@ def generate_mask(
     # Cells are placed in an effective mask area which is not touching borders
     eff_mask = mask[1:-1, 1:-1]
     centroids = np.random.choice(
-        np.arange(eff_mask.size), int(np.ceil(eff_mask.size * seeding_density)), replace=False
+        np.arange(eff_mask.size),
+        int(np.ceil(eff_mask.size * seeding_density)),
+        replace=False,
     )
     eff_mask.flat[centroids] = True  # type: ignore
     mask[1:-1, 1:-1] = eff_mask
     return ndi.label(mask, structure=np.zeros((3, 3)))[0]
+
+
+def generate_disk_masks(
+    shape: Tuple[int, int] = (128, 128),
+    seeding_density: float = 0.1,
+    disk_diameter: int = 10,
+):
+    mask = np.zeros(shape, dtype=bool)
+
+    area = np.multiply(*mask.shape)
+    n = int(np.ceil(mask.size * seeding_density) * (disk_diameter ** 2 / area))
+    centroids = np.random.choice(np.arange(mask.size), n, replace=False)
+
+    r = disk_diameter // 2
+    disk = skimage.morphology.disk(r)
+    x = centroids // shape[0]
+    y = centroids % shape[1]
+    for i in range(n):
+        s = mask[x[i] - r : x[i] + r + 1, y[i] - r : y[i] + r + 1].shape
+        mask[x[i] - r : x[i] + r + 1, y[i] - r : y[i] + r + 1] = disk[
+            : s[0], : s[1]
+        ]
+    return ndi.label(mask)[0]
 
 
 def generate_stack(
@@ -50,7 +74,9 @@ def generate_stack(
     for i in range(n_cell_types):
         available_cells = [c for c in cells if c not in assigned_cells]
         ct_cells[i] = np.random.choice(
-            available_cells, int(np.floor(n_cells / n_cell_types)), replace=False
+            available_cells,
+            int(np.floor(n_cells / n_cell_types)),
+            replace=False,
         )
         assigned_cells = np.append(assigned_cells, ct_cells[i])
     ct_cells[i] = np.append(ct_cells[i], cells[~np.isin(cells, assigned_cells)])
@@ -69,11 +95,14 @@ def generate_stack(
         cell_type_std = np.abs(cell_type_coeffs) * std_sd
     # means = intercept + np.dot(
     means = np.dot(
-        channel_coeffs.reshape((-1, n_channels)).T, cell_type_coeffs.reshape((-1, n_cell_types))
+        channel_coeffs.reshape((-1, n_channels)).T,
+        cell_type_coeffs.reshape((-1, n_cell_types)),
     )
     intercept = np.abs(means.min()) * 2
     means += intercept
-    stds = channel_std.reshape((-1, n_channels)).T + cell_type_std.reshape((-1, n_cell_types))
+    stds = channel_std.reshape((-1, n_channels)).T + cell_type_std.reshape(
+        (-1, n_cell_types)
+    )
 
     for cell_type in range(n_cell_types):
         n = ct_cells[i].size
@@ -102,7 +131,9 @@ def write_roi_to_disk(mask: Array, stack: Array, output_prefix: Path) -> None:
     write_tiff(stack, output_prefix + "_full.tiff")
     # channel_labels
     labels = [str(c).zfill(2) for c in range(1, stack.shape[0] + 1)]
-    channel_labels = pd.Series([f"Ch{c}(Ch{c})" for c in labels], name="channel")
+    channel_labels = pd.Series(
+        [f"Ch{c}(Ch{c})" for c in labels], name="channel"
+    )
     channel_labels.to_csv(output_prefix + "_full.csv")
 
 
@@ -141,7 +172,9 @@ def generate_project(
     processed_dir.mkdir(exist_ok=True)
 
     if sample_names is None:
-        sample_names = ["test_sample_" + str(i).zfill(2) for i in range(1, n_samples + 1)]
+        sample_names = [
+            "test_sample_" + str(i).zfill(2) for i in range(1, n_samples + 1)
+        ]
     _meta: Dict[str, Dict[str, Union[str, int]]] = dict()
     for sample in sample_names:
         tiffs_dir = processed_dir / sample / "tiffs"

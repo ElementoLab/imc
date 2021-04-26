@@ -72,6 +72,8 @@ ROI_STACKS_DIR = Path("tiffs")
 ROI_MASKS_DIR = Path("tiffs")
 ROI_UNCERTAINTY_DIR = Path("uncertainty")
 ROI_SINGLE_CELL_DIR = Path("single_cell")
+MEMBRANE_MASK_AREA = 1
+EXTRACELLULAR_MASK_AREA = 5
 
 
 class ROI:
@@ -122,7 +124,7 @@ class ROI:
         masks_dir: Optional[Path] = ROI_MASKS_DIR,
         single_cell_dir: Optional[Path] = ROI_SINGLE_CELL_DIR,
         sample: Optional["IMCSample"] = None,
-        mask_layer: str = DEFAULT_MASK_LAYER,
+        default_mask_layer: str = DEFAULT_MASK_LAYER,
         **kwargs,
     ):
         # attributes
@@ -138,7 +140,7 @@ class ROI:
             if isinstance(channel_labels, (str, Path))
             else None
         )
-        self.mask_layer = mask_layer
+        self.mask_layer = default_mask_layer
         # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
         self._channel_labels: Optional[Series] = (
             pd.read_csv(channel_labels, index_col=0, squeeze=True)
@@ -156,10 +158,22 @@ class ROI:
         self._area: Optional[int] = None
         self._channel_number: Optional[int] = None
         self._probabilities: Optional[Array] = None
-        self._nuclei_mask_o: Optional[Array] = None
-        self._nuclei_mask: Optional[Array] = None
+
         self._cell_mask_o: Optional[Array] = None
         self._cell_mask: Optional[Array] = None
+
+        self._nuclei_mask_o: Optional[Array] = None
+        self._nuclei_mask: Optional[Array] = None
+
+        self._cytoplasm_mask_o: Optional[Array] = None
+        self._cytoplasm_mask: Optional[Array] = None
+
+        self._membrane_mask_o: Optional[Array] = None
+        self._membrane_mask: Optional[Array] = None
+
+        self._extracellular_mask_o: Optional[Array] = None
+        self._extracellular_mask: Optional[Array] = None
+
         self._adjacency_graph = None
         self._clusters: Optional[Series] = None
 
@@ -334,29 +348,14 @@ class ROI:
         if self._probabilities is not None:
             return self._probabilities
         res: Array = self.read_input("probabilities", set_attribute=False)
-        return res[:3, :, :]  # return only first 3 labels
-
-    @property
-    def nuclei_mask_o(self) -> Array:
-        """An array with unique integers for each cell."""
-        if self._nuclei_mask_o is not None:
-            return self._nuclei_mask_o
-        self._nuclei_mask_o = self.read_input(
-            "nuclei_mask", set_attribute=False
-        )
-        return self._nuclei_mask_o
-
-    @property
-    def nuclei_mask(self) -> Array:
-        """An array with unique integers for each cell."""
-        if self._nuclei_mask is not None:
-            return self._nuclei_mask
-        self._nuclei_mask = clear_border(self.nuclei_mask_o)
-        return self._nuclei_mask
+        return res  # [:3, :, :]  # return only first 3 labels
 
     @property
     def cell_mask_o(self) -> Array:
-        """An array with unique integers for each cell."""
+        """
+        An array with unique integers for each cell.
+        Original array including cells touching image borders.
+        """
         if self._cell_mask_o is not None:
             return self._cell_mask_o
         self._cell_mask_o = self.read_input("cell_mask", set_attribute=False)
@@ -364,19 +363,93 @@ class ROI:
 
     @property
     def cell_mask(self) -> Array:
-        """An array with unique integers for each cell."""
+        """
+        An array with unique integers for each cell,
+        excluding cells touching image borders.
+        """
         if self._cell_mask is not None:
             return self._cell_mask
         self._cell_mask = clear_border(self.cell_mask_o)
         return self._cell_mask
 
     @property
+    def nuclei_mask_o(self) -> Array:
+        """
+        An array with unique integers for each cell.
+        Original array including nuclei of cells touching image borders.
+        """
+        if self._nuclei_mask_o is not None:
+            return self._nuclei_mask_o
+        self._nuclei_mask_o = self.read_input(
+            "nuclei_mask", set_attribute=False
+        )
+        # todo: align numbering with cell mask
+        return self._nuclei_mask_o
+
+    @property
+    def nuclei_mask(self) -> Array:
+        """
+        An array with unique integers for each nuclei
+        matched with cell mask not touching image borders.
+        """
+        if self._nuclei_mask is not None:
+            return self._nuclei_mask
+        nucl = self.nuclei_mask_o
+        nucl[~np.isin(nucl, np.unique(self.cell_mask)[1:])] = 0
+        self._nuclei_mask = nucl
+        return self._nuclei_mask
+
+    @property
+    def cytoplasm_mask(self) -> Array:
+        """
+        An array with unique integers for the cytoplasm of each cell.
+        The cytoplasm is defined as the cell area excluding nuclei and membrane.
+        """
+        if self._cytoplasm_mask is not None:
+            return self._cytoplasm_mask
+        cyto = self.cell_mask.copy()
+        o = (self.nuclei_mask > 0) | (self.membrane_mask > 0)
+        cyto[o] = 0
+        self._cytoplasm_mask = cyto
+        return self._cytoplasm_mask
+
+    @property
+    def membrane_mask(self) -> Array:
+        """
+        An array with unique integers for the membrane of each cell.
+        The membrane is the area of cell defined by a fixed border in the cell's border.
+        """
+        from skimage.segmentation import find_boundaries
+
+        if self._membrane_mask is not None:
+            return self._membrane_mask
+        self._membrane_mask = find_boundaries(
+            self.cell_mask, MEMBRANE_MASK_AREA, mode="inner", background=0
+        )
+        return self._membrane_mask
+
+    @property
+    def extracellular_mask(self) -> Array:
+        """
+        An array with unique integers for the extracellular area of each cell.
+        The extracellular area is a fixed amount around the cell, not overlapping other cells.
+        """
+        from skimage.segmentation import expand_labels
+
+        if self._extracellular_mask is not None:
+            return self._extracellular_mask
+        extr = expand_labels(self.cell_mask, EXTRACELLULAR_MASK_AREA)
+        extr[self.cell_mask > 0] = 0
+        self._extracellular_mask = extr
+        return self._extracellular_mask
+
+    @property
     def mask(self) -> Array:
-        if self.mask_layer == "cell":
-            return self.cell_mask
-        if self.mask_layer == "nuclei":
-            return self.nuclei_mask
-        raise ValueError("")
+        """
+        An array with unique integers for the default mask area of each cell.
+        """
+        mask: Array = getattr(self, self.mask_layer + "_mask")
+        return mask
 
     @property
     def clusters(self):
@@ -857,6 +930,7 @@ class ROI:
         ax: Optional[Axis] = None,
         cmap: Optional[str] = "gray",
         add_scale: bool = True,
+        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
     ) -> Figure:
         if ax is None:
             fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
@@ -865,7 +939,13 @@ class ROI:
         m = self.clusters == cluster
         if m.sum() == 0:
             raise ValueError(f"Cound not find cluster '{cluster}'.")
-        _ax.imshow(cell_labels_to_mask(self.cell_mask, m), cmap=cmap)
+
+        arr = cell_labels_to_mask(self.cell_mask, m)
+        if position is not None:
+            arr = arr[
+                slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)
+            ]
+        _ax.imshow(arr, cmap=cmap)
         _ax.set_title(cluster)
         _ax.axis("off")
 
@@ -879,6 +959,7 @@ class ROI:
         cell_type_combinations: Optional[
             Union[str, List[Tuple[str, str]]]
         ] = None,
+        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
         ax: Union[Axis, List[Axis]] = None,
         palette: Optional[str] = "tab20",
         add_scale: bool = True,
@@ -956,6 +1037,10 @@ class ROI:
             # plot each of the cell types with different colors
             res = cell_labels_to_mask(self.cell_mask, clusters)
             rgb = numbers_to_rgb_colors(res, from_palette=cast(palette))
+            if position is not None:
+                rgb = rgb[
+                    slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)
+                ]
             axes[i, 0].imshow(rgb)
             colors = (
                 pd.Series(sns.color_palette(palette, max(ns.values + 1)))
@@ -1133,6 +1218,7 @@ class ROI:
         self,
         channel_include: List[str] = None,
         channel_exclude: List[str] = None,
+        layers: List[str] = ["cell"],
         **kwargs,
     ) -> DataFrame:
         """Quantify intensity of each cell in each channel."""
@@ -1144,11 +1230,24 @@ class ROI:
             kwargs["channel_exclude"] = self.channel_labels.str.contains(
                 channel_exclude
             ).values
-        return quantify_cell_intensity(
-            self._get_input_filename("stack"),
-            self._get_input_filename(self.mask_layer + "_mask"),
-            **kwargs,
-        ).rename(columns=self.channel_labels)
+
+        stack = self.stack
+        _quant = list()
+        for layer in layers:
+            quant = (
+                quantify_cell_intensity(
+                    stack,
+                    getattr(self, layer + "_mask"),
+                    **kwargs,
+                )
+                .rename(columns=self.channel_labels)
+                .assign(layer=layer)
+            )
+            _quant.append(quant)
+        quant = pd.concat(_quant)
+        if layers == ["cell"]:
+            quant = quant.drop(["layer"], axis=1)
+        return quant
 
     def quantify_cell_morphology(self, **kwargs) -> DataFrame:
         """QUantify shape attributes of each cell."""

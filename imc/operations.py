@@ -2,9 +2,8 @@
 Functions for high order operations.
 """
 
-from __future__ import (
-    annotations,
-)  # fix the type annotatiton of not yet undefined classes
+# fix the type annotatiton of not yet undefined classes
+from __future__ import annotations
 from collections import Counter
 import os
 import re
@@ -62,24 +61,55 @@ DEFAULT_SUPERCOMMUNITY_RESOLUTION = 0.5
 
 
 def quantify_cell_intensity(
-    image_file: Path,
-    segmentation_file: Path,
+    stack: Union[Array, Path],
+    mask: Union[Array, Path],
     red_func: str = "mean",
     border_objs: bool = False,
-    channel_include: Optional[
-        Array
-    ] = None,  # boolean array for channels to include
-    channel_exclude: Optional[
-        Array
-    ] = None,  # boolean array for channels to exclude
+    equalize: bool = True,
+    scale: bool = False,
+    channel_include: Optional[Array] = None,
+    channel_exclude: Optional[Array] = None,
 ) -> DataFrame:
-    """Measure the intensity of each channel in each cell"""
-    stack = read_image_from_file(image_file)
-    segmentation = read_image_from_file(segmentation_file)
-    if not border_objs:
-        segmentation = clear_border(segmentation)
+    """
+    Measure the intensity of each channel in each cell
 
-    cells = np.unique(segmentation)
+
+    Parameters
+    ----------
+    stack: Union[Array, Path]
+        Image to quantify.
+    mask: Union[Array, Path]
+        Mask to quantify.
+    red_func: str
+        Function to reduce pixels to object borders. Defaults to 'mean'.
+    border_objs: bool
+        Whether to quantify objects touching image border. Defaults to False.
+    channel_include: :class:`~np.ndarray`
+        Boolean array for channels to include.
+    channel_exclude: :class:`~np.ndarray`
+        Boolean array for channels to exclude.
+    """
+    from skimage.exposure import equalize_hist as eq
+
+    if isinstance(stack, Path):
+        stack = read_image_from_file(stack)
+    if isinstance(mask, Path):
+        mask = read_image_from_file(mask)
+    if not border_objs:
+        mask = clear_border(mask)
+
+    if equalize:
+        # stack = np.asarray([eq(x) for x in stack])
+        _stack = list()
+        for x in stack:
+            p = np.percentile(x, 98)
+            x[x > p] = p
+            _stack.append(x)
+        stack = np.asarray(_stack)
+    if scale:
+        stack = np.asarray([minmax_scale(x) for x in stack])
+
+    cells = np.unique(mask)
     # the minus one here is to skip the background "0" label which is also
     # ignored by `skimage.measure.regionprops`.
     n_cells = len(cells) - 1
@@ -98,7 +128,7 @@ def quantify_cell_intensity(
     ]:
         res[:, channel] = [
             getattr(x.intensity_image, red_func)()
-            for x in skimage.measure.regionprops(segmentation, stack[channel])
+            for x in skimage.measure.regionprops(mask, stack[channel])
         ]
     return pd.DataFrame(res, index=cells[1:])
 
@@ -165,7 +195,7 @@ def quantify_cell_intensity_rois(
     """
     return pd.concat(
         parmap.map(_quantify_cell_intensity__roi, rois, pm_pbar=True, **kwargs)
-    )
+    ).rename_axis(index="obj_id")
 
 
 def quantify_cell_morphology_rois(
@@ -177,7 +207,7 @@ def quantify_cell_morphology_rois(
     """
     return pd.concat(
         parmap.map(_quantify_cell_morphology__roi, rois, pm_pbar=True, **kwargs)
-    )
+    ).rename_axis(index="obj_id")
 
 
 def quantify_cells_rois(
@@ -198,7 +228,7 @@ def quantify_cells_rois(
         )
         if len(quants) > 1
         else quants[0]
-    )
+    ).rename_axis(index="obj_id")
 
 
 def check_channel_axis_correlation(
@@ -1869,6 +1899,24 @@ def get_threshold_from_gaussian_mixture(
     )
     assert len(thresh) == (n_components - 1)
     return thresh
+
+
+def get_probability_of_gaussian_mixture(
+    x: Series, n_components: int = 2, population=-1
+) -> Series:
+    from sklearn.mixture import GaussianMixture  # type: ignore
+
+    x = x.sort_values()
+    mix = GaussianMixture(n_components=n_components)
+    xx = x.values.reshape((-1, 1))
+    mix.fit(xx)
+    means = pd.Series(mix.means_.squeeze()).sort_values()
+    # assert (means.index == range(n_components)).all()
+    # order components by mean
+    p = mix.predict_proba(xx)[:, means.index]
+    # take requested population
+    p = p[:, population]
+    return pd.Series(p, index=x.index).sort_index()
 
 
 def fit_gaussian_mixture(

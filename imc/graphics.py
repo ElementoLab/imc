@@ -10,7 +10,9 @@ from typing import (
     Callable,
     Any,
     overload,
-)  # , Literal
+    Literal,
+    Collection,
+)
 import warnings
 from functools import wraps
 import colorsys
@@ -306,12 +308,37 @@ def numbers_to_rgb_colors(
     return res
 
 
-def get_grid_dims(dims: int, nstart: Optional[int] = None) -> Tuple[int, int]:
+@overload
+def get_grid_dims(
+    dims: Union[int, Collection],
+    return_fig: Literal[True],
+    nstart: Optional[int],
+) -> Figure:
+    ...
+
+
+@overload
+def get_grid_dims(
+    dims: Union[int, Collection],
+    return_fig: Literal[False],
+    nstart: Optional[int],
+) -> Tuple[int, int]:
+    ...
+
+
+def get_grid_dims(
+    dims: Union[int, Collection],
+    return_fig: bool = False,
+    nstart: Optional[int] = None,
+    **kwargs,
+) -> Union[Tuple[int, int], Figure]:
     """
     Given a number of `dims` subplots, choose optimal x/y dimentions of plotting
     grid maximizing in order to be as square as posible and if not with more
     columns than rows.
     """
+    if not isinstance(dims, int):
+        dims = len(dims)
     if nstart is None:
         n = min(dims, 1 + int(np.ceil(np.sqrt(dims))))
     else:
@@ -325,10 +352,16 @@ def get_grid_dims(dims: int, nstart: Optional[int] = None) -> Tuple[int, int]:
 
     if n * m % dims > 1:
         try:
-            n, m = get_grid_dims(dims=dims, nstart=n - 1)
+            n, m = get_grid_dims(dims=dims, return_fig=False, nstart=n - 1)
         except IndexError:
             pass
-    return n, m
+    if not return_fig:
+        return n, m
+    else:
+        if "figsize" not in kwargs:
+            kwargs["figsize"] = (m * 4, n * 4)
+        fig, ax = plt.subplots(n, m, **kwargs)
+        return fig
 
 
 def share_axes_by(axes: Axis, by: str) -> None:
@@ -418,19 +451,22 @@ def rasterize_scanpy(fig: Figure) -> None:
 
     with warnings.catch_warnings(record=False) as w:
         warnings.simplefilter("ignore")
-        clss = (
+        yes_class = matplotlib.collections.PathCollection
+        not_clss = (
             matplotlib.text.Text,
             matplotlib.axis.XAxis,
             matplotlib.axis.YAxis,
         )
         for axs in fig.axes:
             for __c in axs.get_children():
-                if not isinstance(__c, clss):
+                if not isinstance(__c, not_clss):
                     if not __c.get_children():
-                        __c.set_rasterized(True)
+                        if isinstance(__c, yes_class):
+                            __c.set_rasterized(True)
                     for _cc in __c.get_children():
-                        if not isinstance(_cc, clss):
-                            _cc.set_rasterized(True)
+                        if not isinstance(_cc, not_clss):
+                            if isinstance(_cc, yes_class):
+                                _cc.set_rasterized(True)
 
 
 def add_centroids(a, ax=None, res=None, column=None, algo="umap"):
