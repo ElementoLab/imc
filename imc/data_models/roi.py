@@ -165,13 +165,8 @@ class ROI:
         self._nuclei_mask_o: Optional[Array] = None
         self._nuclei_mask: Optional[Array] = None
 
-        self._cytoplasm_mask_o: Optional[Array] = None
         self._cytoplasm_mask: Optional[Array] = None
-
-        self._membrane_mask_o: Optional[Array] = None
         self._membrane_mask: Optional[Array] = None
-
-        self._extracellular_mask_o: Optional[Array] = None
         self._extracellular_mask: Optional[Array] = None
 
         self._adjacency_graph = None
@@ -423,9 +418,13 @@ class ROI:
 
         if self._membrane_mask is not None:
             return self._membrane_mask
-        self._membrane_mask = find_boundaries(
-            self.cell_mask, MEMBRANE_MASK_AREA, mode="inner", background=0
-        )
+        membrs = (
+            find_boundaries(
+                self.cell_mask, MEMBRANE_MASK_AREA, mode="inner", background=0
+            ).astype(int)
+            * self.cell_mask
+        ).astype("uint")
+        self._membrane_mask = membrs
         return self._membrane_mask
 
     @property
@@ -1245,15 +1244,35 @@ class ROI:
             )
             _quant.append(quant)
         quant = pd.concat(_quant)
+        quant.index.name = "obj_id"
         if layers == ["cell"]:
             quant = quant.drop(["layer"], axis=1)
         return quant
 
-    def quantify_cell_morphology(self, **kwargs) -> DataFrame:
-        """QUantify shape attributes of each cell."""
-        return quantify_cell_morphology(
-            self._get_input_filename(self.mask_layer + "_mask"), **kwargs
-        )
+    def quantify_cell_morphology(
+        self, layers: List[str] = ["cell"], **kwargs
+    ) -> DataFrame:
+        """
+        Quantify shape attributes of each cell.
+        Additional keyword arguments are passed to
+        `imc.operations.quantify_cell_morphology`.
+        """
+        _quant = list()
+        for layer in layers:
+            quant = (
+                quantify_cell_morphology(
+                    getattr(self, layer + "_mask"),
+                    **kwargs,
+                )
+                .rename(columns=self.channel_labels)
+                .assign(layer=layer)
+            )
+            _quant.append(quant)
+        quant = pd.concat(_quant)
+        quant.index.name = "obj_id"
+        if layers == ["cell"]:
+            quant = quant.drop(["layer"], axis=1)
+        return quant
 
     def set_clusters(self, clusters: Optional[Series] = None) -> None:
         if clusters is None:

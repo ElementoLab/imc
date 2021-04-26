@@ -444,6 +444,13 @@ def deepcell_postprocess_both_compartments(
     fig_output_prefix: Path = None,
     verbose: bool = False,
 ) -> Array:
+    """
+    Function to perform post-processing of DeepCell masks when using
+    the MultiplexSegmentation model with the 'both' compartment.
+
+    The major goal is the alignment of the cellular and nuclear masks
+    as much as possible.
+    """
     import pandas as pd
     import seaborn as sns
     from skimage.segmentation import find_boundaries

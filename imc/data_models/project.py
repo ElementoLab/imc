@@ -4,9 +4,20 @@
 A class to model a imaging mass cytometry project.
 """
 
+from __future__ import annotations
 import os
 import pathlib
-from typing import Tuple, List, Optional, Union, Iterator  # , cast
+from typing import (
+    Tuple,
+    Dict,
+    Any,
+    List,
+    Optional,
+    Union,
+    Iterator,
+    overload,
+    Literal,
+)  # , cast
 
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
@@ -249,6 +260,13 @@ class Project:
         Return a list of all ROIs of the project samples.
         """
         return [roi for sample in self.samples for roi in sample.rois]
+
+    @rois.setter
+    def rois(self, rois: List[Union[str, "ROI"]]):
+        for sample in self.samples:
+            sample.rois = [
+                r for r in sample.rois if r.name in rois or r in rois
+            ]
 
     @property
     def n_samples(self) -> int:
@@ -610,10 +628,41 @@ class Project:
         grid.fig.grid = grid
         return grid.fig
 
+    @overload
     def quantify_cells(
         self,
+        layers: List[str] = ["cell"],
         intensity: bool = True,
+        intensity_kwargs: Dict[str, Any] = {},
         morphology: bool = True,
+        morphology_kwargs: Dict[str, Any] = {},
+        set_attribute: Literal[True] = True,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
+    ) -> None:
+        ...
+
+    @overload
+    def quantify_cells(
+        self,
+        layers: List[str] = ["cell"],
+        intensity: bool = True,
+        intensity_kwargs: Dict[str, Any] = {},
+        morphology: bool = True,
+        morphology_kwargs: Dict[str, Any] = {},
+        set_attribute: Literal[False] = False,
+        samples: Optional[List["IMCSample"]] = None,
+        rois: Optional[List["ROI"]] = None,
+    ) -> DataFrame:
+        ...
+
+    def quantify_cells(
+        self,
+        layers: List[str] = ["cell"],
+        intensity: bool = True,
+        intensity_kwargs: Dict[str, Any] = {},
+        morphology: bool = True,
+        morphology_kwargs: Dict[str, Any] = {},
         set_attribute: bool = True,
         samples: Optional[List["IMCSample"]] = None,
         rois: Optional[List["ROI"]] = None,
@@ -624,7 +673,12 @@ class Project:
         from imc.operations import quantify_cells_rois
 
         quantification = quantify_cells_rois(
-            self._get_rois(samples, rois), intensity, morphology
+            self._get_rois(samples, rois),
+            layers=layers,
+            intensity=intensity,
+            intensity_kwargs=intensity_kwargs,
+            morphology=morphology,
+            morphology_kwargs=morphology_kwargs,
         )
         if not set_attribute:
             return quantification

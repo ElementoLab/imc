@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import Counter
 import os
 import re
-from typing import Tuple, List, Optional, Dict, Union, Literal, overload
+from typing import Tuple, List, Optional, Dict, Union, Literal, Any, overload
 
 from ordered_set import OrderedSet
 import numpy as np
@@ -130,11 +130,11 @@ def quantify_cell_intensity(
             getattr(x.intensity_image, red_func)()
             for x in skimage.measure.regionprops(mask, stack[channel])
         ]
-    return pd.DataFrame(res, index=cells[1:])
+    return pd.DataFrame(res, index=cells[1:]).rename_axis(index="obj_id")
 
 
 def quantify_cell_morphology(
-    segmentation_file: Path,
+    mask: Union[Array, Path],
     attributes: List[str] = [
         "area",
         "perimeter",
@@ -145,17 +145,19 @@ def quantify_cell_morphology(
         # orientation should be random, so I'm not including it
         "eccentricity",
         "solidity",
+        "centroid",
     ],
     border_objs: bool = False,
 ) -> DataFrame:
-    segmentation = read_image_from_file(segmentation_file)
+    if isinstance(mask, Path):
+        mask = read_image_from_file(mask)
     if not border_objs:
-        segmentation = clear_border(segmentation)
+        mask = clear_border(mask)
 
     return pd.DataFrame(
-        skimage.measure.regionprops_table(segmentation, properties=attributes),
-        index=np.unique(segmentation)[1:],
-    )
+        skimage.measure.regionprops_table(mask, properties=attributes),
+        index=np.unique(mask)[1:],
+    ).rename_axis(index="obj_id")
 
 
 def _quantify_cell_intensity__roi(roi: "ROI", **kwargs) -> DataFrame:
@@ -211,18 +213,32 @@ def quantify_cell_morphology_rois(
 
 
 def quantify_cells_rois(
-    rois: List["ROI"], intensity: bool = True, morphology: bool = True, **kwargs
+    rois: List["ROI"],
+    layers: List[str],
+    intensity: bool = True,
+    intensity_kwargs: Dict[str, Any] = {},
+    morphology: bool = True,
+    morphology_kwargs: Dict[str, Any] = {},
 ) -> DataFrame:
     """
     Measure the intensity of each channel in each single cell.
     """
     quants = list()
     if intensity:
-        quants.append(quantify_cell_intensity_rois(rois=rois, **kwargs))
+        quants.append(
+            quantify_cell_intensity_rois(
+                rois=rois, layers=layers, **intensity_kwargs
+            )
+        )
     if morphology:
-        quants.append(quantify_cell_morphology_rois(rois=rois, **kwargs))
+        quants.append(
+            quantify_cell_morphology_rois(
+                rois=rois, layers=layers, **morphology_kwargs
+            )
+        )
 
     return (
+        # todo: this will fail if there's different layers in intensity and morphology
         pd.concat(
             [quants[0].drop(["sample", "roi"], axis=1), quants[1]], axis=1
         )
