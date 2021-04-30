@@ -451,7 +451,10 @@ def rasterize_scanpy(fig: Figure) -> None:
 
     with warnings.catch_warnings(record=False) as w:
         warnings.simplefilter("ignore")
-        yes_class = matplotlib.collections.PathCollection
+        yes_class = (
+            matplotlib.collections.PathCollection,
+            matplotlib.collections.LineCollection,
+        )
         not_clss = (
             matplotlib.text.Text,
             matplotlib.axis.XAxis,
