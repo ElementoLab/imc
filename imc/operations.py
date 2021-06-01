@@ -120,12 +120,8 @@ def quantify_cell_intensity(
     if channel_exclude is None:
         channel_exclude = np.asarray([False] * n_channels)
 
-    res = np.zeros(
-        (n_cells, n_channels), dtype=int if red_func == "sum" else float
-    )
-    for channel in np.arange(stack.shape[0])[
-        channel_include & ~channel_exclude
-    ]:
+    res = np.zeros((n_cells, n_channels), dtype=int if red_func == "sum" else float)
+    for channel in np.arange(stack.shape[0])[channel_include & ~channel_exclude]:
         res[:, channel] = [
             getattr(x.intensity_image, red_func)()
             for x in skimage.measure.regionprops(mask, stack[channel])
@@ -178,9 +174,7 @@ def _quantify_cell_morphology__roi(roi: "ROI", **kwargs) -> DataFrame:
     return roi.quantify_cell_morphology(**kwargs).assign(**assignment)
 
 
-def _correlate_channels__roi(
-    roi: "ROI", labels: str = "channel_names"
-) -> DataFrame:
+def _correlate_channels__roi(roi: "ROI", labels: str = "channel_names") -> DataFrame:
     xcorr = np.corrcoef(roi.stack.reshape((roi.channel_number, -1)))
     np.fill_diagonal(xcorr, 0)
     labs = getattr(roi, labels)
@@ -296,9 +290,7 @@ def check_channel_axis_correlation(
     )
     fig.savefig(output_prefix + "channel-axis_correlation.svg", **FIG_KWS)
 
-    df = pd.DataFrame(
-        res, columns=["channel", "axis", "coef", "intercept", "r"]
-    )
+    df = pd.DataFrame(res, columns=["channel", "axis", "coef", "intercept", "r"])
     df["axis_label"] = df["axis"].replace(0, "X").replace(1, "Y")
     df["channel_label"] = [x for x in channel_labels for _ in range(2)]
     df["abs_r"] = df["r"].abs()
@@ -327,9 +319,7 @@ def fix_signal_axis_dependency(
         ddfix = (dd - m) + dd.mean()
         corr_d[channel] = ddfix
 
-        fig, axis = plt.subplots(
-            1, 7, sharex=True, sharey=False, figsize=(7 * 3, 3 * 1)
-        )
+        fig, axis = plt.subplots(1, 7, sharex=True, sharey=False, figsize=(7 * 3, 3 * 1))
         fig.suptitle(channel_labels[channel])
         axis[0].set_title("Original")
         axis[0].imshow(dd)
@@ -377,12 +367,8 @@ def measure_channel_background(
     for roi in rois:
         stack = roi.stack
         mask = roi.cell_mask
-        _imeans[roi.name] = pd.Series(
-            stack.mean(axis=(1, 2)), index=roi.channel_labels
-        )
-        _istds[roi.name] = pd.Series(
-            stack.std(axis=(1, 2)), index=roi.channel_labels
-        )
+        _imeans[roi.name] = pd.Series(stack.mean(axis=(1, 2)), index=roi.channel_labels)
+        _istds[roi.name] = pd.Series(stack.std(axis=(1, 2)), index=roi.channel_labels)
         _cmeans[roi.name] = pd.Series(
             [
                 np.ma.masked_array(stack[i], mask).mean()
@@ -391,10 +377,7 @@ def measure_channel_background(
             index=roi.channel_labels,
         )
         _cstds[roi.name] = pd.Series(
-            [
-                np.ma.masked_array(stack[i], mask).std()
-                for i in range(roi.channel_number)
-            ],
+            [np.ma.masked_array(stack[i], mask).std() for i in range(roi.channel_number)],
             index=roi.channel_labels,
         )
     imeans = pd.DataFrame(_imeans) + 1
@@ -578,15 +561,11 @@ def single_cell_analysis(
     channel_labels = rois[0].channel_labels
     if filter_channels:
         print("Filtering channels.")
-        metric = measure_channel_background(
-            rois, plot=plot, output_prefix=output_prefix
-        )
+        metric = measure_channel_background(rois, plot=plot, output_prefix=output_prefix)
         channel_threshold = metric > channel_filtering_threshold
         filtered_channels = metric[channel_threshold].index.tolist()
     else:
-        channel_threshold = pd.Series(
-            [True] * len(channel_labels), index=channel_labels
-        )
+        channel_threshold = pd.Series([True] * len(channel_labels), index=channel_labels)
         filtered_channels = channel_labels.tolist()
 
     if quantification is None:
@@ -597,9 +576,7 @@ def single_cell_analysis(
 
     # Remove excluded channels
     for _ch in channel_exclude:
-        quantification = quantification.loc[
-            :, ~quantification.columns.str.contains(_ch)
-        ]
+        quantification = quantification.loc[:, ~quantification.columns.str.contains(_ch)]
     # Filter out low QC channels
     if filter_channels:
         # TODO: fileter channels by QC metrics
@@ -607,9 +584,7 @@ def single_cell_analysis(
 
     # Keep only include channels
     if channel_include is not None:
-        _includes = [
-            _ch for _ch in quantification.columns if _ch in channel_include
-        ]
+        _includes = [_ch for _ch in quantification.columns if _ch in channel_include]
         quantification = quantification.loc[:, _includes]
 
     # Get categoricals
@@ -617,9 +592,7 @@ def single_cell_analysis(
 
     # Start usual single cell analysis
     ann = AnnData(
-        quantification.drop(cats, axis=1)
-        .sort_index(axis=1)
-        .reset_index(drop=True)
+        quantification.drop(cats, axis=1).sort_index(axis=1).reset_index(drop=True)
     )
     for cat in cats:
         ann.obs[cat] = pd.Categorical(quantification[cat].values)
@@ -649,13 +622,9 @@ def single_cell_analysis(
     sc.pp.pca(ann_ct)
     sc.pp.neighbors(ann_ct, n_neighbors=8, use_rep="X")
     sc.tl.umap(ann_ct)
-    sc.tl.leiden(
-        ann_ct, key_added="cluster", resolution=leiden_clustering_resolution
-    )
+    sc.tl.leiden(ann_ct, key_added="cluster", resolution=leiden_clustering_resolution)
 
-    ann_ct.obs["cluster"] = pd.Categorical(
-        ann_ct.obs["cluster"].astype(int) + 1
-    )
+    ann_ct.obs["cluster"] = pd.Categorical(ann_ct.obs["cluster"].astype(int) + 1)
     ann.obs["cluster"] = ann_ct.obs["cluster"]
     ann.obsm = ann_ct.obsm
     # sc.tl.diffmap(ann)
@@ -673,9 +642,7 @@ def single_cell_analysis(
         ann.obs["cluster"] = ann.obs["cluster"].replace(new_labels)
 
     # Test
-    sc.tl.rank_genes_groups(
-        ann, groupby="cluster", method="logreg", n_genes=ann.shape[1]
-    )
+    sc.tl.rank_genes_groups(ann, groupby="cluster", method="logreg", n_genes=ann.shape[1])
 
     # Save object
     sc.write(output_prefix + "single_cell.processed.h5ad", ann)
@@ -738,9 +705,7 @@ def single_cell_analysis(
 
     fig, axes = plt.subplots(1, 2, figsize=(2 * 4, 4), sharey=True)
     for axs in axes.flatten():
-        sns.barplot(
-            counts, counts.index, ax=axs, orient="horiz", palette="magma"
-        )
+        sns.barplot(counts, counts.index, ax=axs, orient="horiz", palette="magma")
         axs.set_xlabel("Cells")
         axs.set_ylabel("Cluster")
     axes[-1].set_xscale("log")
@@ -760,12 +725,8 @@ def single_cell_analysis(
     kwargs = dict(robust=True, square=True, xticklabels=True, yticklabels=True)
     for ax, log in zip(axes, [False, True]):
         sns.heatmap(
-            cluster_counts_per_roi
-            if not log
-            else np.log10(1 + cluster_counts_per_roi),
-            cbar_kws=dict(
-                label="Cells per cluster" + ("" if not log else " (log10)")
-            ),
+            cluster_counts_per_roi if not log else np.log10(1 + cluster_counts_per_roi),
+            cbar_kws=dict(label="Cells per cluster" + ("" if not log else " (log10)")),
             ax=ax,
             **kwargs,
         )
@@ -775,9 +736,7 @@ def single_cell_analysis(
         ax=axes[2],
         **kwargs,
     )
-    fig.savefig(
-        output_prefix + "cell.counts_per_cluster_per_roi.svg", **FIG_KWS
-    )
+    fig.savefig(output_prefix + "cell.counts_per_cluster_per_roi.svg", **FIG_KWS)
 
     # # Plot heatmaps with mean expression per cluster
     mean_expr = anndata_to_cluster_means(ann)
@@ -800,9 +759,7 @@ def single_cell_analysis(
         ("cell_type_channels", mean_expr.loc[ann_ct.var.index, :]),
         (
             "filtered_clusters",
-            mean_expr.loc[
-                :, (counts / counts.sum()) >= cluster_min_percentage / 100
-            ],
+            mean_expr.loc[:, (counts / counts.sum()) >= cluster_min_percentage / 100],
         ),
     ]:
         for label2, label3, kwargs2 in [
@@ -830,8 +787,7 @@ def single_cell_analysis(
                 **kwargs2,
             )
             grid.savefig(
-                output_prefix
-                + f"cell.mean_expression_per_cluster.{label1}.{label2}svg",
+                output_prefix + f"cell.mean_expression_per_cluster.{label1}.{label2}svg",
             )
             # **FIG_KWS)
 
@@ -954,8 +910,7 @@ def derive_reference_cell_type_labels(
     axs.axvline(v.mean(), linestyle="--", color="grey")
     axs.axvline(v1, linestyle="--", color="red")
     fig.savefig(
-        output_prefix
-        + "mean_expression_per_cluster.both_z.threshold_position.svg"
+        output_prefix + "mean_expression_per_cluster.both_z.threshold_position.svg"
     )
 
     cmeans = mean_expr.mean(1).rename("Channel mean")
@@ -1031,8 +986,7 @@ def derive_reference_cell_type_labels(
         col_colors=fractions_l,
     )
     grid.savefig(
-        output_prefix
-        + "mean_expression_per_cluster.labeled.both_z.correlation.svg",
+        output_prefix + "mean_expression_per_cluster.labeled.both_z.correlation.svg",
         **FIG_KWS,
     )
 
@@ -1073,9 +1027,7 @@ def predict_cell_types_from_reference(
 ):
     from imc.utils import get_mean_expression_per_cluster
 
-    output_prefix = output_prefix or (
-        sample.root_dir / "single_cell" / sample.name + "."
-    )
+    output_prefix = output_prefix or (sample.root_dir / "single_cell" / sample.name + ".")
     os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
     default_ref = (
         sample.prj.processed_dir
@@ -1114,8 +1066,7 @@ def predict_cell_types_from_reference(
         col_colors=query_col_fractions,
     )
     grid.savefig(
-        output_prefix
-        + "cell_type_assignment_against_reference.correlation.svg",
+        output_prefix + "cell_type_assignment_against_reference.correlation.svg",
         **FIG_KWS,
     )
 
@@ -1140,9 +1091,7 @@ def predict_cell_types_from_reference(
         figsize=(max(map(len, query_means.index)) * 0.15 + side, side),
         col_colors=query_col_fractions,
     )
-    grid.savefig(
-        output_prefix + "cluster_means.predicted_labels.svg", **FIG_KWS
-    )
+    grid.savefig(output_prefix + "cluster_means.predicted_labels.svg", **FIG_KWS)
 
     # export cell type labels for each cell object
     cell_type_assignments = (
@@ -1272,9 +1221,7 @@ def get_adjacency_graph(
     # add cluster label atrtribute
     if clusters is not None:
         nx.set_node_attributes(g, roi.clusters.to_dict(), name="cluster")
-        nx.set_node_attributes(
-            g, roi.clusters.index.to_series().to_dict(), name="obj_id"
-        )
+        nx.set_node_attributes(g, roi.clusters.index.to_series().to_dict(), name="obj_id")
     # save graph
     nx.readwrite.write_gpickle(g, output_prefix + "neighbor_graph.gpickle")
     return g
@@ -1301,9 +1248,7 @@ def measure_cell_type_adjacency(
     if adjacency_graph is None:
         adjacency_graph = roi.adjacency_graph
 
-    adj, order = nx.linalg.attrmatrix.attr_matrix(
-        adjacency_graph, node_attr="cluster"
-    )
+    adj, order = nx.linalg.attrmatrix.attr_matrix(adjacency_graph, node_attr="cluster")
     order = pd.Series(order).astype(
         roi.clusters.dtype
     )  #  passing dtype at instantiation gives warning
@@ -1320,17 +1265,13 @@ def measure_cell_type_adjacency(
             freqs, cluster_counts, roi.clusters.shape[0], inf_replace_method
         )
     if save:
-        norm_freqs.to_csv(
-            output_prefix + "cluster_adjacency_graph.norm_over_random.csv"
-        )
+        norm_freqs.to_csv(output_prefix + "cluster_adjacency_graph.norm_over_random.csv")
 
     if not plot:
         return norm_freqs
     v = norm_freqs.values.std() * 2
     fig, axes = plt.subplots(1, 2, sharey=True, figsize=(4 * 2, 4))
-    kws = dict(
-        cmap="RdBu_r", center=0, square=True, xticklabels=True, yticklabels=True
-    )
+    kws = dict(cmap="RdBu_r", center=0, square=True, xticklabels=True, yticklabels=True)
     sns.heatmap(norm_freqs, robust=True, ax=axes[0], **kws)
     kws2 = dict(vmin=-v, vmax=v, cbar_kws=dict(label="Log odds interaction"))
     sns.heatmap(norm_freqs, ax=axes[1], **kws, **kws2)
@@ -1342,8 +1283,7 @@ def measure_cell_type_adjacency(
     try:
         grid = sns.clustermap(norm_freqs, **kws, **kws2)
         grid.savefig(
-            output_prefix
-            + "cluster_adjacency_graph.norm_over_random.clustermap.svg",
+            output_prefix + "cluster_adjacency_graph.norm_over_random.clustermap.svg",
             **FIG_KWS,
         )
     except FloatingPointError:
@@ -1360,8 +1300,7 @@ def correct_interaction_background_random(
     output_prefix: Union[str, Path],
 ):
     values = {
-        x: roi.adjacency_graph.nodes[x][attribute]
-        for x in roi.adjacency_graph.nodes
+        x: roi.adjacency_graph.nodes[x][attribute] for x in roi.adjacency_graph.nodes
     }
     shuffled_freqs = list()
     for _ in tqdm(range(n_iterations)):
@@ -1422,29 +1361,19 @@ def correct_interaction_background_pharmacoscopy(
     # three ways to replace -inf (cell types with no event touching):
     # # 1. replace with lowest non-inf value (dehemphasize the lower bottom - lack of touching)
     if inf_replace_method == "min":
-        norm_freqs = norms.replace(
-            -np.inf, norms[norms != (-np.inf)].min().min()
-        )
+        norm_freqs = norms.replace(-np.inf, norms[norms != (-np.inf)].min().min())
     # # 2. replace with minus highest (try to )
     if inf_replace_method == "max":
         norm_freqs = norms.replace(-np.inf, -norms.max().max())
     # # 3. One of the above + make symmetric by  X @ X.T + Z-score
     if inf_replace_method == "min_symmetric":
-        norm_freqs = norms.replace(
-            -np.inf, norms[norms != (-np.inf)].min().min()
-        )
+        norm_freqs = norms.replace(-np.inf, norms[norms != (-np.inf)].min().min())
         norm_freqs = norm_freqs @ norm_freqs.T
-        norm_freqs = (
-            norm_freqs - norm_freqs.values.mean()
-        ) / norm_freqs.values.std()
+        norm_freqs = (norm_freqs - norm_freqs.values.mean()) / norm_freqs.values.std()
     if inf_replace_method == "max_symmetric":
-        norm_freqs = norms.replace(
-            -np.inf, norms[norms != (-np.inf)].max().max()
-        )
+        norm_freqs = norms.replace(-np.inf, norms[norms != (-np.inf)].max().max())
         norm_freqs = norm_freqs @ norm_freqs.T
-        norm_freqs = (
-            norm_freqs - norm_freqs.values.mean()
-        ) / norm_freqs.values.std()
+        norm_freqs = (norm_freqs - norm_freqs.values.mean()) / norm_freqs.values.std()
     return norm_freqs
 
 
@@ -1487,9 +1416,7 @@ def find_communities(
         )
 
     # Community finding in graph (overclustering)
-    roi_output_prefix = (
-        roi.sample.root_dir / "single_cell" / (roi.name + ".communities.")
-    )
+    roi_output_prefix = roi.sample.root_dir / "single_cell" / (roi.name + ".communities.")
 
     # TODO: use leiden instead of louvain
     # g = networkx_to_igraph(roi.adjacency_graph)
@@ -1531,9 +1458,7 @@ def find_communities(
             metric="correlation",
             cbar_kws=dict(label="% of cell type (Z-score)"),
         )
-        grid.savefig(
-            roi_output_prefix + "cell_type_composition.zscore.svg", **FIG_KWS
-        )
+        grid.savefig(roi_output_prefix + "cell_type_composition.zscore.svg", **FIG_KWS)
     return partition, comps
 
 
@@ -1543,20 +1468,14 @@ def cluster_communities(
     supercommunity_resolution: float = DEFAULT_SUPERCOMMUNITY_RESOLUTION,
 ) -> Series:
     output_prefix = output_prefix or (
-        rois[0].prj.processed_dir
-        / "single_cell"
-        / (rois[0].prj.name + ".communities.")
+        rois[0].prj.processed_dir / "single_cell" / (rois[0].prj.name + ".communities.")
     )
     output_prefix = cast(output_prefix)
 
     res = parmap.map(find_communities, rois)
     partitions = {k: v[0] for k, v in zip(rois, res)}
-    composition = (
-        pd.concat([v[1] for v in res]).fillna(0).astype(int).sort_index()
-    )
-    composition.to_csv(
-        output_prefix + ".all_communities.cell_type_composition.csv"
-    )
+    composition = pd.concat([v[1] for v in res]).fillna(0).astype(int).sort_index()
+    composition.to_csv(output_prefix + ".all_communities.cell_type_composition.csv")
 
     print(f"Found {composition.shape[0]} communities across all ROIs.")
 
@@ -1569,15 +1488,11 @@ def cluster_communities(
     a = AnnData(composition)
     sc.pp.log1p(a)
     sc.pp.neighbors(a)
-    sc.tl.leiden(
-        a, resolution=supercommunity_resolution, key_added="supercommunity"
-    )
+    sc.tl.leiden(a, resolution=supercommunity_resolution, key_added="supercommunity")
     n_scomms = len(a.obs["supercommunity"].unique())
     print(f"Found {n_scomms} supercommunities.")
     # Make supercommunities 1-based (to distinguish from masks where 0 == background)
-    a.obs["supercommunity"] = pd.Categorical(
-        a.obs["supercommunity"].astype(int) + 1
-    )
+    a.obs["supercommunity"] = pd.Categorical(a.obs["supercommunity"].astype(int) + 1)
     sc.tl.umap(a)
     sc.pp.pca(a)
 
@@ -1592,12 +1507,8 @@ def cluster_communities(
         else:
             c1 = roi.clusters
         # {cell: community}
-        c2 = pd.Series(partitions[roi], name="community").rename_axis(
-            index="obj_id"
-        )
-        scomm = a.obs.loc[(roi.sample.name, roi.name), "supercommunity"].astype(
-            int
-        )
+        c2 = pd.Series(partitions[roi], name="community").rename_axis(index="obj_id")
+        scomm = a.obs.loc[(roi.sample.name, roi.name), "supercommunity"].astype(int)
         assert c2.value_counts().shape[0] == scomm.shape[0]
         c3 = c2.replace(scomm.to_dict()).rename("supercommunity")
         assert c3.max() <= n_scomms
@@ -1609,12 +1520,8 @@ def cluster_communities(
         c["sample"] = roi.sample.name
         c["roi"] = roi.roi_number
         _assignments.append(c)
-    assignments = pd.concat(_assignments).set_index(
-        ["sample", "roi"], append=True
-    )
-    assignments.index = assignments.index.reorder_levels(
-        ["sample", "roi", "obj_id"]
-    )
+    assignments = pd.concat(_assignments).set_index(["sample", "roi"], append=True)
+    assignments.index = assignments.index.reorder_levels(["sample", "roi", "obj_id"])
 
     # Further merge supercommunities if distant by less than X% of composition
     # TODO: revise supercommunity merging
@@ -1653,19 +1560,13 @@ def cluster_communities(
     assignments["supercommunity"] = assignments["supercommunity"].replace(repl)
 
     # check name/number supercommunities is sorted on the abundance of their cell types
-    s = (
-        assignments["supercommunity"]
-        .value_counts()
-        .sort_values(ascending=False)
-    )
+    s = assignments["supercommunity"].value_counts().sort_values(ascending=False)
     assignments["supercommunity"] = assignments["supercommunity"].replace(
         dict(zip(s.index, np.arange(1, len(s))))
     )
 
     # save final assignments
-    assignments.to_csv(
-        output_prefix + "cell_type.community.supercommunities.csv"
-    )
+    assignments.to_csv(output_prefix + "cell_type.community.supercommunities.csv")
 
     # Visualize
     # # visualize initial communities in clustermap, PCA or UMAP
@@ -1732,9 +1633,7 @@ def cluster_communities(
             rasterized=True,
             cbar_kws=dict(label="% of supercommunity"),
         )
-        grid.savefig(
-            output_prefix + f"{var_}.cell_type_composition.svg", **FIG_KWS
-        )
+        grid.savefig(output_prefix + f"{var_}.cell_type_composition.svg", **FIG_KWS)
         grid = sns.clustermap(
             perc_supercts,
             z_score=1,
@@ -1773,9 +1672,7 @@ def cluster_communities(
     for j, var_ in enumerate(vars_):
         if var_ == "community":
             continue
-        add_legend(
-            patches[var_], axes[-1, j], **leg_kws
-        )  # label="Super community",
+        add_legend(patches[var_], axes[-1, j], **leg_kws)  # label="Super community",
         _z = zip(
             axes[0].squeeze(),
             ["Cell types", "Communities", "Super communities"],
@@ -1785,9 +1682,7 @@ def cluster_communities(
     # TODO: limit rasterization to main image
     for axs in axes.flat:
         axs.set_rasterized(True)
-    fig.savefig(
-        output_prefix + "communities_supercommunities.all_rois.svg", **FIG_KWS
-    )
+    fig.savefig(output_prefix + "communities_supercommunities.all_rois.svg", **FIG_KWS)
 
     return assignments["supercommunity"]
 
@@ -1856,9 +1751,7 @@ def get_best_mixture_number(
         assert all(new_means.index == range(len(new_means)))
         return y2
 
-    xx = (
-        x.sample(n=10_000) if subsample_if_needed and x.shape[0] > 10_000 else x
-    )
+    xx = x.sample(n=10_000) if subsample_if_needed and x.shape[0] > 10_000 else x
 
     if isinstance(xx, pd.Series):
         xx = xx.values.reshape((-1, 1))
@@ -1912,9 +1805,7 @@ def get_threshold_from_gaussian_mixture(
     else:
         y = y.reindex(x.index).values
     y = replace_pred(x, y).values
-    thresh = x.loc[((y[:-1] < y[1::])).tolist() + [False]].reset_index(
-        drop=True
-    )
+    thresh = x.loc[((y[:-1] < y[1::])).tolist() + [False]].reset_index(drop=True)
     assert len(thresh) == (n_components - 1)
     return thresh
 
@@ -1982,9 +1873,7 @@ def get_population(
     elif population == 0:
         operator = np.less_equal
     else:
-        raise ValueError(
-            "Chosen population must be '0' (lowest) or '-1' (highest)."
-        )
+        raise ValueError("Chosen population must be '0' (lowest) or '-1' (highest).")
 
     # Make sure index is unique
     if not ser.index.is_monotonic:
@@ -2038,9 +1927,7 @@ def stack_to_probabilities(
         channel_labels.str.contains("|".join(nuclear_channels))
     ]
     if cytoplasm_channels is None:
-        _cytoplasm_channels = channel_labels[
-            ~channel_labels.isin(_nuclear_channels)
-        ]
+        _cytoplasm_channels = channel_labels[~channel_labels.isin(_nuclear_channels)]
     else:
         _cytoplasm_channels = channel_labels[
             channel_labels.str.contains("|".join(cytoplasm_channels))
@@ -2090,9 +1977,7 @@ def stack_to_probabilities(
 def save_probabilities(probs, output_tiff):
     import tifffile
 
-    tifffile.imsave(
-        output_tiff, np.moveaxis((probs * 2 ** 16).astype("uint16"), 0, -1)
-    )
+    tifffile.imsave(output_tiff, np.moveaxis((probs * 2 ** 16).astype("uint16"), 0, -1))
 
 
 # def probabilities_to_mask(arr: Array, nuclei_diameter_range=(5, 30)) -> Array:

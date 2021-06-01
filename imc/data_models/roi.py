@@ -136,9 +136,7 @@ class ROI:
         self.masks_dir = masks_dir
         self.single_cell_dir = single_cell_dir
         self.channel_labels_file: Optional[Path] = (
-            Path(channel_labels)
-            if isinstance(channel_labels, (str, Path))
-            else None
+            Path(channel_labels) if isinstance(channel_labels, (str, Path)) else None
         )
         self.mask_layer = default_mask_layer
         # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
@@ -179,11 +177,7 @@ class ROI:
         return (
             "Region"
             + (f" {self.roi_number}" if self.roi_number is not None else "")
-            + (
-                f" of sample '{self.sample.name}'"
-                if self.sample is not None
-                else ""
-            )
+            + (f" of sample '{self.sample.name}'" if self.sample is not None else "")
         )
 
     @classmethod
@@ -213,9 +207,7 @@ class ROI:
             return self._channel_labels
 
         # read channel labels specifically for ROI
-        channel_labels_file = self._get_input_filename("stack").replace_(
-            ".tiff", ".csv"
-        )
+        channel_labels_file = self._get_input_filename("stack").replace_(".tiff", ".csv")
         if not channel_labels_file.exists():
             msg = (
                 "`channel_labels` was not given upon initialization "
@@ -225,15 +217,11 @@ class ROI:
 
         preview = pd.read_csv(channel_labels_file, header=None, squeeze=True)
         if isinstance(preview, pd.Series):
-            order = preview.to_frame(name="ChannelName").set_index(
-                "ChannelName"
-            )
+            order = preview.to_frame(name="ChannelName").set_index("ChannelName")
             # read reference
             ref: DataFrame = self.sample.panel_metadata
             ref = ref.loc[
-                ref["AcquisitionID"].isin(
-                    [self.roi_number, str(self.roi_number)]
-                )
+                ref["AcquisitionID"].isin([self.roi_number, str(self.roi_number)])
             ]
             self._channel_labels = (
                 order.join(ref.reset_index().set_index("ChannelName"))["index"]
@@ -251,9 +239,7 @@ class ROI:
         if self._channel_exclude is not None:
             return self._channel_exclude
         if self.channel_labels is not None:
-            self._channel_exclude = pd.Series(index=self.channel_labels).fillna(
-                False
-            )
+            self._channel_exclude = pd.Series(index=self.channel_labels).fillna(False)
             return self._channel_exclude
 
     def set_channel_exclude(self, values: Union[List[str], Series]):
@@ -280,9 +266,7 @@ class ROI:
             return self._stack
 
         # read from file and return without storing as attribute
-        mtx: Array = self.read_input(
-            "stack", permissive=False, set_attribute=False
-        )
+        mtx: Array = self.read_input("stack", permissive=False, set_attribute=False)
         self._shape = mtx.shape
         self._channel_number = mtx.shape[0]
         return mtx
@@ -317,9 +301,7 @@ class ROI:
             try:
                 self._shape = self.stack.shape
             except AttributeNotSetError:
-                raise AttributeNotSetError(
-                    "ROI does not have either stack or mask!"
-                )
+                raise AttributeNotSetError("ROI does not have either stack or mask!")
         return self._shape
 
     @property
@@ -375,9 +357,7 @@ class ROI:
         """
         if self._nuclei_mask_o is not None:
             return self._nuclei_mask_o
-        self._nuclei_mask_o = self.read_input(
-            "nuclei_mask", set_attribute=False
-        )
+        self._nuclei_mask_o = self.read_input("nuclei_mask", set_attribute=False)
         # todo: align numbering with cell mask
         return self._nuclei_mask_o
 
@@ -490,6 +470,7 @@ class ROI:
         """
         to_read = {
             "stack": (self.stacks_dir, "_full.tiff"),
+            "ilastik_input": (self.stacks_dir, "_ilastik_s2.h5"),
             # "features": (self.stacks_dir, "_ilastik_s2_Features.h5"),
             "probabilities": (self.stacks_dir, "_Probabilities.tiff"),
             # "uncertainty": (ROI_UNCERTAINTY_DIR, "_ilastik_s2_Probabilities_uncertainty.tiff"),
@@ -534,9 +515,7 @@ class ROI:
         if set_attribute and not overwrite and hasattr(self, key):
             return None
         try:
-            value = read_image_from_file(
-                self._get_input_filename(key), **parameters
-            )
+            value = read_image_from_file(self._get_input_filename(key), **parameters)
         except FileNotFoundError:
             if permissive:
                 return None
@@ -846,9 +825,7 @@ class ROI:
             arr2, colors = merge_channels(arr, return_colors=True, **kwargs)
 
             if position is not None:
-                arr2 = arr2[
-                    slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)
-                ]
+                arr2 = arr2[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
 
             x, y, _ = arr2.shape
             _axes[0].imshow(minmax_scale(arr2))
@@ -941,9 +918,7 @@ class ROI:
 
         arr = cell_labels_to_mask(self.cell_mask, m)
         if position is not None:
-            arr = arr[
-                slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)
-            ]
+            arr = arr[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
         _ax.imshow(arr, cmap=cmap)
         _ax.set_title(cluster)
         _ax.axis("off")
@@ -955,9 +930,7 @@ class ROI:
     def plot_cell_types(
         self,
         cell_type_assignments: Series = None,
-        cell_type_combinations: Optional[
-            Union[str, List[Tuple[str, str]]]
-        ] = None,
+        cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
         position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
         ax: Union[Axis, List[Axis]] = None,
         palette: Optional[str] = "tab20",
@@ -987,9 +960,7 @@ class ROI:
                 clusters = clusters.replace(dict(zip(labels, ns)))
             else:
                 ns = labels.index.to_series()
-                clusters = clusters.replace(
-                    dict(zip(labels, np.arange(len(labels))))
-                )
+                clusters = clusters.replace(dict(zip(labels, np.arange(len(labels)))))
         else:
             labels = sorted(np.unique(clusters.values))
             ns = pd.Series(range(len(labels)))
@@ -1030,16 +1001,12 @@ class ROI:
         for i, _ in enumerate(combs):
             axes[i, 0].set_title(self.name)
             # plot channel mean for texture/context
-            axes[i, 0].imshow(
-                self.get_mean_all_channels() * 0.1, cmap=bckgd_cmap
-            )
+            axes[i, 0].imshow(self.get_mean_all_channels() * 0.1, cmap=bckgd_cmap)
             # plot each of the cell types with different colors
             res = cell_labels_to_mask(self.cell_mask, clusters)
             rgb = numbers_to_rgb_colors(res, from_palette=cast(palette))
             if position is not None:
-                rgb = rgb[
-                    slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)
-                ]
+                rgb = rgb[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
             axes[i, 0].imshow(rgb)
             colors = (
                 pd.Series(sns.color_palette(palette, max(ns.values + 1)))
@@ -1047,8 +1014,7 @@ class ROI:
                 .values
             )
             patches += [
-                mpatches.Patch(color=colors[j], label=l)
-                for j, l in enumerate(labels)
+                mpatches.Patch(color=colors[j], label=l) for j, l in enumerate(labels)
             ]
             axes[i, 0].axis("off")
             if add_scale:
@@ -1180,9 +1146,7 @@ class ROI:
             _axes = axes
         _axes[0].set_ylabel(self.name)
         _axes[0].set_title("Channel mean")
-        _axes[0].imshow(
-            self._get_channel("mean", equalize=True, minmax=True)[1]
-        )
+        _axes[0].imshow(self._get_channel("mean", equalize=True, minmax=True)[1])
         _axes[1].set_title(dna_label)
         _axes[1].imshow(eq(dna))
         _axes[2].set_title("Probabilities")
@@ -1190,18 +1154,14 @@ class ROI:
         i = 0
         if nuclei:
             _axes[3 + i].set_title("Nuclei")
-            _axes[3 + i].imshow(
-                self.nuclei_mask > 0, cmap=get_random_label_cmap()
-            )
+            _axes[3 + i].imshow(self.nuclei_mask > 0, cmap=get_random_label_cmap())
             i += 1
         _axes[3 + i].set_title("Cells")
         mask = self.cell_mask
         if mask.dtype == "bool":
             mask = mask > 0
         mask = np.ma.masked_array(mask, mask == 0)
-        _axes[3 + i].imshow(
-            mask, cmap=get_random_label_cmap(), interpolation="none"
-        )
+        _axes[3 + i].imshow(mask, cmap=get_random_label_cmap(), interpolation="none")
         if add_scale:
             _add_scale(_axes[3 + i])
         # To plot jointly

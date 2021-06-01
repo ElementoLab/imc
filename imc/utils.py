@@ -67,11 +67,7 @@ def filter_kwargs_by_callable(
     from inspect import signature
 
     args = signature(callabl).parameters.keys()
-    return {
-        k: v
-        for k, v in kwargs.items()
-        if (k in args) and k not in (exclude or [])
-    }
+    return {k: v for k, v in kwargs.items() if (k in args) and k not in (exclude or [])}
 
 
 def build_channel_name(
@@ -117,9 +113,7 @@ def parse_acquisition_metadata(
     ].drop_duplicates()
     if acquisition_id is not None:
         acquired = acquired.loc[
-            acquired["AcquisitionID"].isin(
-                [acquisition_id, str(acquisition_id)]
-            )
+            acquired["AcquisitionID"].isin([acquisition_id, str(acquisition_id)])
         ]
         acquired = acquired[["ChannelLabel", "ChannelName"]]
     else:
@@ -132,9 +126,7 @@ def parse_acquisition_metadata(
 
     # clean up the channel name
     acquired["ChannelLabel"] = cleanup_channel_names(acquired["ChannelLabel"])
-    acquired.index = (
-        acquired["ChannelLabel"] + "(" + acquired["ChannelName"] + ")"
-    )
+    acquired.index = acquired["ChannelLabel"] + "(" + acquired["ChannelName"] + ")"
 
     if reference is None:
         return acquired
@@ -162,9 +154,7 @@ def parse_acquisition_metadata(
     )
 
     if filter_full:
-        joint_panel = joint_panel.loc[
-            joint_panel["full"].isin([1, "1", True, "TRUE"])
-        ]
+        joint_panel = joint_panel.loc[joint_panel["full"].isin([1, "1", True, "TRUE"])]
     return joint_panel
 
 
@@ -201,27 +191,19 @@ def align_channels_by_name(res: DataFrame, channel_axis=0) -> DataFrame:
             ex = miss.str.extract(r"^(.*)\(")[0]
             # if all channel *names* come in pairs
             if (ex.value_counts() == 2).all():
-                print(
-                    "Found matching channel names in different metals, will align."
-                )
+                print("Found matching channel names in different metals, will align.")
                 # try to match channel swaps
                 for ch in ex.unique():
                     original = miss[miss.str.startswith(ch)]
-                    chs = "-".join(
-                        original.str.extract(r"^.*\((.*)\)")[0].tolist()
-                    )
+                    chs = "-".join(original.str.extract(r"^.*\((.*)\)")[0].tolist())
                     new_ch_name = ch + "(" + chs + ")"
                     # add joined values
                     if channel_axis == 0:
                         res.loc[new_ch_name] = (
-                            res.loc[original]
-                            .T.stack()
-                            .reset_index(level=1, drop=True)
+                            res.loc[original].T.stack().reset_index(level=1, drop=True)
                         )
                     else:
-                        res.loc[:, new_ch_name] = (
-                            res.loc[:, original].T.stack().values
-                        )
+                        res.loc[:, new_ch_name] = res.loc[:, original].T.stack().values
                     # drop original rows
                     res = res.drop(original, axis=channel_axis)
             else:
@@ -293,17 +275,11 @@ def write_image_to_file(
     file_format: str = "png",
 ) -> None:
     if len(arr.shape) != 3:
-        skimage.io.imsave(
-            output_prefix + "." + "channel_mean" + "." + file_format, arr
-        )
+        skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, arr)
     else:
         __s = np.multiply(eq(arr.mean(axis=0)), 256).astype(np.uint8)
-        skimage.io.imsave(
-            output_prefix + "." + "channel_mean" + "." + file_format, __s
-        )
-        for channel, label in tqdm(
-            enumerate(channel_labels), total=arr.shape[0]
-        ):
+        skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, __s)
+        for channel, label in tqdm(enumerate(channel_labels), total=arr.shape[0]):
             skimage.io.imsave(
                 output_prefix + "." + label + "." + file_format,
                 np.multiply(arr[channel], 256).astype(np.uint8),
@@ -406,9 +382,7 @@ def lacunarity(image, box_size=30):
     return np.var(accumulator) / mean_sqrd + 1
 
 
-def get_canny_edge_image(
-    image: Array, mask: Optional[Array], radius=30, sigma=0.5
-):
+def get_canny_edge_image(image: Array, mask: Optional[Array], radius=30, sigma=0.5):
     """Compute Canny edge image."""
     from skimage.filters.rank import equalize
     from skimage.morphology import disk
@@ -454,10 +428,7 @@ def mcd_to_dir(
     def all_channels_equal(mcd):
         chs = get_dataframe_from_channels(mcd)
         return all(
-            [
-                (chs[c].value_counts() == mcd.n_acquisitions).all()
-                for c in chs.columns
-            ]
+            [(chs[c].value_counts() == mcd.n_acquisitions).all() for c in chs.columns]
         )
 
     def get_panel_partitions(mcd):
@@ -476,31 +447,19 @@ def mcd_to_dir(
         From https://github.com/BodenmillerGroup/ImcPluginsCP/blob/master/plugins/smoothmultichannel.py#L416
         """
         if hp_filter_shape[0] % 2 != 1 or hp_filter_shape[1] % 2 != 1:
-            raise ValueError(
-                "Invalid hot pixel filter shape: %s" % str(hp_filter_shape)
-            )
+            raise ValueError("Invalid hot pixel filter shape: %s" % str(hp_filter_shape))
         hp_filter_footprint = np.ones(hp_filter_shape)
-        hp_filter_footprint[
-            int(hp_filter_shape[0] / 2), int(hp_filter_shape[1] / 2)
-        ] = 0
-        max_img = ndi.maximum_filter(
-            img, footprint=hp_filter_footprint, mode="reflect"
-        )
+        hp_filter_footprint[int(hp_filter_shape[0] / 2), int(hp_filter_shape[1] / 2)] = 0
+        max_img = ndi.maximum_filter(img, footprint=hp_filter_footprint, mode="reflect")
         hp_mask = img - max_img > hp_threshold
         img = img.copy()
         img[hp_mask] = max_img[hp_mask]
         return img
 
     if partition_panels:
-        raise NotImplementedError(
-            "Partitioning sample per panel is not implemented yet."
-        )
+        raise NotImplementedError("Partitioning sample per panel is not implemented yet.")
 
-    if (
-        pannel_csv is None
-        and ilastik_channels is None
-        and ilastik_compartment is None
-    ):
+    if pannel_csv is None and ilastik_channels is None and ilastik_compartment is None:
         raise ValueError(
             "One of `pannel_csv`, `ilastik_channels` or `ilastik_compartment` must be given!"
         )
@@ -586,9 +545,7 @@ def mcd_to_dir(
         # Skip if not overwrite
         file_ending = "ome.tiff" if output_format == "ome-tiff" else "tiff"
         if (prefix + "_full." + file_ending).exists() and not overwrite:
-            print(
-                "TIFF images exist and overwrite is set to `False`. Continuing."
-            )
+            print("TIFF images exist and overwrite is set to `False`. Continuing.")
             continue
 
         # Filter channels
@@ -625,11 +582,7 @@ def mcd_to_dir(
                     )
 
         # Save channel labels for the stack
-        if (
-            not only_crops
-            and ((overwrite) or not (p + "csv").exists())
-            and export_stacks
-        ):
+        if not only_crops and ((overwrite) or not (p + "csv").exists()) and export_stacks:
             channel_labels.to_csv(p + "csv")
 
         if not ilastik_output:
@@ -650,9 +603,7 @@ def mcd_to_dir(
             # Or nuclear/cytoplasmic
             from imc.segmentation import prepare_stack
 
-            full = prepare_stack(
-                ac.image_data, channel_labels, ilastik_compartment
-            )
+            full = prepare_stack(ac.image_data, channel_labels, ilastik_compartment)
             if len(full.shape) == 2:
                 full = full[np.newaxis, ...]
             nchannels = 2 if ilastik_compartment == "both" else 1
@@ -699,6 +650,25 @@ def mcd_to_dir(
     #     for ac_id in partition:
     #         ac = mcd.get_imc_acquisition(ac_id)
     #         ac.save_image(pjoin(output_dir, f"partition_{partition_id}", ""))
+
+
+def txt_to_tiff(
+    txt_file: Path, tiff_file: Path, write_channel_labels: bool = True
+) -> None:
+    """
+    Convert a Fluidigm TXT file to a TIFF file.
+    """
+    df = pd.read_table(txt_file)
+    df = df.drop(
+        ["Start_push", "End_push", "Pushes_duration", "Z"], axis=1, errors="ignore"
+    )
+    df = df.pivot_table(index="X", columns="Y")
+    chs = df.columns.levels[0]
+    stack = np.asarray([df[c].values for c in chs])
+
+    tifffile.imwrite(tiff_file, stack)
+    if write_channel_labels:
+        pd.DataFrame({"channel_label": chs}).to_csv(tiff_file.replace_(".tiff", ".csv"))
 
 
 def plot_panoramas_rois(
@@ -770,7 +740,7 @@ def plot_panoramas_rois(
             continue
 
         x, y, width, height = get_pano_coords(pano)
-        # print(pano['ID'], x, y, width, height)
+        # print(pano["ID"], x, y, width, height)
         pano_pos[pano["ID"]] = (x, y, width, height)
 
         # Try to read panorama image
@@ -783,7 +753,6 @@ def plot_panoramas_rois(
             # # First panorama is the slide (won't be available)
             # # Last panorama is not a real one
             print(f"Could not find image file for panorama '{i + 1}'")
-            pass
 
         # Plot rectangles
         rect = matplotlib.patches.Rectangle(
@@ -948,9 +917,7 @@ def filter_hot_pixels(img, n_bins=1000):
     x2 = x[filter_]
     y2 = y[filter_]
 
-    mod = sm.GLM(
-        y2, np.vstack([x2, np.ones(x2.shape)]).T, family=sm.families.Poisson()
-    )
+    mod = sm.GLM(y2, np.vstack([x2, np.ones(x2.shape)]).T, family=sm.families.Poisson())
     res = mod.fit()
     f1 = lambda x: np.e ** (res.params[0] * x + res.params[1])
     g1 = vmap(grad(f1))
@@ -1131,7 +1098,5 @@ def get_distance_to_lumen_border(roi):
 
     chs = roi.channel_labels
     nuclear_channels = ["DNA", "Histone"]
-    cyto_channels = chs[
-        ~chs.str.contains("|".join(nuclear_channels), case=False)
-    ]
+    cyto_channels = chs[~chs.str.contains("|".join(nuclear_channels), case=False)]
     roi._get_channels(cyto_channels.index.tolist())[1]
