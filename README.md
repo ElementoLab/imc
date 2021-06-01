@@ -49,11 +49,18 @@ cd imctest/
 wget -O data/${SAMPLE}.mcd $MCD_URL
 
 # Run pipeline
+## output description of acquired data
 imc inspect data/${SAMPLE}.mcd
-imc prepare --ilastik --n-crops 0 --ilastik-compartment nuclear data/${SAMPLE}.mcd
+## convert MCD to TIFF and auxiliary files
+imc prepare \
+  --ilastik --n-crops 0 --ilastik-compartment nuclear \
+  data/${SAMPLE}.mcd
+## For each TIFF file, output prediction of mask probabilities and segment them 
 TIFFS=processed/${SAMPLE}/tiffs/${SAMPLE}*_full.tiff
 imc predict $TIFFS
-imc segment --from-probabilities --model deepcell --compartment both $TIFFS
+imc segment \
+  --from-probabilities --model deepcell --compartment both $TIFFS
+## Quantify channel intensity for each single cell in every image
 imc quantify $TIFFS
 ```
 
