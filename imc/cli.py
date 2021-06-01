@@ -14,7 +14,9 @@ import pandas as pd
 from imc.types import Path
 from imc.scripts.inspect_mcds import main as inspect
 from imc.scripts.prepare_mcds import main as prepare
+from imc.scripts.predict import main as predict
 from imc.scripts.segment_stacks import main as segment
+from imc.scripts.quantify import main as quantify
 from imc.utils import mcd_to_dir
 from imc.scripts import cli_config
 
@@ -27,8 +29,15 @@ def main(cli: List[str] = None) -> int:
         inspect(cmd_args)
     elif main_args.command == "prepare":
         prepare(cmd_args)
+    elif main_args.command == "predict":
+        predict(cmd_args)
     elif main_args.command == "segment":
         segment(cmd_args)
+    elif main_args.command == "quantify":
+        quantify(cmd_args)
+    else:
+        print("Command not known!")
+        return 1
     return 0
 
 

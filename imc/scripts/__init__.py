@@ -1,24 +1,7 @@
-from typing import List, Dict
+import typing as tp
 import argparse
 
 from imc.types import Path
-
-
-def build_cli(cmd) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(**cli_config["subcommands"][cmd])  # type: ignore[index]
-    parser = build_params(parser, cli_config["subcommand_arguments"][cmd])  # type: ignore[index]
-    return parser
-
-
-def build_params(
-    parser: argparse.ArgumentParser, config: List[Dict[str, Dict[str, str]]]
-) -> argparse.ArgumentParser:
-    for opt in config:
-        args = opt.get("args") or {}
-        kwargs = opt.get("kwargs") or {}
-        parser.add_argument(*args, **kwargs)  # type: ignore[arg-type]
-    return parser
-
 
 epilog = "https://github.com/ElementoLab/imc"
 cli_config = {
@@ -38,9 +21,19 @@ cli_config = {
             "description": "Prepare project directory from MCD files.",
             "epilog": epilog,
         },
+        "predict": {
+            "prog": "imc predict",
+            "description": "Output cellular probabilities from image stacks.",
+            "epilog": epilog,
+        },
         "segment": {
             "prog": "imc segment",
             "description": "Segment image stacks.",
+            "epilog": epilog,
+        },
+        "quantify": {
+            "prog": "imc quantify",
+            "description": "Quantify channel intensity in segmented cells.",
             "epilog": epilog,
         },
     },
@@ -154,6 +147,53 @@ cli_config = {
                 },
             },
         ],
+        "predict": [
+            {
+                "kwargs": {
+                    "dest": "tiffs",
+                    "nargs": "+",
+                    "type": Path,
+                    "help": "TIFF files with array stack.",
+                }
+            },
+            {
+                "args": ["-l", "--lib-dir"],
+                "kwargs": {
+                    "dest": "lib_dir",
+                    "type": Path,
+                    "default": "_lib",
+                    "help": "Directory to store static resources such as trained models.",
+                },
+            },
+            {
+                "args": ["--ilastik-version"],
+                "kwargs": {
+                    "dest": "ilastik_version",
+                    "choices": ["1.3.3post2"],
+                    "default": "1.3.3post2",
+                },
+            },
+            {
+                "args": ["-m", "--model-version"],
+                "kwargs": {
+                    "dest": "ilastik_model_version",
+                    "choices": ["20210302"],
+                    "default": "20210302",
+                },
+            },
+            {
+                "args": ["--custom-model"],
+                "kwargs": {
+                    "dest": "custom_model",
+                    "type": Path,
+                    "help": "Path to an existing ilastik model to use.",
+                },
+            },
+            {
+                "args": ["--overwrite"],
+                "kwargs": {"dest": "overwrite", "action": "store_true"},
+            },
+        ],
         "segment": [
             {
                 "kwargs": {
@@ -221,5 +261,72 @@ cli_config = {
                 },
             },
         ],
+        "quantify": [
+            {
+                "kwargs": {
+                    "dest": "tiffs",
+                    "nargs": "+",
+                    "type": Path,
+                    "help": "TIFF files with array stack.",
+                }
+            },
+            {
+                "args": ["--no-morphology"],
+                "kwargs": {
+                    "dest": "morphology",
+                    "action": "store_false",
+                },
+            },
+            {
+                "args": ["--layers"],
+                "kwargs": {
+                    "dest": "layers",
+                    "default": "cell",
+                    "help": "Comma-delimited list of layers of segmentation to quantify. Defaults to 'cell'.",
+                },
+            },
+            {
+                "args": ["-e", "--channel-exclude"],
+                "kwargs": {
+                    "default": "",
+                    "help": "Comma-delimited list of channels to exclude from stack.",
+                },
+            },
+            {
+                "args": ["--output"],
+                "kwargs": {
+                    "dest": "output",
+                    "help": "Output file with quantification. Will default to 'results/quantification.csv'.",
+                },
+            },
+            {
+                "args": ["--not-h5ad"],
+                "kwargs": {
+                    "dest": "output_h5ad",
+                    "action": "store_false",
+                    "help": "Don't output quantification in h5ad format. Default is to write h5ad.",
+                },
+            },
+            {
+                "args": ["--overwrite"],
+                "kwargs": {"dest": "overwrite", "action": "store_true"},
+            },
+        ],
     },
 }
+
+
+def build_cli(cmd: tp.Sequence[str]) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(**cli_config["subcommands"][cmd])  # type: ignore[index]
+    parser = build_params(parser, cli_config["subcommand_arguments"][cmd])  # type: ignore[index]
+    return parser
+
+
+def build_params(
+    parser: argparse.ArgumentParser, config: tp.List[tp.Dict[str, tp.Dict[str, str]]]
+) -> argparse.ArgumentParser:
+    for opt in config:
+        args = opt.get("args") or {}
+        kwargs = opt.get("kwargs") or {}
+        parser.add_argument(*args, **kwargs)  # type: ignore[arg-type]
+    return parser

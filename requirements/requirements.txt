@@ -1,20 +1,21 @@
-pandas>=1.0.1
-tifffile==2020.6.3
-imctools>=2.1.0,<3.0.0
-imagecodecs
-colorama
-divvy
-h5py
-ordered-set
+# colorama
+# divvy
+# h5netcdf
+# h5py
+# imagecodecs
+# napari
+# ordered-set
+# outdated
+# python-louvain
+# xarray
 anndata
-scanpy
-leidenalg
-python-louvain
-networkx
-parmap
+imctools>=2.1.0,<3.0.0
 joblib
-outdated
-
-napari
-xarray
-h5netcdf
+leidenalg
+networkx
+numpy_groupies
+pandas>=1.0.1
+parmap
+scanpy
+tifffile==2020.6.3
+# requests

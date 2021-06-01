@@ -154,10 +154,14 @@ def quantify_cell_morphology(
     if not border_objs:
         mask = clear_border(mask)
 
-    return pd.DataFrame(
-        skimage.measure.regionprops_table(mask, properties=attributes),
-        index=np.unique(mask)[1:],
-    ).rename_axis(index="obj_id")
+    return (
+        pd.DataFrame(
+            skimage.measure.regionprops_table(mask, properties=attributes),
+            index=np.unique(mask)[1:],
+        )
+        .rename_axis(index="obj_id")
+        .rename(columns={"centroid-0": "X", "centroid-1": "Y"})
+    )
 
 
 def _quantify_cell_intensity__roi(roi: "ROI", **kwargs) -> DataFrame:
@@ -226,21 +230,19 @@ def quantify_cells_rois(
     quants = list()
     if intensity:
         quants.append(
-            quantify_cell_intensity_rois(
-                rois=rois, layers=layers, **intensity_kwargs
-            )
+            quantify_cell_intensity_rois(rois=rois, layers=layers, **intensity_kwargs)
         )
     if morphology:
         quants.append(
-            quantify_cell_morphology_rois(
-                rois=rois, layers=layers, **morphology_kwargs
-            )
+            quantify_cell_morphology_rois(rois=rois, layers=layers, **morphology_kwargs)
         )
 
     return (
         # todo: this will fail if there's different layers in intensity and morphology
         pd.concat(
-            [quants[0].drop(["sample", "roi"], axis=1), quants[1]], axis=1
+            # ignore because a ROI is not obliged to have a Sample
+            [quants[0].drop(["sample", "roi"], axis=1, errors="ignore"), quants[1]],
+            axis=1,
         )
         if len(quants) > 1
         else quants[0]

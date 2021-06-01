@@ -1,13 +1,12 @@
-ipython
-pylint
-git-lint
-black[d]
-mypy
 # data-science-types
 PyQt5
+Sphinx
+black[d]
+git-lint
+ipython
+mypy
+pylint
 pytest
 rich
-
-Sphinx
 sphinx-issues
 sphinx-rtd-theme

@@ -799,10 +799,23 @@ def plot_panoramas_rois(
         )
         ax.scatter((x + width / 2), (y + height), marker="^", color=colors[i])
 
-    colors = sns.color_palette("tab10")
+    slide_area = (
+        float(spec["Panorama"][0]["SlideX2PosUm"])
+        - float(spec["Panorama"][0]["SlideX1PosUm"])
+    ) * (
+        float(spec["Panorama"][0]["SlideY2PosUm"])
+        - float(spec["Panorama"][0]["SlideY3PosUm"])
+    )
+
     for j, acq in enumerate(spec["Acquisition"]):
         x, y, width, height = get_roi_coords(acq)
-        # print(acq['ID'], x, y, width, height)
+        # print(acq["ID"], x, y, width, height)
+
+        ## if too large it's likely not a real ROI
+        large = (width * height / slide_area) > 0.2
+        if large and x == 0 and y == 0:
+            print(f"ROI {acq['ID']} is likely not real. Skipping.")
+            continue
 
         # Plot rectangle around ROI
         rect = matplotlib.patches.Rectangle(
@@ -810,7 +823,7 @@ def plot_panoramas_rois(
             width,
             height,
             facecolor="none",
-            edgecolor=colors[j],
+            edgecolor="black",
             linestyle="--",
         )
         ax.add_patch(rect)
@@ -819,7 +832,7 @@ def plot_panoramas_rois(
             y - height,
             s=f"ROI '{acq['ID']}'",
             ha="center",
-            color=colors[j],
+            color="black",
         )
 
         if not save_roi_arrays:

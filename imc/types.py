@@ -4,13 +4,34 @@ Specific types or type aliases used in the library.
 
 from __future__ import annotations
 import os
-from typing import Union, TypeVar, Generator
+from typing import (
+    TypeVar,
+    #
+    Mapping,
+    Dict,
+    #
+    Tuple,
+    #
+    List,
+    Collection,
+    Generator,
+    Iterator,
+    Sequence,
+    #
+    Union,
+    Optional,
+    #
+    Callable,
+    Any,
+    Literal,
+)
 import pathlib
 import argparse
 
-import matplotlib  # type: ignore
-import pandas  # type: ignore
-import numpy  # type: ignore
+import matplotlib
+import pandas
+import numpy
+from anndata import AnnData as _AnnData
 
 
 class Path(pathlib.Path):
@@ -51,14 +72,10 @@ class Path(pathlib.Path):
 
     def iterdir(self) -> Generator:
         if self.exists():
-            return pathlib.Path(str(self)).iterdir()
-        # for x in []:  # type: ignore[var-annotated]
-        #     yield x
-        return iter([])
+            yield from [pathlib.Path(str(self)).iterdir()]
+        yield from []
 
-    def mkdir(
-        self, mode=0o777, parents: bool = True, exist_ok: bool = True
-    ) -> Path:
+    def mkdir(self, mode=0o777, parents: bool = True, exist_ok: bool = True) -> Path:
         super().mkdir(mode=mode, parents=parents, exist_ok=exist_ok)
         return self
 
@@ -66,11 +83,23 @@ class Path(pathlib.Path):
 GenericType = TypeVar("GenericType")
 
 # type aliasing (done with Union to distinguish from other declared variables)
-Args = Union[argparse.Namespace]
+
+
+# Args = Union[argparse.Namespace]
+class Args(argparse.Namespace, Mapping[str, Any]):
+    pass
+
+
+# Series = Union[pandas.Series]
+class Series(pandas.Series, Mapping[Any, Any]):
+    pass
+
+
 Array = Union[numpy.ndarray]
-Series = Union[pandas.Series]
+
 MultiIndexSeries = Union[pandas.Series]
 DataFrame = Union[pandas.DataFrame]
+AnnData = Union[_AnnData]
 
 Figure = Union[matplotlib.figure.Figure]
 Axis = Union[matplotlib.axis.Axis]

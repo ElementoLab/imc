@@ -17,7 +17,7 @@ Other backends to handle multiplexed images are under development.
 
 ## Requirements and installation
 
-Requires `Python >= 3.7`.
+Requires `Python >= 3.8`.
 
 Install with `pip`:
 ```bash

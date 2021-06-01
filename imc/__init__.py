@@ -34,9 +34,7 @@ plt.rcParams["font.sans-serif"] = ["Arial"]
 plt.rcParams["text.usetex"] = False
 
 
-def setup_logger(
-    name: str = "imc", level: int = logging.INFO
-) -> logging.Logger:
+def setup_logger(name: str = "imc", level: int = logging.INFO) -> logging.Logger:
     """Setup the logger for the package."""
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -65,3 +63,4 @@ _Path.mkdir = partialmethod(_Path.mkdir, exist_ok=True, parents=True)
 from imc.data_models.project import Project
 from imc.data_models.sample import IMCSample
 from imc.data_models.roi import ROI
+from imc.cli import main

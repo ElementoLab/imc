@@ -1,19 +1,8 @@
 """
 Plotting functions and utilities to handle images.
 """
-from typing import (
-    Dict,
-    Tuple,
-    List,
-    Union,
-    Optional,
-    Callable,
-    Any,
-    overload,
-    Literal,
-    Collection,
-)
-import warnings
+
+import typing as tp
 from functools import wraps
 import colorsys
 
@@ -26,7 +15,7 @@ import seaborn as sns
 
 from skimage.exposure import equalize_hist as eq
 
-from imc.types import DataFrame, Series, Array, Figure, Axis, Patch, ColorMap
+from imc.types import Figure, Axis, Array, Series, ColorMap, Patch, AnnData
 from imc.utils import minmax_scale
 
 DEFAULT_PIXEL_UNIT_NAME = r"$\mu$m"
@@ -34,7 +23,7 @@ DEFAULT_PIXEL_UNIT_NAME = r"$\mu$m"
 DEFAULT_CHANNEL_COLORS = plt.get_cmap("tab10")(np.linspace(0, 1, 10))
 
 
-def close_plots(func) -> Callable:
+def close_plots(func) -> tp.Callable:
     """
     Decorator to close all plots on function exit.
     """
@@ -48,7 +37,7 @@ def close_plots(func) -> Callable:
 
 
 def add_scale(
-    _ax: Optional[Axis] = None,
+    _ax: tp.Optional[Axis] = None,
     width: int = 100,
     unit: str = DEFAULT_PIXEL_UNIT_NAME,
 ) -> None:
@@ -81,7 +70,7 @@ def add_scale(
     )
 
 
-def add_minmax(minmax: Tuple[float, float], _ax: Optional[Axis] = None) -> None:
+def add_minmax(minmax: tp.Tuple[float, float], _ax: tp.Optional[Axis] = None) -> None:
     """
     Add an annotation of the min and max values of the array.
     """
@@ -99,7 +88,7 @@ def add_minmax(minmax: Tuple[float, float], _ax: Optional[Axis] = None) -> None:
 
 
 def add_legend(
-    patches: List[Patch], ax: Optional[Axis] = None, **kwargs
+    patches: tp.Sequence[Patch], ax: tp.Optional[Axis] = None, **kwargs
 ) -> None:
     """Add a legend to an existing axis."""
     if ax is None:
@@ -131,9 +120,9 @@ def saturize(arr: Array) -> Array:
 
 def merge_channels(
     arr: Array,
-    target_colors: Optional[List[Tuple[float, float, float]]] = None,
+    target_colors: tp.Optional[tp.Sequence[tp.Tuple[float, float, float]]] = None,
     return_colors: bool = False,
-) -> Union[Array, Tuple[Array, List[Tuple[float, float, float]]]]:
+) -> tp.Union[Array, tp.Tuple[Array, tp.Sequence[tp.Tuple[float, float, float]]]]:
     """
     Assumes [0, 1] float array.
     to is a tuple of 3 colors.
@@ -142,8 +131,7 @@ def merge_channels(
     n_channels = arr.shape[0]
     if target_colors is None:
         target_colors = [
-            matplotlib.colors.to_rgb(col)
-            for col in DEFAULT_CHANNEL_COLORS[:n_channels]
+            matplotlib.colors.to_rgb(col) for col in DEFAULT_CHANNEL_COLORS[:n_channels]
         ]
 
     if (n_channels == 3) and target_colors is None:
@@ -168,9 +156,7 @@ def merge_channels(
     return res if not return_colors else (res, target_colors)
 
 
-def rainbow_text(
-    x, y, strings, colors, orientation="horizontal", ax=None, **kwargs
-):
+def rainbow_text(x, y, strings, colors, orientation="horizontal", ax=None, **kwargs):
     """
     Take a list of *strings* and *colors* and place them next to each
     other, with text strings[i] being shown in colors[i].
@@ -184,7 +170,7 @@ def rainbow_text(
     colors : list of color
         The colors to use.
     orientation : {'horizontal', 'vertical'}
-    ax : Axes, optional
+    ax : Axes, tp.optional
         The Axes to draw into. If None, the current axes will be used.
     **kwargs
         All other keyword arguments are passed to plt.text(), so you can
@@ -216,23 +202,19 @@ def rainbow_text(
             t = text.get_transform() + Affine2D().translate(0, ex.height * 0.5)
 
 
-def get_rgb_cmaps() -> Tuple[ColorMap, ColorMap, ColorMap]:
+def get_rgb_cmaps() -> tp.Tuple[ColorMap, ColorMap, ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
     r = [
-        matplotlib.colors.LinearSegmentedColormap.from_list("", p * r)
-        for p in np.eye(3)
+        matplotlib.colors.LinearSegmentedColormap.from_list("", p * r) for p in np.eye(3)
     ]
     return tuple(r)  # type: ignore
 
 
-def get_dark_cmaps(
-    n: int = 3, from_palette: str = "colorblind"
-) -> List[ColorMap]:
+def get_dark_cmaps(n: int = 3, from_palette: str = "colorblind") -> tp.List[ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
     if n > len(sns.color_palette(from_palette)):
         print(
-            "Chosen palette has less than the requested number of colors. "
-            "Will reuse!"
+            "Chosen palette has less than the requested number of colors. " "Will reuse!"
         )
     return [
         matplotlib.colors.LinearSegmentedColormap.from_list("", np.array(p) * r)
@@ -241,18 +223,15 @@ def get_dark_cmaps(
 
 
 def get_transparent_cmaps(
-    n: int = 3, from_palette: Optional[str] = "colorblind"
-) -> List[ColorMap]:
+    n: int = 3, from_palette: tp.Optional[str] = "colorblind"
+) -> tp.List[ColorMap]:
     __r = np.linspace(0, 1, 100)
     if n > len(sns.color_palette(from_palette)):
         print(
-            "Chosen palette has less than the requested number of colors. "
-            "Will reuse!"
+            "Chosen palette has less than the requested number of colors. " "Will reuse!"
         )
     return [
-        matplotlib.colors.LinearSegmentedColormap.from_list(
-            "", [p + (c,) for c in __r]
-        )
+        matplotlib.colors.LinearSegmentedColormap.from_list("", [p + (c,) for c in __r])
         for p in sns.color_palette(from_palette, n)
     ]
 
@@ -273,7 +252,7 @@ def get_random_label_cmap(n=2 ** 16, h=(0, 1), l=(0.4, 1), s=(0.2, 0.8)):
 random_label_cmap = get_random_label_cmap
 
 # TODO: see if function can be sped up e.g. with Numba
-def cell_labels_to_mask(mask: Array, labels: Union[Series, Dict]) -> Array:
+def cell_labels_to_mask(mask: Array, labels: tp.Union[Series, tp.Dict]) -> Array:
     """Replaces integers in `mask` with values from the mapping in `labels`."""
     res = np.zeros(mask.shape, dtype=int)
     for k, v in labels.items():
@@ -294,13 +273,10 @@ def numbers_to_rgb_colors(
 
     if n_colors > len(sns.color_palette(from_palette)):
         print(
-            "Chosen palette has less than the requested number of colors. "
-            "Will reuse!"
+            "Chosen palette has less than the requested number of colors. " "Will reuse!"
         )
 
-    colors = Series(sns.color_palette(from_palette, ident.max())).reindex(
-        ident - 1
-    )
+    colors = pd.Series(sns.color_palette(from_palette, ident.max())).reindex(ident - 1)
     res = np.zeros((mask.shape) + (3,))
     for c, i in zip(colors, ident):
         x, y = np.nonzero(np.isin(mask, i))
@@ -308,30 +284,30 @@ def numbers_to_rgb_colors(
     return res
 
 
-@overload
+@tp.overload
 def get_grid_dims(
-    dims: Union[int, Collection],
-    return_fig: Literal[True],
-    nstart: Optional[int],
+    dims: tp.Union[int, tp.Collection],
+    return_fig: tp.Literal[True],
+    nstart: tp.Optional[int],
 ) -> Figure:
     ...
 
 
-@overload
+@tp.overload
 def get_grid_dims(
-    dims: Union[int, Collection],
-    return_fig: Literal[False],
-    nstart: Optional[int],
-) -> Tuple[int, int]:
+    dims: tp.Union[int, tp.Collection],
+    return_fig: tp.Literal[False],
+    nstart: tp.Optional[int],
+) -> tp.Tuple[int, int]:
     ...
 
 
 def get_grid_dims(
-    dims: Union[int, Collection],
+    dims: tp.Union[int, tp.Collection],
     return_fig: bool = False,
-    nstart: Optional[int] = None,
+    nstart: tp.Optional[int] = None,
     **kwargs,
-) -> Union[Tuple[int, int], Figure]:
+) -> tp.Union[tp.Tuple[int, int], Figure]:
     """
     Given a number of `dims` subplots, choose optimal x/y dimentions of plotting
     grid maximizing in order to be as square as posible and if not with more
@@ -400,13 +376,11 @@ def share_axes_by(axes: Axis, by: str) -> None:
 
 
 def plot_single_channel(
-    arr: Array, axis: Optional[Axis] = None, cmap: Optional[ColorMap] = None
-) -> Union[Figure, Axis]:
+    arr: Array, axis: tp.Optional[Axis] = None, cmap: tp.Optional[ColorMap] = None
+) -> tp.Union[Figure, Axis]:
     """Plot a single image channel either in a new figure or in an existing axis"""
     if axis is None:
-        fig, axs = plt.subplots(
-            1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True
-        )
+        fig, axs = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
     axs.imshow(arr, cmap=cmap, interpolation="bilinear", rasterized=True)
     axs.axis("off")
     return fig if axis is None else axs
@@ -414,14 +388,12 @@ def plot_single_channel(
 
 def plot_overlayied_channels(
     arr: Array,
-    channel_labels: List[str],
-    axis: Optional[Axis] = None,
-    palette: Optional[str] = None,
-) -> Union[Figure, Axis]:
+    channel_labels: tp.Sequence[str],
+    axis: tp.Optional[Axis] = None,
+    palette: tp.Optional[str] = None,
+) -> tp.Union[Figure, Axis]:
     if axis is None:
-        fig, ax = plt.subplots(
-            1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True
-        )
+        fig, ax = plt.subplots(1, 1, figsize=(6 * 1, 6 * 1), sharex=True, sharey=True)
     cmaps = get_transparent_cmaps(arr.shape[0], from_palette=palette)
     patches = list()
     for i, (m, c) in enumerate(zip(channel_labels, cmaps)):
@@ -436,9 +408,7 @@ def plot_overlayied_channels(
         )
         ax.axis("off")
         patches.append(mpatches.Patch(color=c(256), label=m))
-    ax.legend(
-        handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0
-    )
+    ax.legend(handles=patches, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0)
     return fig if axis is None else ax
 
 
@@ -472,11 +442,18 @@ def rasterize_scanpy(fig: Figure) -> None:
                                 _cc.set_rasterized(True)
 
 
-def add_centroids(a, ax=None, res=None, column=None, algo="umap"):
+def add_centroids(
+    a: AnnData,
+    ax: tp.Union[tp.Sequence[Axis], Axis] = None,
+    res: float = None,
+    column: str = None,
+    algo: str = "umap",
+):
     """
     a: AnnData
     ax: matplotlib.Axes.axes
     res: resolution of clusters to label
+    column: Column to be used. Has precedence over `res`.
     """
     from numpy_groupies import aggregate
 

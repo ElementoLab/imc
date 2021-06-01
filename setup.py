@@ -10,7 +10,7 @@ from setuptools import setup, find_packages
 from pathlib import Path
 
 
-def parse_requirements(req_file):
+def parse_requirements(req_file: Path):
     """Parse requirements.txt files."""
     reqs = open(req_file).read().strip().split("\n")
     reqs = [r for r in reqs if not r.startswith("#")]
@@ -18,9 +18,9 @@ def parse_requirements(req_file):
 
 
 # Requirements
-reqs_dir = Path("requirements")
+reqs_dir = Path("requirements").glob("*.txt")
 reqs = dict()
-for f in reqs_dir.iterdir():
+for f in reqs_dir:
     pkgs = parse_requirements(f)
     if "." in f.stem:
         k = f.stem.split(".")[-1]
@@ -73,13 +73,13 @@ setup(
         # "Documentation": "https://imc.readthedocs.io",
         "Source Code": "https://github.com/elementolab/imc",
     },
-    author=u"Andre Rendeiro",
+    author="Andre Rendeiro",
     author_email="andre.rendeiro@pm.me",
     license="GPL3",
     setup_requires=["setuptools_scm"],
     install_requires=reqs["base"],
     tests_require=reqs["dev"],
-    extras_require={k: v for k, v in reqs.items() if k not in ["base", "dev"]},
+    extras_require={k: v for k, v in reqs.items() if k not in ["base"]},
     # package_data={"imc": ["config/*.yaml", "templates/*.html", "_models/*"]},
     # data_files=[("requirements", reqs.values())],
 )
