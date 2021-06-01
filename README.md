@@ -1,5 +1,7 @@
 <!--![imc logo](https://raw.githubusercontent.com/elementolab/imcpipeline/master/logo.png)-->
-![imc logo](logo.png)
+<p align="center">
+  <img width="460" height="300" src="logo.png">
+</p>
 
 # Imaging mass cytometry
 
@@ -29,7 +31,49 @@ configuration.
 
 ## Quick start
 
-### Demo data (synthetic)
+### Use case 1 (pipeline processing)
+
+#### Example: Lung sample processing from MCD to single-cell h5ad
+
+Pipeline processing:
+```bash
+SAMPLE=20200629_NL1915A
+MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
+
+# Install imc package (do this inside virtual environment for example)
+pip install git+https://github.com/ElementoLab/imc.git#egg=imc[deepcell]
+
+# Get some example data
+mkdir -p imctest/data
+cd imctest/
+wget -O data/${SAMPLE}.mcd $MCD_URL
+
+# Run pipeline
+imc inspect data/${SAMPLE}.mcd
+imc prepare --ilastik --n-crops 0 --ilastik-compartment nuclear data/${SAMPLE}.mcd
+TIFFS=processed/${SAMPLE}/tiffs/${SAMPLE}*_full.tiff
+imc predict $TIFFS
+imc segment --from-probabilities --model deepcell --compartment both $TIFFS
+imc quantify $TIFFS
+```
+
+There are many customization options for each step. Do `imc --help` or `imc <subcommand> --help` to see all.
+A `all` command is in the making which will make sample processing as easy as `imc process <mcdfile>`.
+
+Quick analysis of single cell data downstream in IPython/Jupyter notebook:
+```python
+import scanpy as sc
+a = sc.read('processed/quantification.h5ad')
+sc.pp.log1p(a)
+sc.pp.pca(a)
+sc.pp.neighbors(a)
+sc.tl.umap(a)
+sc.pl.umap(a, color=a.var.index)
+```
+
+### Use case 2 (API usage)
+
+#### Demo data (synthetic)
 ```python
 >>> from imc.demo import generate_project
 >>> prj = generate_project(n_samples=2, n_rois_per_sample=3, shape=(8, 8))
@@ -82,7 +126,7 @@ array([[0, 0, 0, 0, 0, 0, 0, 0],
 >>> prj.find_communities()
 
 ```
-### Demo data (real)
+#### Demo data (real)
 ```python
 >>> import imc.demo
 >>> imc.demo.datasets
@@ -128,7 +172,7 @@ Name: BaselTMA_SP41_15.475kx12.665ky_10000x8500_5_20170905_90_88_X11Y5_242_a0, d
 <Figure size 400x1200 with 12 Axes>
 ```
 
-### Your own data
+#### Your own data
 
 The best way is to have a CSV file with one row per sample, or one row per ROI.
 That will ensure additional sample/ROI metadata is passed to the objects and used later in analysis.
@@ -174,7 +218,6 @@ Documentation is for now mostly a skeleton but will be enlarged soon:
 ```bash
 make docs
 ```
-
 
 ## Testing
 
