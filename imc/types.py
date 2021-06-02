@@ -4,27 +4,7 @@ Specific types or type aliases used in the library.
 
 from __future__ import annotations
 import os
-from typing import (
-    TypeVar,
-    #
-    Mapping,
-    Dict,
-    #
-    Tuple,
-    #
-    List,
-    Collection,
-    Generator,
-    Iterator,
-    Sequence,
-    #
-    Union,
-    Optional,
-    #
-    Callable,
-    Any,
-    Literal,
-)
+import typing as tp
 import pathlib
 import argparse
 
@@ -70,7 +50,7 @@ class Path(pathlib.Path):
     def replace_(self, patt: str, repl: str) -> Path:
         return Path(str(self).replace(patt, repl))
 
-    def iterdir(self) -> Generator:
+    def iterdir(self) -> tp.Generator:
         if self.exists():
             yield from [pathlib.Path(str(self)).iterdir()]
         yield from []
@@ -80,28 +60,28 @@ class Path(pathlib.Path):
         return self
 
 
-GenericType = TypeVar("GenericType")
+GenericType = tp.TypeVar("GenericType")
 
 # type aliasing (done with Union to distinguish from other declared variables)
 
 
 # Args = Union[argparse.Namespace]
-class Args(argparse.Namespace, Mapping[str, Any]):
+class Args(argparse.Namespace, tp.Mapping[str, tp.Any]):
     pass
 
 
 # Series = Union[pandas.Series]
-class Series(pandas.Series, Mapping[Any, Any]):
+class Series(pandas.Series, tp.Mapping[tp.Any, tp.Any]):
     pass
 
 
-Array = Union[numpy.ndarray]
+Array = tp.Union[numpy.ndarray]
 
-MultiIndexSeries = Union[pandas.Series]
-DataFrame = Union[pandas.DataFrame]
-AnnData = Union[_AnnData]
+MultiIndexSeries = tp.Union[pandas.Series]
+DataFrame = tp.Union[pandas.DataFrame]
+AnnData = tp.Union[_AnnData]
 
-Figure = Union[matplotlib.figure.Figure]
-Axis = Union[matplotlib.axis.Axis]
-Patch = Union[matplotlib.patches.Patch]
-ColorMap = Union[matplotlib.colors.LinearSegmentedColormap]
+Figure = tp.Union[matplotlib.figure.Figure]
+Axis = tp.Union[matplotlib.axis.Axis]
+Patch = tp.Union[matplotlib.patches.Patch]
+ColorMap = tp.Union[matplotlib.colors.LinearSegmentedColormap]
