@@ -27,9 +27,12 @@ licence = "gpt3"
 requires-python = ">=3.8"
 # not yet supported by pip!
 dependencies = [
+    "ordered-set",
+    "PyYAML",
     "imctools>=2.1.0",
     "joblib",
     "leidenalg",
+    "python-louvain",
     "networkx",
     "pandas>=1.0.1",
     "parmap",
@@ -103,6 +106,8 @@ license = "GPL-3.0-or-later"
 
 [tool.poetry.dependencies]
 python = "^3.8"
+ordered-set = "^4.0.2"
+PyYAML = "^5.4.1"
 pandas = ">=1.0.1"
 tifffile = "^2020.6.3"
 imctools = "^2.1.0"

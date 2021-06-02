@@ -9,7 +9,7 @@ import logging
 from functools import partialmethod
 from pathlib import Path as _Path
 
-from outdated import warn_if_outdated
+# from outdated import warn_if_outdated
 from joblib import Memory
 import matplotlib
 import matplotlib.pyplot as plt

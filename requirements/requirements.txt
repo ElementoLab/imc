@@ -9,9 +9,12 @@
 # python-louvain
 # xarray
 anndata
+ordered-set
+PyYAML
 imctools>=2.1.0,<3.0.0
 joblib
 leidenalg
+python-louvain
 networkx
 numpy_groupies
 pandas>=1.0.1
