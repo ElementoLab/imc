@@ -5,6 +5,7 @@ Plotting functions and utilities to handle images.
 import typing as tp
 from functools import wraps
 import colorsys
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -12,15 +13,163 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
+from tqdm import tqdm
 
 from skimage.exposure import equalize_hist as eq
 
-from imc.types import Figure, Axis, Array, Series, ColorMap, Patch, AnnData
+from imc.types import Figure, Axis, Array, Series, ColorMap, Patch, AnnData, Path
 from imc.utils import minmax_scale
 
 DEFAULT_PIXEL_UNIT_NAME = r"$\mu$m"
 
 DEFAULT_CHANNEL_COLORS = plt.get_cmap("tab10")(np.linspace(0, 1, 10))
+
+
+class InteractiveViewer:
+    """
+    An interactive image viewer for multiplexed images.
+
+    Parameters
+    ----------
+    obj: ROI | Array
+        An ROI object or a numpy array
+
+    **kwargs: dict
+        Additional keyword arguments to pass to matplotlib.pyplot.imshow.
+    """
+
+    def __init__(
+        self,
+        obj: tp.Union["ROI", Array],
+        show: bool = False,
+        up_key: str = "w",
+        down_key: str = "s",
+        log_key: str = "l",
+        **kwargs,
+    ):
+        plt.close("all")
+        self.array = obj if isinstance(obj, np.ndarray) else obj.stack
+        self.labels = (
+            ([""] * len(self.array))
+            if isinstance(obj, np.ndarray)
+            else obj.channel_labels.tolist()
+        )
+        self.suptitle = "" if isinstance(obj, np.ndarray) else obj.name
+        self.up_key = up_key
+        self.down_key = down_key
+        self.log_key = log_key
+        self.kwargs = kwargs
+
+        # internal
+        self.index = 0
+        self.n_channels = self.array.shape[0]
+        self.transforms: tp.Set[str] = set()
+        self.fig, self.ax = plt.subplots(num=self.suptitle)
+
+        # go
+        self.multi_slice_viewer()
+        if show:
+            plt.show(block=False)
+        # plt.close(self.fig)
+
+    def multi_slice_viewer(self) -> Figure:
+        """Start the viewer process."""
+        self.remove_keymap_conflicts({self.up_key, self.down_key, self.log_key})
+
+        self.ax.imshow(self.array[self.index], **self.kwargs)
+        self.img = self.ax.images[0]
+        self.ax.set_title(self.index, loc="left")
+        if self.labels is not None:
+            self.ax.set_title(self.labels[self.index])
+        if self.suptitle is not None:
+            self.fig.suptitle(self.suptitle)
+        self.ax.set(xlabel="X", ylabel="Y")
+        # TODO: add colorbar scale
+
+        # Add event listener
+        self.fig.canvas.mpl_connect("key_press_event", partial(self.process_key))
+
+    def remove_keymap_conflicts(self, new_keys_set: tp.Set) -> None:
+        """Remove conflicts between viewer keyboard shortcuts and previously existing shortcuts."""
+        for prop in plt.rcParams:
+            if prop.startswith("keymap."):
+                keys = plt.rcParams[prop]
+                remove_list = set(keys) & new_keys_set
+                for key in remove_list:
+                    keys.remove(key)
+
+    def process_key(self, event) -> None:
+        """Process keyboard events."""
+        if event.key == self.up_key:
+            self.previous_slice()
+        elif event.key == self.down_key:
+            self.next_slice()
+        elif event.key == self.log_key:
+            self.log_slice()
+
+        self.ax.set_title(self.index, loc="left")
+        if self.labels is not None:
+            self.ax.set_title(self.labels[self.index])
+
+        # Report transformations
+        if self.transforms:
+            trans = ", ".join(self.transforms)
+            self.ax.set_xlabel("X" + f"\nTransformations: '{trans}'")
+        else:
+            self.ax.set_xlabel("X")
+
+        # Draw
+        self.fig.canvas.draw()
+
+    def get_slice(self) -> Array:
+        """Get a array slice for the current index with current transformations."""
+        a = self.array[self.index]
+        if "log" in self.transforms:
+            a = np.log1p(a)
+        return a
+
+    def set_image(self) -> None:
+        """Update image to current index and transformations."""
+        a = self.get_slice()
+        self.img.set_array(a)
+        self.img.set_clim(a.min(), a.max())
+
+    def previous_slice(self) -> None:
+        """Go to the previous slice."""
+        self.index = (self.index - 1) % self.n_channels
+        self.set_image()
+
+    def next_slice(self) -> None:
+        """Go to the next slice."""
+        self.index = (self.index + 1) % self.n_channels
+        self.set_image()
+
+    def log_slice(self) -> None:
+        """Go to the previous slice."""
+        if "log" not in self.transforms:
+            self.transforms.add("log")
+        else:
+            self.transforms.remove("log")
+        self.set_image()
+
+
+def get_volume() -> Array:
+    """Get example volumetric image."""
+    from urlpath import URL
+    import imageio
+
+    base_url = URL("https://prod-images-static.radiopaedia.org/images/")
+    start_n = 53734044
+    length = 137
+
+    imgs = list()
+    for i in tqdm(range(length)):
+        url = base_url / f"{start_n + i}/{i + 1}_gallery.jpeg"
+        resp = url.get()
+        c = resp.content
+        imgs.append(imageio.read(c, format="jpeg").get_data(0))
+    img = np.asarray(imgs)
+    return img
 
 
 def close_plots(func) -> tp.Callable:

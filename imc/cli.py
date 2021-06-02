@@ -17,6 +17,7 @@ from imc.scripts.prepare_mcds import main as prepare
 from imc.scripts.predict import main as predict
 from imc.scripts.segment_stacks import main as segment
 from imc.scripts.quantify import main as quantify
+from imc.scripts.view import main as view
 from imc.utils import mcd_to_dir
 from imc.scripts import cli_config
 
@@ -35,6 +36,8 @@ def main(cli: List[str] = None) -> int:
         segment(cmd_args)
     elif main_args.command == "quantify":
         quantify(cmd_args)
+    elif main_args.command == "view":
+        view(cmd_args)
     else:
         print("Command not known!")
         return 1

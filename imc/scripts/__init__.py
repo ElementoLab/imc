@@ -36,6 +36,11 @@ cli_config = {
             "description": "Quantify channel intensity in segmented cells.",
             "epilog": epilog,
         },
+        "view": {
+            "prog": "imc view",
+            "description": "Visualize an image stack interactively using a matplotlib frontend.",
+            "epilog": epilog,
+        },
     },
     "subcommand_arguments": {
         "inspect": [
@@ -161,7 +166,6 @@ cli_config = {
                 "kwargs": {
                     "dest": "lib_dir",
                     "type": Path,
-                    "default": "_lib",
                     "help": "Directory to store static resources such as trained models.",
                 },
             },
@@ -310,6 +314,44 @@ cli_config = {
             {
                 "args": ["--overwrite"],
                 "kwargs": {"dest": "overwrite", "action": "store_true"},
+            },
+        ],
+        "view": [
+            {
+                "kwargs": {
+                    "dest": "tiffs",
+                    "nargs": "+",
+                    "type": Path,
+                    "help": "TIFF files with array stack.",
+                }
+            },
+            {
+                "args": ["-u", "--up-key"],
+                "kwargs": {
+                    "default": "w",
+                    "help": "Key to get previous channel.",
+                },
+            },
+            {
+                "args": ["-d", "--down-key"],
+                "kwargs": {
+                    "default": "s",
+                    "help": "Key to get next channel.",
+                },
+            },
+            {
+                "args": ["-l", "--log-key"],
+                "kwargs": {
+                    "default": "l",
+                    "help": "Key to toggle log transformation.",
+                },
+            },
+            {
+                "args": ["--kwargs"],
+                "kwargs": {
+                    "default": "",
+                    "help": "Additional parameters for plot customization passed in the form 'key1=value1,key2=value2'.",
+                },
             },
         ],
     },

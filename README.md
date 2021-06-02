@@ -62,6 +62,9 @@ imc segment \
   --from-probabilities --model deepcell --compartment both $TIFFS
 ## Quantify channel intensity for each single cell in every image
 imc quantify $TIFFS
+
+# `imc` also includes a lightweight interactive image viewer
+imc view $TIFFS
 ```
 
 There are many customization options for each step. Do `imc --help` or `imc <subcommand> --help` to see all.
