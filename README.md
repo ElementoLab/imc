@@ -23,10 +23,8 @@ Requires `Python >= 3.8`.
 
 Install with `pip`:
 ```bash
-pip install git+ssh://git@github.com/elementolab/imc.git
+pip install git+https://github.com/ElementoLab/imc.git
 ```
-While the repository is private, the `git+ssh` protocol requires proper git
-configuration.
 
 
 ## Quick start
