@@ -186,7 +186,7 @@ class Project:
             return pd.DataFrame()
 
         content = (
-            [x for x in list(self.processed_dir.iterdir()) if x.is_dir()]
+            [x for x in self.processed_dir.iterdir() if x.is_dir()]
             if self.subfolder_per_sample
             else self.processed_dir.glob("*_full.tiff")
         )

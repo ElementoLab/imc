@@ -52,7 +52,7 @@ class Path(pathlib.Path):
 
     def iterdir(self) -> tp.Generator:
         if self.exists():
-            yield from [pathlib.Path(str(self)).iterdir()]
+            yield from [Path(x) for x in pathlib.Path(str(self)).iterdir()]
         yield from []
 
     def mkdir(self, mode=0o777, parents: bool = True, exist_ok: bool = True) -> Path:
