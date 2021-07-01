@@ -72,10 +72,12 @@ def get_ilastik(base_path: Path, version: str = "1.3.3post2") -> Path:
     """Download ilastik software."""
     import tarfile
 
-    url = "https://files.ilastik.org/"
-    file = f"ilastik-{version}-Linux.tar.bz2"
+    os = "Linux"
 
-    f = base_path / f"ilastik-{version}-Linux" / "run_ilastik.sh"
+    url = "https://files.ilastik.org/"
+    file = f"ilastik-{version}-{os}.tar.bz2"
+
+    f = base_path / "lib" / "external" / f"ilastik-{version}-{os}" / "run_ilastik.sh"
     if not f.exists():
         base_path.mkdir()
         print("Downloading ilastik archive.")

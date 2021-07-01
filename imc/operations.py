@@ -1723,6 +1723,7 @@ def get_best_mixture_number(
     ...
 
 
+@overload
 def get_best_mixture_number(
     x: Series,
     min_mix: int = 2,

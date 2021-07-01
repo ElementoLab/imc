@@ -27,6 +27,7 @@ licence = "gpt3"
 requires-python = ">=3.8"
 # not yet supported by pip!
 dependencies = [
+    "setuptools_scm",
     "ordered-set",
     "PyYAML",
     "imctools>=2.1.0",
@@ -57,6 +58,7 @@ dev = [
     "pylint",
     "git-lint",
     "pytest",
+    "pydocstyle",
     "rich",
     # data-science-types
     "PyQt5",

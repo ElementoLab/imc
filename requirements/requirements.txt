@@ -1,24 +1,16 @@
-# colorama
-# divvy
-# h5netcdf
-# h5py
-# imagecodecs
-# napari
-# ordered-set
-# outdated
-# python-louvain
-# xarray
-anndata
+setuptools_scm
 ordered-set
 PyYAML
-imctools>=2.1.0,<3.0.0
+parmap
+tqdm
 joblib
+numpy
+numpy_groupies
+pandas>=1.0.1
+imctools>=2.1.0
+tifffile==2020.6.3
+scikit-image==0.17.2
 leidenalg
 python-louvain
 networkx
-numpy_groupies
-pandas>=1.0.1
-parmap
 scanpy
-tifffile==2020.6.3
-# requests

@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 
-from __future__ import (
-    annotations,
-)  # fix the type annotatiton of not yet undefined classes
+# fix the type annotatiton of not yet undefined classes
+from __future__ import annotations
 import os
 import sys
 import logging
@@ -52,17 +51,23 @@ def setup_logger(name: str = "imc", level: int = logging.INFO) -> logging.Logger
 LOGGER = setup_logger()
 
 # Setup joblib memory
+_Path.mkdir = partialmethod(_Path.mkdir, exist_ok=True, parents=True)
 JOBLIB_CACHE_DIR = _Path("~/.imc").expanduser()
+JOBLIB_CACHE_DIR.mkdir()
 MEMORY = Memory(location=JOBLIB_CACHE_DIR, verbose=0)
 
 # Decorate seaborn clustermap
 # _sns.clustermap = colorbar_decorator(_sns.clustermap)
 
 
-_Path.mkdir = partialmethod(_Path.mkdir, exist_ok=True, parents=True)
-
-
 from imc.data_models.project import Project
 from imc.data_models.sample import IMCSample
 from imc.data_models.roi import ROI
 from imc.cli import main
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(1)
