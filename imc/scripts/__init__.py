@@ -371,8 +371,9 @@ cli_config = {
             {
                 "args": ["--kwargs"],
                 "kwargs": {
-                    "default": "",
-                    "help": "Additional parameters for plot customization passed in the form 'key1=value1,key2=value2'.",
+                    "dest": "kwargs",
+                    "default": None,
+                    "help": "Additional parameters for plot customization passed in the form 'key1=value1,key2=value2'. For example '--kwargs \"cmap=RdBu_r,vmin=0,vmax=3\"'.",
                 },
             },
         ],

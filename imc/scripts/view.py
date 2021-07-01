@@ -18,8 +18,12 @@ from imc.scripts import build_cli
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("view")
     args = parser.parse_args(cli)
-    params = [x.split("=") for x in args.kwargs.split(",")]
-    kwargs = {y[0]: y[1] for y in params}
+
+    kwargs = {}
+    if args.kwargs is not None:
+        print(args.kwargs)
+        params = [x.split("=") for x in args.kwargs.split(",")]
+        kwargs = {y[0]: y[1] for y in params}
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
     print(f"Starting viewers for {len(args.tiffs)} TIFF files: {fs}!")
