@@ -3,6 +3,10 @@ import argparse
 
 from imc.types import Path
 
+
+DEFAULT_LIB_DIR = Path("~/imc/lib").expanduser().mkdir()
+
+
 epilog = "https://github.com/ElementoLab/imc"
 cli_config = {
     "main": {
@@ -165,6 +169,7 @@ cli_config = {
                 "args": ["-l", "--lib-dir"],
                 "kwargs": {
                     "dest": "lib_dir",
+                    "default": DEFAULT_LIB_DIR,
                     "type": Path,
                     "help": "Directory to store static resources such as trained models.",
                 },
