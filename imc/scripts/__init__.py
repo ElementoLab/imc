@@ -4,7 +4,7 @@ import argparse
 from imc.types import Path
 
 
-DEFAULT_LIB_DIR = Path("~/imc/lib").expanduser().mkdir()
+DEFAULT_LIB_DIR = Path("~/.imc/lib").expanduser().mkdir()
 
 
 epilog = "https://github.com/ElementoLab/imc"
