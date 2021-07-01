@@ -1,4 +1,5 @@
 # data-science-types
+wheel
 PyQt5
 Sphinx
 black[d]

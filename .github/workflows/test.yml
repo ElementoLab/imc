@@ -21,7 +21,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest
+        pip install wheel pytest
         pip install .[deepcell]
     - name: Test with pytest
       run: |
@@ -66,7 +66,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest
+        pip install wheel pytest
         pip install .[deepcell]
     - name: Test with pytest
       run: |
@@ -78,13 +78,13 @@ jobs:
         MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
 
         # Get example data (will be cached by github action)
-        mkdir -p /home/$USER/.imc/ imctest/data
-        if [ ! -f /home/$USER/.imc/${SAMPLE}.mcd ]; then
+        mkdir -p /Applications/imc/ imctest/data
+        if [ ! -f /Applications/imc/${SAMPLE}.mcd ]; then
           echo "Downloading test dataset..."
-          wget -q -O /home/$USER/.imc/${SAMPLE}.mcd $MCD_URL
+          wget -q -O /Applications/imc/${SAMPLE}.mcd $MCD_URL
           echo "Finished downloading."
         fi
-        ln -s /home/$USER/.imc/${SAMPLE}.mcd imctest/data/${SAMPLE}.mcd
+        ln -s /Applications/imc/${SAMPLE}.mcd imctest/data/${SAMPLE}.mcd
 
         # Run pipeline
         cd imctest/

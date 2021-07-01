@@ -6,11 +6,9 @@ import getpass
 from imc.types import Path
 
 # TODO: move to global package __init__/config
-print(sys.platform)
 if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
-    home = Path("~").expanduser()
     try:
-        DEFAULT_IMC_DIR = (home / ".imc").mkdir()
+        DEFAULT_IMC_DIR = Path("~/.imc").expanduser().mkdir()
     except Exception:
         DEFAULT_IMC_DIR = Path("./.imc").absolute().mkdir()
         print(
@@ -18,10 +16,10 @@ if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
             "Using a resource directory in the user's home directory improves "
             "management of resources. Make sure your home directory is writable."
         )
-elif sys.platform.startswith("darwin") or sys.platform.startswith("os"):
-    home = Path(f"/User/{getpass.getuser()}")
+elif sys.platform.startswith("darwin"):
+    # home = Path(f"/User/{getpass.getuser()}")
     try:
-        DEFAULT_IMC_DIR = (home / ".imc").mkdir()
+        DEFAULT_IMC_DIR = Path("/Applications/.imc").mkdir()
     except Exception:
         DEFAULT_IMC_DIR = Path("./.imc").absolute().mkdir()
         print(

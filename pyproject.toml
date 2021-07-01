@@ -52,6 +52,7 @@ cellpose = [
     "cellpose>=0.1.0.1,<1.0.0",
 ]
 dev = [
+    "wheel",
     "ipython",
     "black[d]",
     "mypy",  # pin to version supporting pyproject.toml
