@@ -1,9 +1,44 @@
+import sys
 import typing as tp
 import argparse
+import getpass
 
 from imc.types import Path
 
-DEFAULT_IMC_DIR = Path("~/.imc").expanduser().mkdir()
+# TODO: move to global package __init__/config
+print(sys.platform)
+if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
+    home = Path("~").expanduser()
+    try:
+        DEFAULT_IMC_DIR = (home / ".imc").mkdir()
+    except Exception:
+        DEFAULT_IMC_DIR = Path("./.imc").absolute().mkdir()
+        print(
+            f"Could not create directory '~/.imc', will use '{DEFAULT_IMC_DIR.as_posix()}'. "
+            "Using a resource directory in the user's home directory improves "
+            "management of resources. Make sure your home directory is writable."
+        )
+elif sys.platform.startswith("darwin") or sys.platform.startswith("os"):
+    home = Path(f"/User/{getpass.getuser()}")
+    try:
+        DEFAULT_IMC_DIR = (home / ".imc").mkdir()
+    except Exception:
+        DEFAULT_IMC_DIR = Path("./.imc").absolute().mkdir()
+        print(
+            f"Could not create directory '/User/{getpass.getuser()}/.imc', "
+            "will use '{DEFAULT_IMC_DIR.as_posix()}'. "
+            "Using a resource directory in the user's home directory improves "
+            "management of resources. Make sure your home directory is writable."
+        )
+elif sys.platform.startswith("win") or sys.platform.startswith("cygwin"):
+    raise NotImplementedError("Windows support is not yet available!")
+else:
+    print(
+        "Warning, OS could not be easily identified. Using default dir ~/.imc to store "
+        "resources but that might not work!"
+    )
+    DEFAULT_IMC_DIR = Path("~/.imc").expanduser().mkdir()
+
 DEFAULT_LIB_DIR = (DEFAULT_IMC_DIR / "lib").mkdir()
 DEFAULT_MODELS_DIR = (DEFAULT_IMC_DIR / "models").mkdir()
 

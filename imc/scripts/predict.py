@@ -93,9 +93,9 @@ def get_ilastik(lib_dir: Path, version: str = "1.3.3post2") -> Path:
             / "ilastik-release"
             / "run_ilastik.sh"
         )
-    elif sys.platform.startswith("win"):
+    else:
         raise NotImplementedError(
-            "ilastik command line use not available for Windows OS yet!"
+            "ilastik command line use is only available for Linux and MacOS!"
         )
 
     if not f.exists():

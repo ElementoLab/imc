@@ -23,17 +23,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         pip install .[deepcell]
-    - name: Cache pip
-      id: cache-pip
-      uses: actions/cache@v2
-      with:
-        path: /home/$USER/.cache/pip
-        key: pip
     - name: Test with pytest
       run: |
         # Test package
         python -m pytest imc/
-        
+
         # Run example processing pipeline
         SAMPLE=20200629_NL1915A
         MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
@@ -49,7 +43,7 @@ jobs:
 
         # Run pipeline
         cd imctest/
-        imc process data/${SAMPLE}.mcd        
+        imc process data/${SAMPLE}.mcd
 
         # List output files
         ls -l processed/
@@ -59,7 +53,7 @@ jobs:
       uses: actions/cache@v2
       with:
         path: /home/$USER/.imc
-        key: imc-resources
+        key: imc-resources-linux
 
   osx:
     runs-on: macos-10.14
@@ -74,17 +68,11 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         pip install .[deepcell]
-    - name: Cache pip
-      id: cache-pip
-      uses: actions/cache@v2
-      with:
-        path: /home/$USER/.cache/pip
-        key: pip
     - name: Test with pytest
       run: |
         # Test package
         python -m pytest imc/
-        
+
         # Run example processing pipeline
         SAMPLE=20200629_NL1915A
         MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
@@ -100,7 +88,7 @@ jobs:
 
         # Run pipeline
         cd imctest/
-        imc process data/${SAMPLE}.mcd        
+        imc process data/${SAMPLE}.mcd
 
         # List output files
         ls -l processed/
@@ -110,4 +98,4 @@ jobs:
       uses: actions/cache@v2
       with:
         path: /home/$USER/.imc
-        key: imc-resources
+        key: imc-resources-osx
