@@ -25,8 +25,6 @@ Install with `pip`:
 pip install git+https://github.com/ElementoLab/imc.git
 ```
 
-> N.B: at the moment, the `predict` step of pipeline processing only works in Linux - testing in MacOS is under way.
-
 ## Quick start
 
 ### Use case 1 (pipeline processing)
@@ -68,7 +66,6 @@ imc prepare \
 TIFFS=processed/${SAMPLE}/tiffs/${SAMPLE}*_full.tiff
 
 ## Output pixel probabilities of nucleus, membrane and background using ilastik
-## - N.B. predict step current only works on Linux
 imc predict $TIFFS
 
 ## Segment cell instances with DeepCell
