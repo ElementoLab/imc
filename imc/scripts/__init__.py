@@ -201,6 +201,13 @@ cli_config = {
                 },
             },
             {
+                "args": ["--verbose"],
+                "kwargs": {
+                    "dest": "quiet",
+                    "action": "store_false",
+                },
+            },
+            {
                 "args": ["--custom-model"],
                 "kwargs": {
                     "dest": "custom_model",

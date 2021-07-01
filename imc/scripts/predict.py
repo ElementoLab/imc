@@ -42,7 +42,7 @@ def main(cli: tp.List[str] = None) -> int:
 
     # Predict
     tiff_files = [roi._get_input_filename("ilastik_input") for roi in rois]
-    predict(tiff_files, ilastik_sh, model_ilp)
+    predict(tiff_files, ilastik_sh, model_ilp, args.quiet)
 
     for roi in rois:
         _in = roi.root_dir / roi.name + "_ilastik_s2_Probabilities.tiff"
@@ -53,14 +53,17 @@ def main(cli: tp.List[str] = None) -> int:
     return 0
 
 
-def predict(tiff_files: tp.Sequence[Path], ilastik_sh: Path, model_ilp: Path) -> int:
+def predict(
+    tiff_files: tp.Sequence[Path], ilastik_sh: Path, model_ilp: Path, quiet: bool = True
+) -> int:
     """
     Use a trained ilastik model to classify pixels in an IMC image.
     """
+    quiet_arg = "\n        --redirect_output /dev/null \\" if quiet else ""
     cmd = f"""{ilastik_sh} \\
         --headless \\
         --readonly \\
-        --export_source probabilities \\
+        --export_source probabilities \\{quiet_arg}
         --project {model_ilp} \\
         """
     # Shell expansion of input files won't happen in subprocess call

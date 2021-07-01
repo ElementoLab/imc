@@ -29,7 +29,7 @@ jobs:
       id: cache-resources
       uses: actions/cache@v2
       with:
-        path: /home/runner/.imc
+        path: /home/$USER/.imc
         key: imc-resources
     - name: Test with pytest
       run: |
@@ -41,13 +41,13 @@ jobs:
         MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
 
         # Get example data (will be cached by github action)
-        mkdir -p imctest/data
-        if [! -f /home/runner/.imc/data/${SAMPLE}.mcd ]; then
+        mkdir -p /home/$USER/.imc/ imctest/data
+        if [ ! -f /home/$USER/.imc/${SAMPLE}.mcd ]; then
           echo "Downloading..."
-          wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL
+          wget -q -O imctest/${SAMPLE}.mcd $MCD_URL
           echo "Finished."
         fi
-        ln -s /home/runner/.imc/data/${SAMPLE}.mcd imctest/data/${SAMPLE}.mcd
+        ln -s /home/$USER/.imc/${SAMPLE}.mcd imctest/data/${SAMPLE}.mcd
 
         # Run pipeline
         cd imctest/
