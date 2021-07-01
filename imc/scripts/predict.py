@@ -36,7 +36,7 @@ def main(cli: tp.List[str] = None) -> int:
     # Get resources
     ilastik_sh = get_ilastik(args.lib_dir)
     if args.custom_model is None:
-        model_ilp = get_model(args.lib_dir, args.ilastik_model_version)
+        model_ilp = get_model(args.models_dir, args.ilastik_model_version)
     else:
         model_ilp = args.custom_model
 
@@ -68,7 +68,7 @@ def predict(tiff_files: tp.Sequence[Path], ilastik_sh: Path, model_ilp: Path) ->
     return run_shell_command(cmd)
 
 
-def get_ilastik(base_path: Path, version: str = "1.3.3post2") -> Path:
+def get_ilastik(lib_dir: Path, version: str = "1.3.3post2") -> Path:
     """Download ilastik software."""
     import tarfile
 
@@ -77,19 +77,18 @@ def get_ilastik(base_path: Path, version: str = "1.3.3post2") -> Path:
     url = "https://files.ilastik.org/"
     file = f"ilastik-{version}-{os}.tar.bz2"
 
-    f = base_path / "lib" / "external" / f"ilastik-{version}-{os}" / "run_ilastik.sh"
+    f = lib_dir / "external" / f"ilastik-{version}-{os}" / "run_ilastik.sh"
     if not f.exists():
-        base_path.mkdir()
+        (lib_dir / "external").mkdir()
         print("Downloading ilastik archive.")
-        download_file(url + file, base_path / file)
+        download_file(url + file, lib_dir / "external" / file)
         print("Extracting ilastik archive.")
-        tar = tarfile.open(base_path / file, "r:bz2")
-        tar.extractall(base_path)
-        tar.close()
+        with tarfile.open(lib_dir / "external" / file, "r:bz2") as tar:
+            tar.extractall(lib_dir / "external")
     return f
 
 
-def get_model(base_path: Path, version: str = "20210302") -> Path:
+def get_model(models_dir: Path, version: str = "20210302") -> Path:
     """Download pre-trained ilastik model."""
     import tarfile
 
@@ -100,9 +99,9 @@ def get_model(base_path: Path, version: str = "20210302") -> Path:
     url = versions[version]
     file = f"pan_dataset.{version}.ilp"
 
-    f = base_path / "models" / file
+    f = models_dir / file
     if not f.exists():
-        (base_path / "models").mkdir()
+        models_dir.mkdir()
         print("Downloading ilastik model.")
         download_file(url, f)
     return f

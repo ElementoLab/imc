@@ -5,6 +5,7 @@ from imc.types import Path
 
 
 DEFAULT_LIB_DIR = Path("~/.imc/lib").expanduser().mkdir()
+DEFAULT_MODELS_DIR = Path("~/.imc/models").expanduser().mkdir()
 
 
 epilog = "https://github.com/ElementoLab/imc"
@@ -171,7 +172,16 @@ cli_config = {
                     "dest": "lib_dir",
                     "default": DEFAULT_LIB_DIR,
                     "type": Path,
-                    "help": "Directory to store static resources such as trained models.",
+                    "help": "Directory to store external software (e.g. ilastik).",
+                },
+            },
+            {
+                "args": ["-m", "--models-dir"],
+                "kwargs": {
+                    "dest": "models_dir",
+                    "default": DEFAULT_MODELS_DIR,
+                    "type": Path,
+                    "help": "Directory to store static models.",
                 },
             },
             {
@@ -183,7 +193,7 @@ cli_config = {
                 },
             },
             {
-                "args": ["-m", "--model-version"],
+                "args": ["-v", "--model-version"],
                 "kwargs": {
                     "dest": "ilastik_model_version",
                     "choices": ["20210302"],

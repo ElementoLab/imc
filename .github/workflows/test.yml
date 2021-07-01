@@ -39,10 +39,11 @@ jobs:
 
         # Get example data
         mkdir -p imctest/data
-        cd imctest/
-        wget -O data/${SAMPLE}.mcd $MCD_URL
+        wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL
 
         # Run pipeline
+        cd imctest/
+
         ## output description of acquired data
         imc inspect data/${SAMPLE}.mcd
 

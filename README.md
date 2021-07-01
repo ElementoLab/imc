@@ -35,31 +35,44 @@ pip install git+https://github.com/ElementoLab/imc.git
 
 Pipeline processing:
 ```bash
-SAMPLE=20200629_NL1915A
-MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
-
 # Install imc package (do this inside virtual environment for example)
 pip install git+https://github.com/ElementoLab/imc.git#egg=imc[deepcell]
 
-# Get some example data
+# Get example data
+SAMPLE=20200629_NL1915A
+MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
 mkdir -p imctest/data
-cd imctest/
-wget -O data/${SAMPLE}.mcd $MCD_URL
+wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL
 
 # Run pipeline
+cd imctest/
+
 ## output description of acquired data
 imc inspect data/${SAMPLE}.mcd
-## convert MCD to TIFF and auxiliary files
+
+## convert MCD to TIFFs and auxiliary files
 imc prepare \
-  --ilastik --n-crops 0 --ilastik-compartment nuclear \
+  --ilastik \
+  --n-crops 0 \
+  --ilastik-compartment nuclear \
   data/${SAMPLE}.mcd
+
 ## For each TIFF file, output prediction of mask probabilities and segment them 
 TIFFS=processed/${SAMPLE}/tiffs/${SAMPLE}*_full.tiff
+
+## Output pixel probabilities of nucleus, membrane and background using ilastik
+## - N.B. predict step current only works on Linux
 imc predict $TIFFS
+
+## Segment cell instances with DeepCell
 imc segment \
-  --from-probabilities --model deepcell --compartment both $TIFFS
+  --from-probabilities \
+  --model deepcell \
+  --compartment both $TIFFS
+
 ## Quantify channel intensity for each single cell in every image
 imc quantify $TIFFS
+
 
 # `imc` also includes a lightweight interactive image viewer
 imc view $TIFFS
