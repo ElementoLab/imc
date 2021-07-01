@@ -45,8 +45,10 @@ def main(cli: tp.Sequence[str] = None) -> int:
     if args.output is None:
         f = Path("processed").mkdir() / "quantification.csv"
         quant.to_csv(f, index=False)
+        print(f"Wrote CSV file to '{f.absolute()}'.")
     else:
         quant.to_csv(args.output, index=False)
+        print(f"Wrote CSV file to '{args.output.absolute()}'.")
 
     if args.output_h5ad:
         from anndata import AnnData
@@ -60,6 +62,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
         ann = AnnData(quant.drop(cols, axis=1), obs=quant[cols])
         f = Path("processed").mkdir() / "quantification.h5ad"
         sc.write(f, ann)
+        print(f"Wrote h5ad file to '{f.absolute()}'.")
 
     print("Finished quantification.")
 

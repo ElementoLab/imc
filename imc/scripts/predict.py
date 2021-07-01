@@ -77,14 +77,14 @@ def get_ilastik(lib_dir: Path, version: str = "1.3.3post2") -> Path:
     url = "https://files.ilastik.org/"
     file = f"ilastik-{version}-{os}.tar.bz2"
 
-    f = lib_dir / "external" / f"ilastik-{version}-{os}" / "run_ilastik.sh"
+    f = lib_dir / f"ilastik-{version}-{os}" / "run_ilastik.sh"
     if not f.exists():
-        (lib_dir / "external").mkdir()
+        lib_dir.mkdir()
         print("Downloading ilastik archive.")
-        download_file(url + file, lib_dir / "external" / file)
+        download_file(url + file, lib_dir / file)
         print("Extracting ilastik archive.")
-        with tarfile.open(lib_dir / "external" / file, "r:bz2") as tar:
-            tar.extractall(lib_dir / "external")
+        with tarfile.open(lib_dir / file, "r:bz2") as tar:
+            tar.extractall(lib_dir)
     return f
 
 

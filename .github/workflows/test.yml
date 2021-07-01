@@ -25,6 +25,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         pip install .[deepcell]
+    - name: Cache resources
+      id: cache-resources
+      uses: actions/cache@v2
+      with:
+        path: /home/runner/.imc
+        key: imc-resources
     - name: Test with pytest
       run: |
         # Test package
@@ -34,12 +40,14 @@ jobs:
         SAMPLE=20200629_NL1915A
         MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
 
-        # Install imc package (do this inside virtual environment for example)
-        pip install git+https://github.com/ElementoLab/imc.git#egg=imc[deepcell]
-
-        # Get example data
+        # Get example data (will be cached by github action)
         mkdir -p imctest/data
-        wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL
+        if [! -f /home/runner/.imc/data/${SAMPLE}.mcd ]; then
+          echo "Downloading..."
+          wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL
+          echo "Finished."
+        fi
+        ln -s /home/runner/.imc/data/${SAMPLE}.mcd imctest/data/${SAMPLE}.mcd
 
         # Run pipeline
         cd imctest/
@@ -60,3 +68,6 @@ jobs:
 
         ## Quantify channel intensity for each single cell in every image
         imc quantify $TIFFS
+
+        ls -l processed/
+        ls -l processed/${SAMPLE}
