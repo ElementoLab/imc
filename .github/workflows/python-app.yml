@@ -1,0 +1,67 @@
+# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Test imc package
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.8
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+        pip install .[deepcell]
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    - name: Test with pytest
+      run: |
+        # Test package
+        python -m pytest imc/
+        
+        # Run example processing pipeline
+        SAMPLE=20200629_NL1915A
+        MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
+
+        # Install imc package (do this inside virtual environment for example)
+        pip install git+https://github.com/ElementoLab/imc.git#egg=imc[deepcell]
+
+        # Get example data
+        mkdir -p imctest/data
+        cd imctest/
+        wget -O data/${SAMPLE}.mcd $MCD_URL
+
+        # Run pipeline
+        ## output description of acquired data
+        imc inspect data/${SAMPLE}.mcd
+
+        ## convert MCD to TIFF and auxiliary files
+        imc prepare \
+          --ilastik --n-crops 0 --ilastik-compartment nuclear \
+          data/${SAMPLE}.mcd
+
+        ## For each TIFF file, output prediction of mask probabilities and segment them 
+        TIFFS=processed/${SAMPLE}/tiffs/${SAMPLE}*_full.tiff
+        imc predict $TIFFS
+        imc segment \
+          --from-probabilities --model deepcell --compartment both $TIFFS
+
+        ## Quantify channel intensity for each single cell in every image
+        imc quantify $TIFFS
