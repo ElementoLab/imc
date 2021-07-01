@@ -34,7 +34,7 @@ class TestSimpleSerialization:
         # assert r is s
 
 
-def func(roi: ROI):
+def func(roi: ROI) -> int:
     return len(roi.shape)
 
 
@@ -42,17 +42,20 @@ class TestParmapSerialization:
     def test_simple_parmap(self, project):
 
         res = parmap.map(func, project.rois)
-        assert all([x == 3 for x in res])
+        assert all(x == 3 for x in res)
 
     def test_quant_parmap_lowlevel(self, project):
 
         _res = parmap.map(_quantify_cell_intensity__roi, project.rois)
         res = pd.concat(_res)
         assert not res.empty
-        assert all(res.columns == project.rois[0].channel_labels.tolist() + ["roi", "sample"])
+        assert all(
+            res.columns == project.rois[0].channel_labels.tolist() + ["roi", "sample"]
+        )
 
     def test_quant_parmap_highlevel(self, project):
         res = project.quantify_cell_intensity()
-        res.to_csv("/home/afr/test.csv")
         assert not res.empty
-        assert all(res.columns == project.rois[0].channel_labels.tolist() + ["roi", "sample"])
+        assert all(
+            res.columns == project.rois[0].channel_labels.tolist() + ["roi", "sample"]
+        )
