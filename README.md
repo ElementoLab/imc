@@ -5,16 +5,15 @@
 
 # Imaging mass cytometry
 
-This is a package for the analysis of imaging mass cytometry (IMC) data.
+This is a package for processing and  analysis of imaging mass cytometry (IMC) data.
 
 It implements image- and channel-wise quality control, quantification of cell
 intenstity and morphology, cell type discovery through clustering, automated
 cell type labeling, community and super-community finding and differential
 comparisons between sample groups, in addition to many handy visualization tools.
-
 Above all, it is a tool for the use of IMC data at scale.
-To do that, it implements out-of-memory handling of image stacks and masks.
-Other backends to handle multiplexed images are under development.
+
+Development is still underway, so use at your own risk.
 
 
 ## Requirements and installation
@@ -26,6 +25,7 @@ Install with `pip`:
 pip install git+https://github.com/ElementoLab/imc.git
 ```
 
+> N.B: at the moment, the `predict` step of pipeline processing only works in Linux - testing in MacOS is under way.
 
 ## Quick start
 
@@ -33,20 +33,27 @@ pip install git+https://github.com/ElementoLab/imc.git
 
 #### Example: Lung sample processing from MCD to single-cell h5ad
 
-Pipeline processing:
+One-line IMC data processing:
 ```bash
 # Install imc package (do this inside virtual environment for example)
 pip install git+https://github.com/ElementoLab/imc.git#egg=imc[deepcell]
 
-# Get example data
+# Download some example data
 SAMPLE=20200629_NL1915A
 MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
 mkdir -p imctest/data
 wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL
-
-# Run pipeline
 cd imctest/
 
+# Run pipeline in one step:
+imc process data/${SAMPLE}.mcd
+```
+Several MCD or TIFF files can be given to `imc process`. See more with the `--help` option.
+
+`imc` is nonetheless very modular and allows the user to run any of the step seperately as well.
+
+The above is also equivalent to the following:
+```bash
 ## output description of acquired data
 imc inspect data/${SAMPLE}.mcd
 
@@ -70,18 +77,17 @@ imc segment \
   --model deepcell \
   --compartment both $TIFFS
 
-## Quantify channel intensity for each single cell in every image
+## Quantify channel intensity and morphology for each single cell in every image
 imc quantify $TIFFS
+```
+There are many customization options for each step. Do `imc --help` or `imc <subcommand> --help` to see all.
 
-
-# `imc` also includes a lightweight interactive image viewer
+`imc` also includes a lightweight interactive image viewer:
+```bash
 imc view $TIFFS
 ```
 
-There are many customization options for each step. Do `imc --help` or `imc <subcommand> --help` to see all.
-A `all` command is in the making which will make sample processing as easy as `imc process <mcdfile>`.
-
-Quick analysis of single cell data downstream in IPython/Jupyter notebook:
+A quick example of further analysis steps of single cell data downstream in IPython/Jupyter notebook:
 ```python
 import scanpy as sc
 a = sc.read('processed/quantification.h5ad')
@@ -234,7 +240,7 @@ The expected files are produced by common preprocessing pipelines such as
 
 ## Documentation
 
-Documentation is for now mostly a skeleton but will be enlarged soon:
+Documentation is for now mostly a skeleton but will be expanded soon:
 
 ```bash
 make docs
@@ -245,5 +251,8 @@ make docs
 Tests are still very limited, but you can run tests this way:
 
 ```bash
+pip install pytest  # install testing package
 python -m pytest --pyargs imc
 ```
+
+For data processing, running the example lung data should make sure eveything is running smoothly.

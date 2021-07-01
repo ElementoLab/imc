@@ -9,7 +9,7 @@ import sys
 import yaml
 import argparse
 from collections import OrderedDict
-from typing import List, Tuple, Any
+import typing as tp
 
 import pandas as pd
 
@@ -20,12 +20,12 @@ from imc.utils import cleanup_channel_names, build_channel_name
 from imc.scripts import build_cli
 
 
-def main(cli: List[str] = None) -> int:
+def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("inspect")
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
-    print(f"Starting analysis of {len(args.mcd_files)} MCD files: {fs}!")
+    print(f"Starting inspection step for {len(args.mcd_files)} MCD files: {fs}!")
 
     # Inspect each MCD
     metas = dict()
@@ -59,15 +59,13 @@ def main(cli: List[str] = None) -> int:
         print(f"MCD files use different panels, {n_panels} in total.")
 
     if not args.no_write:
-        channels.to_csv(
-            args.output_prefix + ".all_mcds.channel_labels.csv", index=False
-        )
+        channels.to_csv(args.output_prefix + ".all_mcds.channel_labels.csv", index=False)
 
-    print("Finished with all files!")
+    print("Finished inspect step!")
     return 0
 
 
-def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
+def inspect_mcd(mcd_file: Path, args: Args) -> tp.Tuple[DataFrame, DataFrame]:
     cols = [
         "Target",
         "Metal_Tag",
@@ -77,7 +75,7 @@ def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
     ]
     exclude_channels = ["EMPTY", "190BCKG", "80Ar", "89Y", "127I", "124Xe"]
 
-    print(f"Started analyzing '{mcd_file}'!")
+    print(f"    Analyzing '{mcd_file}':")
 
     mcd = McdParser(mcd_file)
     session = mcd.session
@@ -89,9 +87,7 @@ def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
             # ac_id: pd.Series(cleanup_channel_names(
             #     session.acquisitions[ac_id].channel_labels
             # ).values, index=session.acquisitions[ac_id].channel_masses)
-            ac_id: cleanup_channel_names(
-                session.acquisitions[ac_id].channel_labels
-            )
+            ac_id: cleanup_channel_names(session.acquisitions[ac_id].channel_labels)
             for ac_id in ac_ids
         }
     )
@@ -128,9 +124,9 @@ def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
 
         annot = pd.DataFrame(ids, columns=cols)
         annot["Atom"] = annot["Metal_Tag"].str.extract(r"(\d+)")[0]
-        annot["full"] = (
-            ~annot.index.str.contains("|".join(exclude_channels))
-        ).astype(int)
+        annot["full"] = (~annot.index.str.contains("|".join(exclude_channels))).astype(
+            int
+        )
         annot["ilastik"] = (
             annot.index.str.contains("DNA") | annot.index.str.startswith("CD")
         ).astype(int)
@@ -153,9 +149,7 @@ def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
     meta["consensus_channels"] = (
         channel_names.iloc[:, 0].to_dict() if same_channels else None
     )
-    meta["panoramas"] = {
-        p: v.get_csv_dict() for p, v in session.panoramas.items()
-    }
+    meta["panoramas"] = {p: v.get_csv_dict() for p, v in session.panoramas.items()}
     meta["acquisitions"] = {
         a: ac.get_csv_dict() for a, ac in session.acquisitions.items()
     }
@@ -174,7 +168,7 @@ def inspect_mcd(mcd_file: Path, args: Args) -> Tuple[DataFrame, DataFrame]:
     return meta, annot
 
 
-def encode(obj: Any) -> Any:
+def encode(obj: tp.Any) -> tp.Any:
     """
     For serializing to JSON or YAML with no special Python object references.
 

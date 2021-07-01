@@ -30,7 +30,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
         args.sample_names = [None] * len(args.mcd_files)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
-    print(f"Starting analysis of {len(args.mcd_files)} MCD files: {fs}!")
+    print(f"Starting prepare step for {len(args.mcd_files)} MCD files: {fs}!")
 
     for mcd_file, pannel_csv, sample_name in zip(
         args.mcd_files, args.pannel_csvs, args.sample_names
@@ -56,10 +56,9 @@ def main(cli: tp.Sequence[str] = None) -> int:
             panorama_image_prefix=args.root_output_dir / mcd_file.stem / "Panorama_",
             save_roi_arrays=False,
         )
+        print(f"Finished with '{mcd_file}'.")
 
-        print(f"Finished processing '{mcd_file}'.")
-
-    print("Finished with all files!")
+    print("Finished prepare step!")
     return 0
 
 

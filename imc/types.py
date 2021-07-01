@@ -65,19 +65,22 @@ GenericType = tp.TypeVar("GenericType")
 # type aliasing (done with Union to distinguish from other declared variables)
 
 
-# Args = Union[argparse.Namespace]
-class Args(argparse.Namespace, tp.Mapping[str, tp.Any]):
-    pass
+# # Args = Union[argparse.Namespace]
+# class Args(argparse.Namespace, tp.Mapping[str, tp.Any]):
+#     pass
 
 
-# Series = Union[pandas.Series]
-class Series(pandas.Series, tp.Mapping[tp.Any, tp.Any]):
-    pass
+# # Series = Union[pandas.Series]
+# class Series(pandas.Series, tp.Mapping[tp.Any, tp.Any]):
+#     pass
 
+
+Args = tp.Union[argparse.Namespace, tp.Mapping[str, tp.Any]]
 
 Array = tp.Union[numpy.ndarray]
 
 MultiIndexSeries = tp.Union[pandas.Series]
+Series = tp.Union[pandas.Series]
 DataFrame = tp.Union[pandas.DataFrame]
 AnnData = tp.Union[_AnnData]
 

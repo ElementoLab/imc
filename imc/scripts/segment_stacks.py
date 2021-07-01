@@ -6,7 +6,7 @@ Segment image stacks.
 
 import sys
 import argparse
-from typing import List, Optional
+import typing as tp
 from dataclasses import dataclass
 
 import numpy as np
@@ -20,12 +20,12 @@ from imc.segmentation import segment_roi, plot_image_and_mask
 from imc.scripts import build_cli
 
 
-def main(cli: List[str] = None) -> int:
+def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("segment")
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
-    print(f"Starting analysis of {len(args.tiffs)} TIFF files: {fs}!")
+    print(f"Starting segmentation step for {len(args.tiffs)} TIFF files: {fs}!")
 
     # Prepare ROI objects
     rois = list()
@@ -35,8 +35,6 @@ def main(cli: List[str] = None) -> int:
         rois.append(roi)
 
     # Run segmentation
-    add = "nuc" if args.compartment == "nuclear" else ""
-
     for roi in rois:
         if args.compartment == "both":
             mask_files = {
@@ -45,18 +43,16 @@ def main(cli: List[str] = None) -> int:
             }
         else:
             mask_files = {
-                args.compartment: roi._get_input_filename(
-                    args.compartment + "_mask"
-                )
+                args.compartment: roi._get_input_filename(args.compartment + "_mask")
             }
-        exists = all([f.exists() for f in mask_files.values()])
+        exists = all(f.exists() for f in mask_files.values())
         if exists and not args.overwrite:
             print(f"Mask for '{roi}' already exists, skipping...")
             continue
 
         print(f"Started segmentation of '{roi} with shape: '{roi.stack.shape}'")
         try:
-            mask_dict = segment_roi(
+            _ = segment_roi(
                 roi,
                 from_probabilities=args.from_probabilities,
                 model=args.model,
@@ -72,7 +68,7 @@ def main(cli: List[str] = None) -> int:
             continue
         print(f"Finished segmentation of '{roi}'.")
 
-    print("Finished with all files!")
+    print("Finished segmentation step!")
     return 0
 
 

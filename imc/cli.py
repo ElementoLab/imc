@@ -7,26 +7,27 @@ metadata as YAML files, and panel information as CSV files.
 
 import sys
 import argparse
-from typing import List
+import typing as tp
 
-import pandas as pd
-
-from imc.types import Path
+from imc.scripts.process import main as process
 from imc.scripts.inspect_mcds import main as inspect
 from imc.scripts.prepare_mcds import main as prepare
 from imc.scripts.predict import main as predict
 from imc.scripts.segment_stacks import main as segment
 from imc.scripts.quantify import main as quantify
 from imc.scripts.view import main as view
-from imc.utils import mcd_to_dir
+
+cli_config: tp.Dict[str, tp.Any]
 from imc.scripts import cli_config
 
 
-def main(cli: List[str] = None) -> int:
+def main(cli: tp.Sequence[str] = None) -> int:
     parser = get_args()
-    main_args, cmd_args = parser.parse_known_args()
+    main_args, cmd_args = parser.parse_known_args(cli)
 
-    if main_args.command == "inspect":
+    if main_args.command == "process":
+        process(cmd_args)
+    elif main_args.command == "inspect":
         inspect(cmd_args)
     elif main_args.command == "prepare":
         prepare(cmd_args)

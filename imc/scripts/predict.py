@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 """
-Generate probablity maps for each image.
+Generate probablity maps for each pixel in each image.
 """
 
 import sys
@@ -12,13 +12,14 @@ from imc.types import Path
 from imc.scripts import build_cli
 
 
-def main(cli: tp.List[str] = None) -> int:
+def main(cli: tp.Sequence[str] = None) -> int:
     """Generate probability maps for each ROI using ilastik."""
     parser = build_cli("predict")
+    print(cli)
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
-    print(f"Starting analysis of {len(args.tiffs)} TIFF files: {fs}!")
+    print(f"Starting predict step for {len(args.tiffs)} TIFF files: {fs}!")
 
     # Prepare ROI objects
     rois = list()
@@ -41,19 +42,20 @@ def main(cli: tp.List[str] = None) -> int:
         model_ilp = args.custom_model
 
     # Predict
+    print("Starting ilastik pixel classification.")
     tiff_files = [roi._get_input_filename("ilastik_input") for roi in rois]
-    predict(tiff_files, ilastik_sh, model_ilp, args.quiet)
+    predict_with_ilastik(tiff_files, ilastik_sh, model_ilp, args.quiet)
 
     for roi in rois:
         _in = roi.root_dir / roi.name + "_ilastik_s2_Probabilities.tiff"
         if _in.exists():
             _in.rename(roi._get_input_filename("probabilities"))
 
-    print("Finished with all files!")
+    print("Finished predict step!")
     return 0
 
 
-def predict(
+def predict_with_ilastik(
     tiff_files: tp.Sequence[Path], ilastik_sh: Path, model_ilp: Path, quiet: bool = True
 ) -> int:
     """
@@ -88,6 +90,7 @@ def get_ilastik(lib_dir: Path, version: str = "1.3.3post2") -> Path:
         print("Extracting ilastik archive.")
         with tarfile.open(lib_dir / file, "r:bz2") as tar:
             tar.extractall(lib_dir)
+        (lib_dir / file).unlink()
     return f
 
 
@@ -124,7 +127,7 @@ def download_file(url: str, output_file: tp.Union[Path, str], chunk_size=1024) -
         Size in bytes of chunk to write to disk at a time.
     """
     import shutil
-    import urllib.request as request
+    from urllib import request
     from contextlib import closing
     import requests
 
@@ -153,7 +156,7 @@ def run_shell_command(cmd: str, dry_run: bool = False) -> int:
     # the subprocess call must have its own shell
     # this should only occur if cellprofiler is being run uncontainerized
     # and needs a command to be called prior such as conda activate, etc
-    symbol = any([x in cmd for x in ["&", "&&", "|"]])
+    symbol = any(x in cmd for x in ["&", "&&", "|"])
     source = cmd.startswith("source")
     shell = bool(symbol or source)
     print(

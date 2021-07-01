@@ -3,9 +3,9 @@ import argparse
 
 from imc.types import Path
 
-
-DEFAULT_LIB_DIR = Path("~/.imc/lib").expanduser().mkdir()
-DEFAULT_MODELS_DIR = Path("~/.imc/models").expanduser().mkdir()
+DEFAULT_IMC_DIR = Path("~/.imc").expanduser().mkdir()
+DEFAULT_LIB_DIR = (DEFAULT_IMC_DIR / "lib").mkdir()
+DEFAULT_MODELS_DIR = (DEFAULT_IMC_DIR / "models").mkdir()
 
 
 epilog = "https://github.com/ElementoLab/imc"
@@ -16,6 +16,11 @@ cli_config = {
         "epilog": epilog,
     },
     "subcommands": {
+        "process": {
+            "prog": "imc process",
+            "description": "Process raw IMC files end-to-end.",
+            "epilog": epilog,
+        },
         "inspect": {
             "prog": "imc inspect",
             "description": "Inspect MCD files and extract metadata.",
@@ -48,6 +53,16 @@ cli_config = {
         },
     },
     "subcommand_arguments": {
+        "process": [
+            {
+                "kwargs": {
+                    "dest": "files",
+                    "nargs": "+",
+                    "type": Path,
+                    "help": "Input files to process. Can be MCD or TIFF.",
+                }
+            }
+        ],
         "inspect": [
             {"kwargs": {"dest": "mcd_files", "nargs": "+", "type": Path}},
             {

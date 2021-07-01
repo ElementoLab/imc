@@ -783,7 +783,7 @@ def plot_panoramas_rois(
         ## if too large it's likely not a real ROI
         large = (width * height / slide_area) > 0.2
         if large and x == 0 and y == 0:
-            print(f"ROI {acq['ID']} is likely not real. Skipping.")
+            print(f"ROI {acq['ID']} is empty. Skipping.")
             continue
 
         # Plot rectangle around ROI
