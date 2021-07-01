@@ -25,12 +25,12 @@ jobs:
         python -m pip install --upgrade pip
         pip install pytest
         pip install .[deepcell]
-    - name: Cache resources
-      id: cache-resources
+    - name: Cache pip
+      id: cache-pip
       uses: actions/cache@v2
       with:
-        path: /home/$USER/.imc
-        key: imc-resources
+        path: /home/$USER/.cache/pip
+        key: pip
     - name: Test with pytest
       run: |
         # Test package
@@ -43,9 +43,9 @@ jobs:
         # Get example data (will be cached by github action)
         mkdir -p /home/$USER/.imc/ imctest/data
         if [ ! -f /home/$USER/.imc/${SAMPLE}.mcd ]; then
-          echo "Downloading..."
-          wget -q -O imctest/${SAMPLE}.mcd $MCD_URL
-          echo "Finished."
+          echo "Downloading test dataset..."
+          wget -q -O /home/$USER/.imc/${SAMPLE}.mcd $MCD_URL
+          echo "Finished downloading."
         fi
         ln -s /home/$USER/.imc/${SAMPLE}.mcd imctest/data/${SAMPLE}.mcd
 
@@ -71,3 +71,9 @@ jobs:
 
         ls -l processed/
         ls -l processed/${SAMPLE}
+    - name: Cache resources
+      id: cache-resources
+      uses: actions/cache@v2
+      with:
+        path: /home/$USER/.imc
+        key: imc-resources
