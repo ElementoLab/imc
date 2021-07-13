@@ -7,17 +7,7 @@ A class to model a imaging mass cytometry project.
 from __future__ import annotations
 import os
 import pathlib
-from typing import (
-    Tuple,
-    Dict,
-    Any,
-    List,
-    Optional,
-    Union,
-    Iterator,
-    overload,
-    Literal,
-)  # , cast
+import typing as tp
 
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
@@ -27,6 +17,7 @@ import matplotlib.pyplot as plt  # type: ignore
 import seaborn as sns  # type: ignore
 
 from imc.data_models.sample import IMCSample
+from imc.data_models.roi import ROI
 from imc.types import Path, Figure, Patch, DataFrame, Series, MultiIndexSeries
 
 # from imc import LOGGER
@@ -37,10 +28,7 @@ from imc.operations import (
     measure_cell_type_adjacency,
     cluster_communities,
 )
-from imc.graphics import (
-    get_grid_dims,
-    add_legend,
-)
+from imc.graphics import get_grid_dims, add_legend
 from imc.utils import align_channels_by_name
 from imc.exceptions import cast  # TODO: replace with typing.cast
 
@@ -62,8 +50,8 @@ ROI_UNCERTAINTY_DIR = Path("uncertainty")
 ROI_SINGLE_CELL_DIR = Path("single_cell")
 
 
-# def cast(arg: Optional[GenericType], name: str, obj: str) -> GenericType:
-#     """Remove `Optional` from `T`."""
+# def cast(arg: tp.Optional[GenericType], name: str, obj: str) -> GenericType:
+#     """Remove `tp.Optional` from `T`."""
 #     if arg is None:
 #         raise AttributeNotSetError(f"Attribute '{name}' of '{obj}' cannot be None!")
 #     return arg
@@ -90,17 +78,17 @@ class Project:
         Path to CSV metadata sheet.
     metadata : :class:`pandas.DataFrame`
         Metadata dataframe
-    samples : List[:class:`IMCSample`]
-        List of IMC sample objects.
+    samples : tp.List[:class:`IMCSample`]
+        tp.List of IMC sample objects.
     """
 
     def __init__(
         self,
-        metadata: Optional[Union[str, Path, DataFrame]] = None,
+        metadata: tp.Optional[tp.Union[str, Path, DataFrame]] = None,
         name: str = DEFAULT_PROJECT_NAME,
         sample_name_attribute: str = DEFAULT_SAMPLE_NAME_ATTRIBUTE,
-        sample_grouping_attributes: Optional[List[str]] = None,
-        panel_metadata: Optional[Union[Path, DataFrame]] = None,
+        sample_grouping_attributes: tp.Sequence[str] = None,
+        panel_metadata: tp.Optional[tp.Union[Path, DataFrame]] = None,
         toggle: bool = True,
         subfolder_per_sample: bool = SUBFOLDERS_PER_SAMPLE,
         processed_dir: Path = DEFAULT_PROCESSED_DIR_NAME,
@@ -114,18 +102,18 @@ class Project:
             if isinstance(metadata, (str, pathlib.Path, Path))
             else metadata
         )
-        self.samples: List["IMCSample"] = list()
+        self.samples: tp.Sequence[IMCSample] = list()
         self.sample_name_attribute = sample_name_attribute
         self.sample_grouping_attributes = (
             sample_grouping_attributes or DEFAULT_SAMPLE_GROUPING_ATTRIBUTEs
         )
-        self.panel_metadata: Optional[DataFrame] = (
+        self.panel_metadata: tp.Optional[DataFrame] = (
             pd.read_csv(panel_metadata, index_col=0)
             if isinstance(panel_metadata, (str, Path))
             else panel_metadata
         )
         # # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
-        # self.channel_labels: Optional[Series] = (
+        # self.channel_labels: tp.Optional[Series] = (
         #     pd.read_csv(channel_labels, index_col=0, squeeze=True)
         #     if isinstance(channel_labels, (str, Path))
         #     else channel_labels
@@ -136,13 +124,13 @@ class Project:
         self.processed_dir = Path(processed_dir).expanduser().absolute()
         self.results_dir = Path(results_dir).expanduser().absolute()
         self.results_dir.mkdir()
-        self.quantification: Optional[DataFrame] = None
-        self._clusters: Optional[
+        self.quantification: tp.Optional[DataFrame] = None
+        self._clusters: tp.Optional[
             MultiIndexSeries
         ] = None  # MultiIndex: ['sample', 'roi', 'obj_id']
 
         if not hasattr(self, "samples"):
-            self.samples = list()
+            self.samples = tp.List()
 
         self._initialize_project_from_annotation(**kwargs)
 
@@ -174,10 +162,10 @@ class Project:
     def __exit__(self, type, value, traceback):
         pass
 
-    def __getitem__(self, item: int) -> "IMCSample":
+    def __getitem__(self, item: int) -> IMCSample:
         return self.samples[item]
 
-    def __iter__(self) -> Iterator["IMCSample"]:
+    def __iter__(self) -> tp.Iterator[IMCSample]:
         return iter(self.samples)
 
     def _detect_samples(self) -> DataFrame:
@@ -197,12 +185,12 @@ class Project:
         df[DEFAULT_SAMPLE_NAME_ATTRIBUTE] = df[0].apply(
             lambda x: x.name.replace("_full.tiff", "")
         )
-        return df.drop(0, axis=1)  # .sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
+        return df.drop([0], axis=1)  # .sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
 
     def _initialize_project_from_annotation(
         self,
-        toggle: Optional[bool] = None,
-        sample_grouping_attributes: Optional[List[str]] = None,
+        toggle: tp.Optional[bool] = None,
+        sample_grouping_attributes: tp.Optional[tp.List[str]] = None,
         **kwargs,
     ) -> None:
         def cols_with_unique_values(dfs: DataFrame) -> set:
@@ -220,7 +208,7 @@ class Project:
         sample_grouping_attributes = (
             sample_grouping_attributes
             or self.sample_grouping_attributes
-            or metadata.columns.tolist()
+            or metadata.columns.totp.List()
         )
 
         for _, idx in metadata.groupby(
@@ -249,14 +237,14 @@ class Project:
             self.samples.append(sample)
 
     @property
-    def rois(self) -> List["ROI"]:
+    def rois(self) -> tp.List[ROI]:
         """
-        Return a list of all ROIs of the project samples.
+        Return a tp.List of all ROIs of the project samples.
         """
         return [roi for sample in self.samples for roi in sample.rois]
 
     @rois.setter
-    def rois(self, rois: List[Union[str, "ROI"]]):
+    def rois(self, rois: tp.List[tp.Union[str, ROI]]):
         for sample in self.samples:
             sample.rois = [r for r in sample.rois if r.name in rois or r in rois]
 
@@ -269,20 +257,20 @@ class Project:
         return len(self.rois)
 
     @property
-    def channel_labels(self) -> Union[Series, DataFrame]:
+    def channel_labels(self) -> tp.Union[Series, DataFrame]:
         return pd.concat([sample.channel_labels for sample in self.samples], axis=1)
 
     @property
-    def channel_names(self) -> Union[Series, DataFrame]:
+    def channel_names(self) -> tp.Union[Series, DataFrame]:
         return pd.concat([sample.channel_names for sample in self.samples], axis=1)
 
     @property
-    def channel_metals(self) -> Union[Series, DataFrame]:
+    def channel_metals(self) -> tp.Union[Series, DataFrame]:
         return pd.concat([sample.channel_metals for sample in self.samples], axis=1)
 
     def _get_rois(
-        self, samples: Optional[List["IMCSample"]], rois: Optional[List["ROI"]]
-    ) -> List["ROI"]:
+        self, samples: tp.Optional[tp.List[IMCSample]], rois: tp.Optional[tp.List[ROI]]
+    ) -> tp.List[ROI]:
         return [
             r
             for sample in (samples or self.samples)
@@ -309,7 +297,7 @@ class Project:
         dir_, suffix = to_read[input_type]
         return self.results_dir / dir_ / (self.name + suffix)
 
-    def get_samples(self, sample_names: Union[str, List[str]]):
+    def get_samples(self, sample_names: tp.Union[str, tp.List[str]]):
         if isinstance(sample_names, str):
             sample_names = [sample_names]
         samples = [s for s in self.samples if s.name in sample_names]
@@ -318,7 +306,7 @@ class Project:
         else:
             ValueError(f"Sample '{sample_names}' couldn't be found.")
 
-    def get_rois(self, roi_names: Union[str, List[str]]):
+    def get_rois(self, roi_names: tp.Union[str, tp.List[str]]):
         if isinstance(roi_names, str):
             roi_names = [roi_names]
         rois = [r for r in self.rois if r.name in roi_names]
@@ -329,17 +317,17 @@ class Project:
 
     def plot_channels(
         self,
-        channels: List[str] = ["mean"],
+        channels: tp.List[str] = ["mean"],
         per_sample: bool = False,
         merged: bool = False,
         save: bool = False,
-        output_dir: Optional[Path] = None,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        output_dir: tp.Optional[Path] = None,
+        samples: tp.Optional[tp.List[IMCSample]] = None,
+        rois: tp.Optional[tp.List[ROI]] = None,
         **kwargs,
     ) -> Figure:
         """
-        Plot a list of channels for all Samples/ROIs.
+        Plot a tp.List of channels for all Samples/ROIs.
         """
         if isinstance(channels, str):
             channels = [channels]
@@ -377,9 +365,9 @@ class Project:
     def plot_probabilities_and_segmentation(
         self,
         jointly: bool = False,
-        output_dir: Optional[Path] = None,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        output_dir: Path = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
     ):
         # TODO: adapt to detect whether to plot nuclei mask
         samples = samples or self.samples
@@ -411,11 +399,11 @@ class Project:
 
     def plot_cell_types(
         self,
-        cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
-        cell_type_assignments: Optional[DataFrame] = None,
-        palette: Optional[str] = "tab20",
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        cell_type_combinations: tp.Union[str, tp.List[tp.Tuple[str, str]]] = None,
+        cell_type_assignments: DataFrame = None,
+        palette: tp.Optional[str] = "tab20",
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
     ):
         # TODO: fix compatibility of `cell_type_combinations`.
         samples = samples or self.samples
@@ -424,7 +412,7 @@ class Project:
         n = len(samples)
         m = max([sample.n_rois for sample in samples])
         fig, axes = plt.subplots(n, m, figsize=(3 * m, 3 * n), squeeze=False)
-        patches: List[Patch] = list()
+        patches: tp.List[Patch] = tp.List()
         for i, sample in enumerate(samples):
             for j, roi in enumerate([roi for roi in rois if roi in sample.rois]):
                 patches += roi.plot_cell_types(
@@ -441,13 +429,13 @@ class Project:
     def channel_summary(
         self,
         red_func: str = "mean",
-        channel_exclude: Optional[List[str]] = None,
+        channel_exclude: tp.List[str] = None,
         plot: bool = True,
         output_prefix: str = None,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
         **kwargs,
-    ) -> Union[DataFrame, Tuple[DataFrame, Figure]]:
+    ) -> tp.Union[DataFrame, tp.Tuple[DataFrame, Figure]]:
         # for sample, _func in zip(samples or self.samples, red_func):
         samples = samples or self.samples
         rois = self._get_rois(samples, rois)
@@ -516,8 +504,8 @@ class Project:
 
     def image_summary(
         self,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: List["ROI"] = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
     ):
         raise NotImplementedError
         from imc.utils import lacunarity, fractal_dimension
@@ -547,9 +535,9 @@ class Project:
 
     def channel_correlation(
         self,
-        channel_exclude: Optional[List[str]] = None,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        channel_exclude: tp.List[str] = None,
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
     ) -> Figure:
         """
         Observe the pairwise correlation of channels across ROIs.
@@ -589,45 +577,45 @@ class Project:
         grid.fig.grid = grid
         return grid.fig
 
-    @overload
+    @tp.overload
     def quantify_cells(
         self,
-        layers: List[str] = ["cell"],
-        intensity: bool = True,
-        intensity_kwargs: Dict[str, Any] = {},
-        morphology: bool = True,
-        morphology_kwargs: Dict[str, Any] = {},
-        set_attribute: Literal[True] = True,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        layers: tp.List[str],
+        intensity: bool,
+        intensity_kwargs: tp.Dict[str, tp.Any],
+        morphology: bool,
+        morphology_kwargs: tp.Dict[str, tp.Any],
+        set_attribute: tp.Literal[True],
+        samples: tp.List[IMCSample],
+        rois: tp.List[ROI],
     ) -> None:
         ...
 
-    @overload
+    @tp.overload
     def quantify_cells(
         self,
-        layers: List[str] = ["cell"],
-        intensity: bool = True,
-        intensity_kwargs: Dict[str, Any] = {},
-        morphology: bool = True,
-        morphology_kwargs: Dict[str, Any] = {},
-        set_attribute: Literal[False] = False,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        layers: tp.List[str],
+        intensity: bool,
+        intensity_kwargs: tp.Dict[str, tp.Any],
+        morphology: bool,
+        morphology_kwargs: tp.Dict[str, tp.Any],
+        set_attribute: tp.Literal[False],
+        samples: tp.List[IMCSample],
+        rois: tp.List[ROI],
     ) -> DataFrame:
         ...
 
     def quantify_cells(
         self,
-        layers: List[str] = ["cell"],
+        layers: tp.List[str] = ["cell"],
         intensity: bool = True,
-        intensity_kwargs: Dict[str, Any] = {},
+        intensity_kwargs: tp.Dict[str, tp.Any] = {},
         morphology: bool = True,
-        morphology_kwargs: Dict[str, Any] = {},
+        morphology_kwargs: tp.Dict[str, tp.Any] = {},
         set_attribute: bool = True,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
-    ) -> Optional[DataFrame]:
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
+    ) -> tp.Optional[DataFrame]:
         """
         Measure the intensity of each channel in each single cell.
         """
@@ -648,8 +636,8 @@ class Project:
 
     def quantify_cell_intensity(
         self,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
         **kwargs,
     ) -> DataFrame:
         """
@@ -661,8 +649,8 @@ class Project:
 
     def quantify_cell_morphology(
         self,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
         **kwargs,
     ) -> DataFrame:
         """
@@ -674,13 +662,13 @@ class Project:
 
     def cluster_cells(
         self,
-        output_prefix: Optional[Path] = None,
+        output_prefix: Path = None,
         plot: bool = True,
         set_attribute: bool = True,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
         **kwargs,
-    ) -> Optional[Series]:
+    ) -> tp.Optional[Series]:
         """
         Derive clusters of single cells based on their channel intensity.
         """
@@ -694,7 +682,7 @@ class Project:
             if "cell_type" in self.panel_metadata.columns:
                 kwargs["cell_type_channels"] = self.panel_metadata.query(
                     "cell_type == 1"
-                ).index.tolist()
+                ).index.totp.List()
 
         clusters = single_cell_analysis(
             output_prefix=output_prefix,
@@ -725,9 +713,9 @@ class Project:
 
     def set_clusters(
         self,
-        clusters: Optional[MultiIndexSeries] = None,
+        clusters: MultiIndexSeries = None,
         write_to_disk: bool = False,
-        samples: Optional[List["IMCSample"]] = None,
+        samples: tp.Sequence[IMCSample] = None,
     ) -> None:
         """
         Set the `clusters` attribute of the project and
@@ -758,8 +746,8 @@ class Project:
 
     def label_clusters(
         self,
-        h5ad_file: Optional[Path] = None,
-        output_prefix: Optional[Path] = None,
+        h5ad_file: Path = None,
+        output_prefix: Path = None,
         **kwargs,
     ) -> None:
         """
@@ -783,12 +771,12 @@ class Project:
 
     def sample_comparisons(
         self,
-        sample_attributes: Optional[List[str]] = None,
-        output_prefix: Optional[Path] = None,
+        sample_attributes: tp.Sequence[str] = None,
+        output_prefix: Path = None,
         cell_type_percentage_threshold: float = 1.0,
-        channel_exclude: List[str] = None,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        channel_exclude: tp.Sequence[str] = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
     ):
         # TODO: revamp/separate into smaller functions
         import itertools
@@ -859,7 +847,7 @@ class Project:
 
         # Test difference between channels/clusters
         # # channels
-        _res = list()
+        _res = tp.List()
         for attribute in sample_attributes:
             for channel in channel_df["channel"].unique():
                 for group1, group2 in itertools.permutations(
@@ -918,7 +906,7 @@ class Project:
         )
 
         # # clusters
-        _res = list()
+        _res = tp.List()
         for attribute in sample_attributes:
             for cluster in cluster_df["cluster"].unique():
                 for group1, group2 in itertools.permutations(
@@ -1182,9 +1170,9 @@ class Project:
 
     def measure_adjacency(
         self,
-        output_prefix: Optional[Path] = None,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        output_prefix: Path = None,
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
     ) -> None:
         """
         Derive cell adjacency graphs for each ROI.
@@ -1255,9 +1243,9 @@ class Project:
 
     def find_communities(
         self,
-        output_prefix: Optional[Path] = None,
-        samples: Optional[List["IMCSample"]] = None,
-        rois: Optional[List["ROI"]] = None,
+        output_prefix: Path = None,
+        samples: tp.List[IMCSample] = None,
+        rois: tp.List[ROI] = None,
         **kwargs,
     ) -> None:
         """

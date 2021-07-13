@@ -58,7 +58,9 @@ def main(cli: tp.Sequence[str] = None) -> int:
         idx = quant["roi"] + "-" + quant["obj_id"].astype(str).str.zfill(v)
         quant.index = idx
 
-        cols = ["roi", "obj_id"] + (["X", "Y"] if args.morphology else [])
+        cols = ["roi", "obj_id"] + (
+            ["X_centroid", "Y_centroid"] if args.morphology else []
+        )
         ann = AnnData(quant.drop(cols, axis=1), obs=quant[cols])
         f = Path("processed").mkdir() / "quantification.h5ad"
         sc.write(f, ann)

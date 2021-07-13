@@ -56,6 +56,7 @@ dev = [
     "ipython",
     "black[d]",
     "mypy",  # pin to version supporting pyproject.toml
+    "pandas-stubs",
     "pylint",
     "git-lint",
     "pytest",
@@ -192,9 +193,6 @@ module = [
     'networkx.*',
     'pingouin.*',
     'tqdm.*',
-    #
-    'imc.*',
-    'seaborn_extensions.*'
 ]
 ignore_missing_imports = true
 

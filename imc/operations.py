@@ -7,7 +7,7 @@ from __future__ import annotations
 from collections import Counter
 import os
 import re
-from typing import Tuple, List, Optional, Dict, Union, Literal, Any, overload
+import typing as tp
 
 from ordered_set import OrderedSet
 import numpy as np
@@ -37,6 +37,8 @@ import networkx as nx
 import community
 
 from imc import MEMORY
+import imc.data_models.roi as _roi
+import imc.data_models.sample as _sample
 from imc.exceptions import cast
 from imc.types import DataFrame, Series, Array, Path, MultiIndexSeries
 from imc.utils import (
@@ -61,14 +63,14 @@ DEFAULT_SUPERCOMMUNITY_RESOLUTION = 0.5
 
 
 def quantify_cell_intensity(
-    stack: Union[Array, Path],
-    mask: Union[Array, Path],
+    stack: tp.Union[Array, Path],
+    mask: tp.Union[Array, Path],
     red_func: str = "mean",
     border_objs: bool = False,
     equalize: bool = True,
     scale: bool = False,
-    channel_include: Optional[Array] = None,
-    channel_exclude: Optional[Array] = None,
+    channel_include: Array = None,
+    channel_exclude: Array = None,
 ) -> DataFrame:
     """
     Measure the intensity of each channel in each cell
@@ -76,9 +78,9 @@ def quantify_cell_intensity(
 
     Parameters
     ----------
-    stack: Union[Array, Path]
+    stack: tp.Union[Array, Path]
         Image to quantify.
-    mask: Union[Array, Path]
+    mask: tp.Union[Array, Path]
         Mask to quantify.
     red_func: str
         Function to reduce pixels to object borders. Defaults to 'mean'.
@@ -130,8 +132,8 @@ def quantify_cell_intensity(
 
 
 def quantify_cell_morphology(
-    mask: Union[Array, Path],
-    attributes: List[str] = [
+    mask: tp.Union[Array, Path],
+    attributes: tp.Sequence[str] = [
         "area",
         "perimeter",
         "major_axis_length",
@@ -160,34 +162,34 @@ def quantify_cell_morphology(
     )
 
 
-def _quantify_cell_intensity__roi(roi: "ROI", **kwargs) -> DataFrame:
+def _quantify_cell_intensity__roi(roi: _roi.ROI, **kwargs) -> DataFrame:
     assignment = dict(roi=roi.name)
     if roi.sample is not None:
         assignment["sample"] = roi.sample.name
     return roi.quantify_cell_intensity(**kwargs).assign(**assignment)
 
 
-def _quantify_cell_morphology__roi(roi: "ROI", **kwargs) -> DataFrame:
+def _quantify_cell_morphology__roi(roi: _roi.ROI, **kwargs) -> DataFrame:
     assignment = dict(roi=roi.name)
     if roi.sample is not None:
         assignment["sample"] = roi.sample.name
     return roi.quantify_cell_morphology(**kwargs).assign(**assignment)
 
 
-def _correlate_channels__roi(roi: "ROI", labels: str = "channel_names") -> DataFrame:
+def _correlate_channels__roi(roi: _roi.ROI, labels: str = "channel_names") -> DataFrame:
     xcorr = np.corrcoef(roi.stack.reshape((roi.channel_number, -1)))
     np.fill_diagonal(xcorr, 0)
     labs = getattr(roi, labels)
     return pd.DataFrame(xcorr, index=labs, columns=labs)
 
 
-# def _get_adjacency_graph__roi(roi: "ROI", **kwargs) -> DataFrame:
+# def _get_adjacency_graph__roi(roi: _roi.ROI, **kwargs) -> DataFrame:
 #     output_prefix = roi.sample.root_dir / "single_cell" / roi.name
 #     return get_adjacency_graph(roi.stack, roi.mask, roi.clusters, output_prefix, **kwargs)
 
 
 def quantify_cell_intensity_rois(
-    rois: List["ROI"],
+    rois: tp.Sequence[_roi.ROI],
     **kwargs,
 ) -> DataFrame:
     """
@@ -199,7 +201,7 @@ def quantify_cell_intensity_rois(
 
 
 def quantify_cell_morphology_rois(
-    rois: List["ROI"],
+    rois: tp.Sequence[_roi.ROI],
     **kwargs,
 ) -> DataFrame:
     """
@@ -211,12 +213,12 @@ def quantify_cell_morphology_rois(
 
 
 def quantify_cells_rois(
-    rois: List["ROI"],
-    layers: List[str],
+    rois: tp.Sequence[_roi.ROI],
+    layers: tp.Sequence[str],
     intensity: bool = True,
-    intensity_kwargs: Dict[str, Any] = {},
+    intensity_kwargs: tp.Dict[str, tp.Any] = {},
     morphology: bool = True,
-    morphology_kwargs: Dict[str, Any] = {},
+    morphology_kwargs: tp.Dict[str, tp.Any] = {},
 ) -> DataFrame:
     """
     Measure the intensity of each channel in each single cell.
@@ -244,7 +246,7 @@ def quantify_cells_rois(
 
 
 def check_channel_axis_correlation(
-    arr: Array, channel_labels: List[str], output_prefix: Path
+    arr: Array, channel_labels: tp.Sequence[str], output_prefix: Path
 ) -> DataFrame:
     # # Plot and regress
     n, m = get_grid_dims(arr.shape[0])
@@ -299,7 +301,7 @@ def check_channel_axis_correlation(
 
 
 def fix_signal_axis_dependency(
-    arr: Array, channel_labels: List[str], res: DataFrame, output_prefix: Path
+    arr: Array, channel_labels: tp.Sequence[str], res: DataFrame, output_prefix: Path
 ) -> Array:
     # res = pd.read_csv(pjoin("processed", "case_b", "plots", "qc", roi + "_channel-axis_correlation.csv"))
     corr_d = np.empty_like(arr)
@@ -356,14 +358,14 @@ def fix_signal_axis_dependency(
 
 @MEMORY.cache
 def measure_channel_background(
-    rois: List["ROI"], plot: bool = True, output_prefix: Optional[Path] = None
+    rois: tp.Sequence[_roi.ROI], plot: bool = True, output_prefix: Path = None
 ) -> Series:
     # Quantify whole image area
-    _imeans: Dict[str, Series] = dict()
-    _istds: Dict[str, Series] = dict()
+    _imeans: tp.Dict[str, Series] = dict()
+    _istds: tp.Dict[str, Series] = dict()
     # Quantify only cell area
-    _cmeans: Dict[str, Series] = dict()
-    _cstds: Dict[str, Series] = dict()
+    _cmeans: tp.Dict[str, Series] = dict()
+    _cstds: tp.Dict[str, Series] = dict()
     for roi in rois:
         stack = roi.stack
         mask = roi.cell_mask
@@ -502,7 +504,7 @@ def measure_channel_background(
 
 
 def anndata_to_cluster_means(
-    ann: anndata.AnnData, raw: bool = False, cluster_label: str = "cluster"
+    ann: AnnData, raw: bool = False, cluster_label: str = "cluster"
 ) -> DataFrame:
     means = dict()
     obj = ann if not raw else ann.raw
@@ -516,17 +518,17 @@ def anndata_to_cluster_means(
 
 def single_cell_analysis(
     output_prefix: Path,
-    quantification: Optional[DataFrame] = None,
-    rois: Optional[List["ROI"]] = None,
+    quantification: DataFrame = None,
+    rois: tp.List["ROI"] = None,
     label_clusters: bool = True,
     plot: bool = True,
     intensity: bool = True,
     morphology: bool = True,
     filter_channels: bool = False,
-    cell_type_channels: Optional[List[str]] = None,
+    cell_type_channels: tp.List[str] = None,
     channel_filtering_threshold: float = 0.1,  # 0.12
-    channel_include: Optional[List[str]] = None,
-    channel_exclude: List[str] = [
+    channel_include: tp.List[str] = None,
+    channel_exclude: tp.Sequence[str] = [
         "<EMPTY>",
         "EMPTY",
         "Ar80",
@@ -535,7 +537,7 @@ def single_cell_analysis(
     ],  # r"Ru\d+", "DNA"
     cluster_min_percentage: float = 1.0,
     leiden_clustering_resolution: float = DEFAULT_SINGLE_CELL_RESOLUTION,
-    plot_only_channels: List[str] = None,
+    plot_only_channels: tp.Sequence[str] = None,
 ) -> MultiIndexSeries:
     """
 
@@ -805,11 +807,11 @@ def single_cell_analysis(
 
 
 def derive_reference_cell_type_labels(
-    h5ad_file: Optional[Path] = None,
-    mean_expr: Optional[DataFrame] = None,
-    cluster_assignments: Optional[Series] = None,
-    cell_type_channels: Optional[List[str]] = None,
-    output_prefix: Optional[Path] = None,
+    h5ad_file: Path = None,
+    mean_expr: DataFrame = None,
+    cluster_assignments: Series = None,
+    cell_type_channels: tp.List[str] = None,
+    output_prefix: Path = None,
     plot: bool = True,
     std_threshold: float = 1.5,
     cluster_min_percentage: float = 0.0,
@@ -1019,7 +1021,7 @@ def derive_reference_cell_type_labels(
 
 
 def predict_cell_types_from_reference(
-    sample: "IMCSample",
+    sample: _sample.IMCSample,
     reference_csv: str = None,
     h5ad_file: Path = None,
     output_prefix: Path = None,
@@ -1108,7 +1110,7 @@ def predict_cell_types_from_reference(
     return cell_type_assignments
 
 
-# def merge_clusterings(samples: List["IMCSample"]):
+# def merge_clusterings(samples: tp.Sequence["IMCSample"]):
 
 #     means = dict()
 #     for sample in samples:
@@ -1158,8 +1160,8 @@ def predict_cell_types_from_reference(
 
 
 def get_adjacency_graph(
-    roi: "ROISample",
-    output_prefix: Optional[Path] = None,
+    roi: _roi.ROI,
+    output_prefix: Path = None,
     max_dist: int = MAX_BETWEEN_CELL_DIST,
 ):
     clusters = roi.clusters
@@ -1228,12 +1230,12 @@ def get_adjacency_graph(
 
 
 def measure_cell_type_adjacency(
-    roi: "ROISample",
+    roi: _roi.ROI,
     method: str = "random",
-    adjacency_graph: Optional[nx.Graph] = None,
+    adjacency_graph: nx.Graph = None,
     n_iterations: int = 100,
     inf_replace_method: str = "min",
-    output_prefix: Optional[Path] = None,
+    output_prefix: Path = None,
     plot: bool = True,
     save: bool = True,
 ) -> DataFrame:
@@ -1292,12 +1294,12 @@ def measure_cell_type_adjacency(
 
 
 def correct_interaction_background_random(
-    roi: "ROI",
+    roi: _roi.ROI,
     freqs: DataFrame,
     attribute,
     n_iterations: int,
     save: bool,
-    output_prefix: Union[str, Path],
+    output_prefix: tp.Union[str, Path],
 ):
     values = {
         x: roi.adjacency_graph.nodes[x][attribute] for x in roi.adjacency_graph.nodes
@@ -1337,7 +1339,7 @@ def correct_interaction_background_pharmacoscopy(
     frequency_matrix: DataFrame,
     cluster_counts: Series,
     total_cells: int,
-    inf_replace_method: Optional[str] = "min_symmetric",
+    inf_replace_method: tp.Optional[str] = "min_symmetric",
 ):
     c = np.log(total_cells)
     fa = np.log(frequency_matrix.sum().sum()) - c
@@ -1378,10 +1380,10 @@ def correct_interaction_background_pharmacoscopy(
 
 
 def find_communities(
-    roi: "ROI",
+    roi: _roi.ROI,
     community_resolution: float = DEFAULT_COMMUNITY_RESOLUTION,
     plot: bool = True,
-) -> Tuple[Series, Tuple]:
+) -> tp.Tuple[Series, tp.Tuple]:
     # def networkx_to_igraph(graph):
     #     import igraph as ig
     #     g = ig.Graph(edges=list(graph.edges))
@@ -1393,17 +1395,17 @@ def find_communities(
     #     g.delete_vertices(vertexes[~vertexes.isin(nodes)].values)
     #     return g
 
-    def get_community_members(partition: Dict) -> Dict:
+    def get_community_members(partition: tp.Dict) -> tp.Dict:
         counts = Counter(partition)
         # {com: members}
-        comms: Dict[int, set] = dict()
+        comms: tp.Dict[int, set] = dict()
         for com in counts.keys():
             comms[com] = set()
         for n, com in partition.items():
             comms[com].add(n)
         return comms
 
-    def get_community_cell_type_composition(roi: "ROI", partition: Series):
+    def get_community_cell_type_composition(roi: _roi.ROI, partition: Series):
         cts = dict()
         for com, members in get_community_members(partition).items():
             # cts[f"{roi.sample.name} - {roi.roi_number} - {com}"] = \
@@ -1463,8 +1465,8 @@ def find_communities(
 
 
 def cluster_communities(
-    rois: List["ROI"],
-    output_prefix: Optional[Path] = None,
+    rois: tp.Sequence[_roi.ROI],
+    output_prefix: Path = None,
     supercommunity_resolution: float = DEFAULT_SUPERCOMMUNITY_RESOLUTION,
 ) -> Series:
     output_prefix = output_prefix or (
@@ -1653,7 +1655,7 @@ def cluster_communities(
     vars_ = ["cluster", "community", "supercommunity"]
     n = len(rois)
     m = len(vars_)
-    patches: Dict[str, List] = dict()
+    patches: tp.Dict[str, tp.List] = dict()
     fig, axes = plt.subplots(
         n, m, figsize=(4 * m, 4 * n), squeeze=False, sharex="row", sharey="row"
     )
@@ -1695,56 +1697,56 @@ def cluster_communities(
     # rs = rs / rs.sum()
 
 
-@overload
+@tp.overload
 def get_best_mixture_number(
     x: Series,
     min_mix: int,
     max_mix: int,
     subsample_if_needed: bool,
     n_iters: int,
-    metrics: List[str],
+    metrics: tp.Sequence[str],
     red_func: str,
-    return_prediction: Literal[False],
+    return_prediction: tp.Literal[False],
 ) -> int:
     ...
 
 
-@overload
+@tp.overload
 def get_best_mixture_number(
     x: Series,
     min_mix: int,
     max_mix: int,
     subsample_if_needed: bool,
     n_iters: int,
-    metrics: List[str],
+    metrics: tp.Sequence[str],
     red_func: str,
-    return_prediction: Literal[True],
-) -> Tuple[int, Array]:
+    return_prediction: tp.Literal[True],
+) -> tp.Tuple[int, Array]:
     ...
 
 
-@overload
+@tp.overload
 def get_best_mixture_number(
     x: Series,
     min_mix: int = 2,
     max_mix: int = 6,
     subsample_if_needed: bool = True,
     n_iters: int = 3,
-    metrics: List[str] = [
+    metrics: tp.Sequence[str] = [
         "silhouette_score",
         "calinski_harabasz_score",
         "davies_bouldin_score",
     ],
     red_func: str = "mean",
     return_prediction: bool = False,
-) -> Union[int, Tuple[int, Array]]:
+) -> tp.Union[int, tp.Tuple[int, Array]]:
     from sklearn.mixture import GaussianMixture
     import sklearn.metrics
 
-    def get_means(num: Series, pred: Union[Series, Array]) -> Series:
+    def get_means(num: Series, pred: tp.Union[Series, Array]) -> Series:
         return num.groupby(pred).mean().sort_values()
 
-    def replace_pred(x: Series, y: Union[Series, Array]) -> Series:
+    def replace_pred(x: Series, y: tp.Union[Series, Array]) -> Series:
         means = get_means(x, y)
         repl = dict(zip(means.index, range(len(means))))
         y2 = pd.Series(y, index=x.index).replace(repl)
@@ -1782,12 +1784,12 @@ def get_best_mixture_number(
 
 
 def get_threshold_from_gaussian_mixture(
-    x: Series, y: Optional[Series] = None, n_components: int = 2
+    x: Series, y: Series = None, n_components: int = 2
 ) -> Array:
-    def get_means(num: Series, pred: Union[Series, Array]) -> Series:
+    def get_means(num: Series, pred: tp.Union[Series, Array]) -> Series:
         return num.groupby(pred).mean().sort_values()
 
-    def replace_pred(x: Series, y: Union[Series, Array]) -> Series:
+    def replace_pred(x: Series, y: tp.Union[Series, Array]) -> Series:
         means = get_means(x, y)
         repl = dict(zip(means.index, range(len(means))))
         y2 = pd.Series(y, index=x.index).replace(repl)
@@ -1830,8 +1832,8 @@ def get_probability_of_gaussian_mixture(
 
 
 def fit_gaussian_mixture(
-    x: Union[Series, DataFrame], n_mixtures: Union[int, List[int]] = None
-) -> Union[Series, DataFrame]:
+    x: tp.Union[Series, DataFrame], n_mixtures: tp.Union[int, tp.List[int]] = None
+) -> tp.Union[Series, DataFrame]:
     # TODO: paralelize
     from sklearn.mixture import GaussianMixture
 
@@ -1854,7 +1856,7 @@ def fit_gaussian_mixture(
 
     for i, ch in enumerate(x.columns):
         if n_mixtures is None:
-            n_best = get_best_mixture_number(x, return_prediction=False)  # type: ignore[call-overload]
+            n_best = get_best_mixture_number(x, return_prediction=False)  # type: ignore[call-tp.overload]
             mix = GaussianMixture(n_best)
         else:
             mix = GaussianMixture(n_mixtures[i])
@@ -1912,8 +1914,8 @@ def get_population(
 def stack_to_probabilities(
     stack: Array,
     channel_labels: Series,
-    nuclear_channels: Optional[List[str]] = None,
-    cytoplasm_channels: Optional[List[str]] = None,
+    nuclear_channels: tp.Sequence[str] = None,
+    cytoplasm_channels: tp.Sequence[str] = None,
     log: bool = True,
     # scale: bool = True,
 ) -> Array:
@@ -1975,7 +1977,7 @@ def stack_to_probabilities(
     # axes[3].imshow(roi.mask)
 
 
-def save_probabilities(probs, output_tiff):
+def save_probabilities(probs: Array, output_tiff: Path):
     import tifffile
 
     tifffile.imsave(output_tiff, np.moveaxis((probs * 2 ** 16).astype("uint16"), 0, -1))

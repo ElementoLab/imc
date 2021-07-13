@@ -6,41 +6,24 @@ A class to model a imaging mass cytometry acquired region of interest (ROI).
 
 from __future__ import annotations
 import re
-from typing import (
-    Dict,
-    Tuple,
-    List,
-    Sequence,
-    Optional,
-    Union,
-    Any,
-    overload,
-)  # , cast
-
-try:
-    from typing import Literal
-except ImportError:
-    from typing_extensions import Literal  # 3.7
+import typing as tp
 from functools import partial
 
 import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 import scipy  # type: ignore
 import scipy.ndimage as ndi  # type: ignore
-
-
 import matplotlib.pyplot as plt  # type: ignore
 import matplotlib.patches as mpatches  # type: ignore
 import seaborn as sns  # type: ignore
-
 import networkx as nx  # type: ignore
 from skimage.filters import gaussian  # type: ignore
 from skimage.exposure import equalize_hist as eq  # type: ignore
 from skimage.segmentation import clear_border  # type: ignore
 
 from imc.types import Path, Figure, Axis, Patch, Array, DataFrame, Series
-
-# from imc import LOGGER
+import imc.data_models.sample as _sample
+import imc.data_models.project as _project
 from imc.operations import quantify_cell_intensity, quantify_cell_morphology
 from imc.utils import read_image_from_file, sorted_nicely, minmax_scale
 from imc.graphics import (
@@ -101,7 +84,7 @@ class ROI:
 
     # clusters: Series  # Index: 'obj_id'
 
-    # shape: Tuple[int, int]
+    # shape: tp.Tuple[int, int]
 
     file_types = [
         # "stack",
@@ -115,15 +98,15 @@ class ROI:
     def __init__(
         self,
         name: str = DEFAULT_ROI_NAME,
-        roi_number: Optional[int] = None,
-        channel_labels: Optional[Union[Path, Series]] = None,
-        root_dir: Optional[Path] = None,
-        stacks_dir: Optional[
+        roi_number: tp.Optional[int] = None,
+        channel_labels: tp.Optional[tp.Union[Path, Series]] = None,
+        root_dir: tp.Optional[Path] = None,
+        stacks_dir: tp.Optional[
             Path
         ] = ROI_STACKS_DIR,  # TODO: make these relative to the root_dir
-        masks_dir: Optional[Path] = ROI_MASKS_DIR,
-        single_cell_dir: Optional[Path] = ROI_SINGLE_CELL_DIR,
-        sample: Optional["IMCSample"] = None,
+        masks_dir: tp.Optional[Path] = ROI_MASKS_DIR,
+        single_cell_dir: tp.Optional[Path] = ROI_SINGLE_CELL_DIR,
+        sample: tp.Optional[_sample.IMCSample] = None,
         default_mask_layer: str = DEFAULT_MASK_LAYER,
         **kwargs,
     ):
@@ -135,12 +118,12 @@ class ROI:
         self.stacks_dir = stacks_dir
         self.masks_dir = masks_dir
         self.single_cell_dir = single_cell_dir
-        self.channel_labels_file: Optional[Path] = (
+        self.channel_labels_file: tp.Optional[Path] = (
             Path(channel_labels) if isinstance(channel_labels, (str, Path)) else None
         )
         self.mask_layer = default_mask_layer
         # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
-        self._channel_labels: Optional[Series] = (
+        self._channel_labels: tp.Optional[Series] = (
             pd.read_csv(channel_labels, index_col=0, squeeze=True)
             if isinstance(channel_labels, (str, Path))
             else channel_labels
@@ -149,26 +132,26 @@ class ROI:
         self._channel_exclude = None
         # obj connections
         self.sample = sample
-        self.prj: Optional["Project"] = None
+        self.prj: tp.Optional[_project.Project] = None
         # data
-        self._stack: Optional[Array] = None
-        self._shape: Optional[Tuple] = None
-        self._area: Optional[int] = None
-        self._channel_number: Optional[int] = None
-        self._probabilities: Optional[Array] = None
+        self._stack: tp.Optional[Array] = None
+        self._shape: tp.Optional[tp.Tuple] = None
+        self._area: tp.Optional[int] = None
+        self._channel_number: tp.Optional[int] = None
+        self._probabilities: tp.Optional[Array] = None
 
-        self._cell_mask_o: Optional[Array] = None
-        self._cell_mask: Optional[Array] = None
+        self._cell_mask_o: tp.Optional[Array] = None
+        self._cell_mask: tp.Optional[Array] = None
 
-        self._nuclei_mask_o: Optional[Array] = None
-        self._nuclei_mask: Optional[Array] = None
+        self._nuclei_mask_o: tp.Optional[Array] = None
+        self._nuclei_mask: tp.Optional[Array] = None
 
-        self._cytoplasm_mask: Optional[Array] = None
-        self._membrane_mask: Optional[Array] = None
-        self._extracellular_mask: Optional[Array] = None
+        self._cytoplasm_mask: tp.Optional[Array] = None
+        self._membrane_mask: tp.Optional[Array] = None
+        self._extracellular_mask: tp.Optional[Array] = None
 
         self._adjacency_graph = None
-        self._clusters: Optional[Series] = None
+        self._clusters: tp.Optional[Series] = None
 
         # Add kwargs as attributes
         self.__dict__.update(kwargs)
@@ -181,7 +164,7 @@ class ROI:
         )
 
     @classmethod
-    def from_stack(self, stack_file: Union[Path, str], **kwargs) -> ROI:
+    def from_stack(self, stack_file: tp.Union[Path, str], **kwargs) -> ROI:
         import re
 
         if isinstance(stack_file, str):
@@ -242,10 +225,10 @@ class ROI:
             self._channel_exclude = pd.Series(index=self.channel_labels).fillna(False)
             return self._channel_exclude
 
-    def set_channel_exclude(self, values: Union[List[str], Series]):
+    def set_channel_exclude(self, values: tp.Union[tp.List[str], Series]):
         """
-        values: List | Series
-            Sequence of channels to exclude.
+        values: tp.List | Series
+            tp.Sequence of channels to exclude.
         """
         self._channel_exclude = self.channel_labels.isin(values).set_axis(
             self.channel_labels
@@ -291,7 +274,7 @@ class ROI:
         # .to_netcdf(file_name + ".nc", engine='h5netcdf')
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tp.Tuple[int, ...]:
         """The shape of the image stack."""
         if self._shape is not None:
             return self._shape
@@ -501,8 +484,8 @@ class ROI:
         permissive: bool = False,
         set_attribute: bool = True,
         overwrite: bool = False,
-        parameters: Optional[Dict] = None,
-    ) -> Optional[Array]:
+        parameters: tp.Optional[tp.Dict] = None,
+    ) -> tp.Optional[Array]:
         """Reads in all sample-wise inputs:
             - raw stack
             - extracted features
@@ -532,12 +515,12 @@ class ROI:
 
     def read_all_inputs(
         self,
-        only_these_keys: Optional[List[str]] = None,
+        only_these_keys: tp.Optional[tp.List[str]] = None,
         permissive: bool = False,
         set_attribute: bool = True,
         overwrite: bool = False,
-        parameters: Optional[Union[Dict, List]] = None,
-    ) -> Optional[Dict[str, Array]]:
+        parameters: tp.Optional[tp.Union[tp.Dict, tp.List]] = None,
+    ) -> tp.Optional[tp.Dict[str, Array]]:
         """Reads in all sample-wise inputs:
             - raw stack
             - extracted features
@@ -582,21 +565,21 @@ class ROI:
 
     def _get_channel(
         self,
-        channel: Union[int, str],
+        channel: tp.Union[int, str],
         red_func: str = "mean",
         log: bool = False,
         equalize: bool = False,
         minmax: bool = False,
-        smooth: Optional[int] = None,
+        smooth: tp.Optional[int] = None,
         dont_warn: bool = False,
-    ) -> Tuple[str, Array, Tuple[float, float]]:
+    ) -> tp.Tuple[str, Array, tp.Tuple[float, float]]:
         """
         Get a 2D signal array from a channel name or number.
         If the channel name matches more than one channel, return reduction of channels.
 
         Parameters
         ----------
-        channel : {Union[int, str]}
+        channel : {tp.Union[int, str]}
             An integer index of `channel_labels` or a string for its value.
             If the string does not match exactly the value, the channel that
             contains it would be retrieved.
@@ -621,7 +604,7 @@ class ROI:
 
         Returns
         -------
-        Tuple[str, Array, Tuple[float, float]]
+        tp.Tuple[str, Array, tp.Tuple[float, float]]
             A string describing the channel and the respective array,
             the actuall array, and a tuple with the min-max values of the array prior
             to any transformation if applicable.
@@ -634,7 +617,7 @@ class ROI:
         import numba as nb
 
         def reduce_channels(
-            stack: Array, red_func: str, ex: Union[List[bool], Series] = None
+            stack: Array, red_func: str, ex: tp.Union[tp.List[bool], Series] = None
         ):
             ex = [False] * stack.shape[0] if ex is None else ex
             m = np.asarray([g(f(x)) for i, x in enumerate(stack) if not ex[i]])
@@ -706,8 +689,8 @@ class ROI:
         return label, arr, vminmax
 
     def _get_channels(
-        self, channels: List[Union[int, str]], **kwargs
-    ) -> Tuple[str, Array, Array]:
+        self, channels: tp.List[tp.Union[int, str]], **kwargs
+    ) -> tp.Tuple[str, Array, Array]:
         """
         Convenience function to get signal from various channels.
         """
@@ -727,13 +710,13 @@ class ROI:
 
     def plot_channel(
         self,
-        channel: Union[int, str],
-        ax: Optional[Axis] = None,
+        channel: tp.Union[int, str],
+        ax: tp.Optional[Axis] = None,
         equalize: bool = True,
         log: bool = True,
         minmax: bool = True,
-        smooth: Optional[int] = None,
-        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+        smooth: tp.Optional[int] = None,
+        position: tp.Optional[tp.Tuple[tp.Tuple[int, int], tp.Tuple[int, int]]] = None,
         add_scale: bool = True,
         add_range: bool = True,
         **kwargs,
@@ -768,19 +751,19 @@ class ROI:
 
     def plot_channels(
         self,
-        channels: Optional[List[str]] = None,
+        channels: tp.Optional[tp.List[str]] = None,
         merged: bool = False,
-        axes: List[Axis] = None,
+        axes: tp.List[Axis] = None,
         equalize: bool = None,
         log: bool = True,
         minmax: bool = True,
-        smooth: Optional[int] = None,
-        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+        smooth: tp.Optional[int] = None,
+        position: tp.Optional[tp.Tuple[tp.Tuple[int, int], tp.Tuple[int, int]]] = None,
         add_scale: bool = True,
         add_range: bool = True,
         share_axes: bool = True,
         **kwargs,
-    ) -> Optional[Figure]:
+    ) -> tp.Optional[Figure]:
         """
 
         If axes is given it must be length channels
@@ -892,21 +875,21 @@ class ROI:
             )
         return cell_type_assignments["cluster"]
 
-    @overload
+    @tp.overload
     def plot_cell_type(self, cluster, ax: None) -> Figure:
         ...
 
-    @overload
+    @tp.overload
     def plot_cell_type(self, cluster, ax: Axis) -> None:
         ...
 
     def plot_cell_type(
         self,
         cluster,
-        ax: Optional[Axis] = None,
-        cmap: Optional[str] = "gray",
+        ax: tp.Optional[Axis] = None,
+        cmap: tp.Optional[str] = "gray",
         add_scale: bool = True,
-        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
+        position: tp.Optional[tp.Tuple[tp.Tuple[int, int], tp.Tuple[int, int]]] = None,
     ) -> Figure:
         if ax is None:
             fig, _ax = plt.subplots(1, 1, figsize=(4, 4))
@@ -930,14 +913,16 @@ class ROI:
     def plot_cell_types(
         self,
         cell_type_assignments: Series = None,
-        cell_type_combinations: Optional[Union[str, List[Tuple[str, str]]]] = None,
-        position: Optional[Tuple[Tuple[int, int], Tuple[int, int]]] = None,
-        ax: Union[Axis, List[Axis]] = None,
-        palette: Optional[str] = "tab20",
+        cell_type_combinations: tp.Optional[
+            tp.Union[str, tp.List[tp.Tuple[str, str]]]
+        ] = None,
+        position: tp.Optional[tp.Tuple[tp.Tuple[int, int], tp.Tuple[int, int]]] = None,
+        ax: tp.Union[Axis, tp.List[Axis]] = None,
+        palette: tp.Optional[str] = "tab20",
         add_scale: bool = True,
         add_legend: bool = True,
-        legend_kwargs: Dict = {},
-    ) -> Union[Figure, List[Patch]]:
+        legend_kwargs: tp.Dict = {},
+    ) -> tp.Union[Figure, tp.List[Patch]]:
         """
         If ax is given it must match number of `cell_type_combinations`.
         """
@@ -1026,7 +1011,7 @@ class ROI:
 
     def get_distinct_marker_sets(
         self, n_groups: int = 4, group_size: int = 4, save_plot: bool = False
-    ) -> Tuple[DataFrame, Dict[int, List[str]]]:
+    ) -> tp.Tuple[DataFrame, tp.Dict[int, tp.List[str]]]:
         """Use cross-channel correlation to pick `n` clusters of distinct channels to overlay"""
         xcorr = pd.DataFrame(
             np.corrcoef(self.stack.reshape((self.channel_number, -1))),
@@ -1056,7 +1041,7 @@ class ROI:
             index=xcorr.index,
         )
 
-        marker_sets: Dict[int, List[str]] = dict()
+        marker_sets: tp.Dict[int, tp.List[str]] = dict()
         for _sp in range(1, n_groups + 1):
             marker_sets[_sp] = list()
             for i in np.random.choice(np.unique(c), group_size, replace=True):
@@ -1114,8 +1099,8 @@ class ROI:
         return fig
 
     def plot_probabilities_and_segmentation(
-        self, axes: Optional[Sequence[Axis]] = None, add_scale: bool = True
-    ) -> Optional[Figure]:
+        self, axes: tp.Optional[tp.Sequence[Axis]] = None, add_scale: bool = True
+    ) -> tp.Optional[Figure]:
         """
         Visualize channel mean, DNA channel, segmentation probabilities
         and the segmented nuclei and cells.
@@ -1175,9 +1160,9 @@ class ROI:
 
     def quantify_cell_intensity(
         self,
-        channel_include: List[str] = None,
-        channel_exclude: List[str] = None,
-        layers: List[str] = ["cell"],
+        channel_include: tp.List[str] = None,
+        channel_exclude: tp.List[str] = None,
+        layers: tp.List[str] = ["cell"],
         **kwargs,
     ) -> DataFrame:
         """Quantify intensity of each cell in each channel."""
@@ -1210,7 +1195,7 @@ class ROI:
         return quant
 
     def quantify_cell_morphology(
-        self, layers: List[str] = ["cell"], **kwargs
+        self, layers: tp.List[str] = ["cell"], **kwargs
     ) -> DataFrame:
         """
         Quantify shape attributes of each cell.
@@ -1234,7 +1219,7 @@ class ROI:
             quant = quant.drop(["layer"], axis=1)
         return quant
 
-    def set_clusters(self, clusters: Optional[Series] = None) -> None:
+    def set_clusters(self, clusters: tp.Optional[Series] = None) -> None:
         if clusters is None:
             self.sample.set_clusters(clusters=clusters, rois=[self])
         else:

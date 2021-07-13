@@ -77,14 +77,14 @@ GenericType = tp.TypeVar("GenericType")
 
 Args = tp.Union[argparse.Namespace, tp.Mapping[str, tp.Any]]
 
-Array = tp.Union[numpy.ndarray]
+Array = numpy.ndarray
 
-MultiIndexSeries = tp.Union[pandas.Series]
-Series = tp.Union[pandas.Series]
-DataFrame = tp.Union[pandas.DataFrame]
-AnnData = tp.Union[_AnnData]
+MultiIndexSeries = pandas.Series
+Series = pandas.Series
+DataFrame = pandas.DataFrame
+AnnData = _AnnData
 
-Figure = tp.Union[matplotlib.figure.Figure]
-Axis = tp.Union[matplotlib.axis.Axis]
-Patch = tp.Union[matplotlib.patches.Patch]
-ColorMap = tp.Union[matplotlib.colors.LinearSegmentedColormap]
+Figure = matplotlib.figure.Figure
+Axis = matplotlib.axis.Axis
+Patch = matplotlib.patches.Patch
+ColorMap = matplotlib.colors.LinearSegmentedColormap

@@ -1,6 +1,15 @@
-README.md
-requirements/requirements.txt
-requirements/requirements.dev.txt
-requirements/requirements.deepcell.txt
-requirements/requirements.stardist.txt
-requirements/requirements.cellpose.txt
+include AUTHORS.md
+include CONTRIBUTING.md
+include CHANGELOG.md
+include LICENSE
+include README.md
+
+recursive-include requirements *
+recursive-include tests *
+recursive-include docs *.md *.rst conf.py Makefile make.bat
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+
+global-include *.typed
+
+include logo.png

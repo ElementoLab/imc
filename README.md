@@ -5,7 +5,7 @@
 
 # Imaging mass cytometry
 
-This is a package for processing and  analysis of imaging mass cytometry (IMC) data.
+A package for processing and analysis of imaging mass cytometry (IMC) data.
 
 It implements image- and channel-wise quality control, quantification of cell
 intenstity and morphology, cell type discovery through clustering, automated
