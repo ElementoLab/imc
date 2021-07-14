@@ -29,6 +29,7 @@ requires-python = ">=3.8"
 dependencies = [
     "setuptools_scm",
     "ordered-set",
+    "urlpath",
     "PyYAML",
     "imctools>=2.1.0",
     "joblib",
@@ -36,6 +37,9 @@ dependencies = [
     "python-louvain",
     "networkx",
     "pandas>=1.0.1",
+    "matplotlib",
+    "seaborn",
+    "fastcluster",
     "parmap",
     "scanpy",
     "numpy_groupies",

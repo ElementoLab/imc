@@ -865,16 +865,14 @@ def get_mean_expression_per_cluster(a: AnnData) -> DataFrame:
     return mean_expr
 
 
-# @overload
-# def z_score(x: Literal[Array], axis: Union[Literal[0], Literal[1]]) -> Array:
-#     ...
+@overload
+def z_score(x: Array, axis: Union[Literal[0], Literal[1]]) -> Array:
+    ...
 
 
-# @overload
-# def z_score(
-#     x: Literal[DataFrame], axis: Union[Literal[0], Literal[1]]
-# ) -> DataFrame:
-#     ...
+@overload
+def z_score(x: DataFrame, axis: Union[Literal[0], Literal[1]]) -> DataFrame:
+    ...
 
 
 def z_score(
