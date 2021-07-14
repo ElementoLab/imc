@@ -2,6 +2,7 @@
 Plotting functions and utilities to handle images.
 """
 
+from __future__ import annotations
 import typing as tp
 from functools import wraps
 import colorsys
@@ -40,7 +41,7 @@ class InteractiveViewer:
 
     def __init__(
         self,
-        obj: tp.Union["ROI", Array],
+        obj: tp.Union[_roi.ROI, Array],
         show: bool = False,
         up_key: str = "w",
         down_key: str = "s",
@@ -631,3 +632,6 @@ def add_centroids(
     )
     for i, clust in enumerate(a.obs[lab].sort_values().unique()):
         ax.text(*cent[i], s=clust)
+
+
+import imc.data_models.roi as _roi

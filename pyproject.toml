@@ -77,6 +77,7 @@ doc = [
     "Sphinx",
     "sphinx-issues",
     "sphinx-rtd-theme",
+    "sphinx-argparse",
 ]
 
 [project.urls]

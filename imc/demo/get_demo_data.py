@@ -230,3 +230,39 @@ def get_phillips_2021(output_dir: Path = None) -> Project:
             pd.Series(markers, name="channel").to_csv(f.replace_(".tiff", ".csv"))
 
     return Project(name=dataset_name, processed_dir=output_dir / "processed")
+
+
+def get_allam_2021_data(output_dir: Path = None) -> Project:
+    if output_dir is None:
+        output_dir = Path(tempfile.TemporaryDirectory().name).mkdir()
+
+    base_url = URL("https://raw.githubusercontent.com/coskunlab/SpatialViz/main/data")
+    samples = [
+        y[0] + str(y[1]) for code in ["DT", "NT"] for y in zip([code] * 6, range(1, 7))
+    ]
+    markers = [
+        "CD20",
+        "CD3",
+        "CD4",
+        "CD45RO",
+        "CD68",
+        "CD8a",
+        "Col1",
+        "DNA1",
+        "DNA2",
+        "Ecadherin",
+        "FoxP3",
+        "GranzymeB",
+        "Histone3",
+        "Ki67",
+        "PD1",
+        "PDL1",
+        "Pankeratin",
+        "SMA",
+        "Vimentin",
+    ]
+
+    for sample in samples:
+        mask_url = base_url / "cell_masks" / f"{sample}_cell_Mask.tiff"
+        for marker in markers:
+            channel_url = base_url / "raw" / sample / f"{sample}_{marker}.tiff"

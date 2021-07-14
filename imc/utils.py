@@ -642,6 +642,17 @@ def txt_to_tiff(
 ) -> None:
     """
     Convert a Fluidigm TXT file to a TIFF file.
+
+    Parameters
+    ----------
+    txt_file :
+        Input text file from Fluidigm.
+
+    tiff_file :
+        Path to output file.
+
+    write_channel_labels :
+        Whether to write a file with labels for the channel names.
     """
     df = pd.read_table(txt_file)
     df = df.drop(
@@ -854,10 +865,10 @@ def z_score(
 
     Parameters
     ----------
-    x:
+    x :
         A numpy array or pandas DataFrame.
 
-    axis : int
+    axis :
         Axis across which to compute - 0 == rows, 1 == columns.
         This effectively calculates a column-wise (0) or row-wise (1) Z-score.
     """
