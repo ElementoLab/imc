@@ -37,8 +37,9 @@ def main(cli: tp.Sequence[str] = None) -> int:
     quant = quantify_cells_rois(
         rois, args.layers.split(","), morphology=args.morphology
     ).reset_index()
+
     # reorder columns for nice effect
-    ext = ["roi", "obj_id"] + (["X", "Y"] if args.morphology else [])
+    ext = ["roi", "obj_id"] + (["X_centroid", "Y_centroid"] if args.morphology else [])
     rem = [x for x in quant.columns.tolist() if x not in ext]
     quant = quant[ext + rem]
 

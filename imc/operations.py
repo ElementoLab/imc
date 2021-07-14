@@ -158,7 +158,7 @@ def quantify_cell_morphology(
             index=np.unique(mask)[1:],
         )
         .rename_axis(index="obj_id")
-        .rename(columns={"centroid-0": "X", "centroid-1": "Y"})
+        .rename(columns={"centroid-0": "X_centroid", "centroid-1": "Y_centroid"})
     )
 
 
@@ -293,7 +293,7 @@ def check_channel_axis_correlation(
     fig.savefig(output_prefix + "channel-axis_correlation.svg", **FIG_KWS)
 
     df = pd.DataFrame(res, columns=["channel", "axis", "coef", "intercept", "r"])
-    df["axis_label"] = df["axis"].replace(0, "X").replace(1, "Y")
+    df["axis_label"] = df["axis"].replace(0, "X_centroid").replace(1, "Y_centroid")
     df["channel_label"] = [x for x in channel_labels for _ in range(2)]
     df["abs_r"] = df["r"].abs()
     df.to_csv(output_prefix + "channel-axis_correlation.csv", index=False)

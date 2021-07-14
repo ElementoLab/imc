@@ -1,44 +1,26 @@
 #! /usr/bin/env python
 
 """
+Convenience utilities for the package.
 """
 
-import os
 import re
 import json
-from typing import (
-    Tuple,
-    Union,
-    List,
-    Optional,
-    Dict,
-    Sequence,
-    Callable,
-    Any,
-    Literal,
-    overload,
-)
+import typing as tp
 
 import numpy as np
 import pandas as pd
 import scipy
-from scipy.cluster.hierarchy import fcluster
 import scipy.ndimage as ndi
-from scipy.stats import pearsonr
 
 import matplotlib
-import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
-import seaborn as sns
 
-import networkx as nx
 import h5py
 from anndata import AnnData
-import scanpy as sc
 
 import skimage
 from skimage.exposure import equalize_hist as eq
-from skimage.future import graph
 import skimage.io
 import skimage.measure
 from skimage.transform import resize
@@ -62,8 +44,9 @@ DEFAULT_SUPERCOMMUNITY_RESOLUTION = 0.5
 
 
 def filter_kwargs_by_callable(
-    kwargs: Dict[str, Any], callabl: Callable, exclude: List[str] = None
-) -> Dict[str, Any]:
+    kwargs: tp.Dict[str, tp.Any], callabl: tp.Callable, exclude: tp.List[str] = None
+) -> tp.Dict[str, tp.Any]:
+    """Filter a dictionary keeping only the keys which are part of a function signature."""
     from inspect import signature
 
     args = signature(callabl).parameters.keys()
@@ -71,15 +54,15 @@ def filter_kwargs_by_callable(
 
 
 def build_channel_name(
-    labels: Dict[int, Tuple[str, Optional[str]]],
-    metals: Dict[int, Tuple[str, Optional[str]]],
+    labels: tp.Dict[int, tp.Tuple[str, tp.Optional[str]]],
+    metals: tp.Dict[int, tp.Tuple[str, tp.Optional[str]]],
 ) -> Series:
     return (
         cleanup_channel_names(pd.Series(labels)) + "(" + pd.Series(metals) + ")"
     ).rename("channel")
 
 
-def cleanup_channel_names(series: Union[Series, list]) -> Series:
+def cleanup_channel_names(series: tp.Union[Series, tp.List]) -> Series:
     """Standardize channel naming using a set of defined rules."""
     to_replace = [
         ("-", ""),
@@ -90,23 +73,22 @@ def cleanup_channel_names(series: Union[Series, list]) -> Series:
         ("pHistone", "pH"),
         ("cmycp67", "cMYCp67"),
     ]
-    if isinstance(series, list):
-        series = pd.Series(series)
+    _series = pd.Series(series) if not isinstance(series, pd.Series) else series
     for k, v in to_replace:
-        series = series.str.replace(k, v)
-    series = series.replace("", np.nan).fillna("<EMPTY>")
-    series[series.str.contains(r"\(").values] = (
-        series.str.extract(r"(.*)\(", expand=False).dropna().values
+        _series = _series.str.replace(k, v)
+    _series = _series.replace("", np.nan).fillna("<EMPTY>")
+    _series[_series.str.contains(r"\(").values] = (
+        _series.str.extract(r"(.*)\(", expand=False).dropna().values
     )
-    return series
+    return _series
 
 
 def parse_acquisition_metadata(
     acquisition_csv: Path,
-    acquisition_id: Optional[Union[str, int]] = None,
-    reference: Optional[Union[Path, DataFrame]] = None,
+    acquisition_id: tp.Union[str, int] = None,
+    reference: tp.Union[Path, DataFrame] = None,
     filter_full: bool = False,
-):
+) -> DataFrame:
     acquired = pd.read_csv(acquisition_csv)
     acquired = acquired.loc[
         ~acquired["ChannelLabel"].isin(["X", "Y", "Z"]), :
@@ -132,9 +114,12 @@ def parse_acquisition_metadata(
         return acquired
 
     # Check matches, report missing
-    if isinstance(reference, str):
-        reference = pd.read_csv(reference, index_col=0)
-    __c = acquired.index.isin(reference.index)
+    _reference = (
+        pd.read_csv(reference, index_col=0)
+        if not isinstance(reference, pd.DataFrame)
+        else reference
+    )
+    __c = acquired.index.isin(_reference.index)
     if not __c.all():
         miss = "\n - ".join(acquired.loc[~__c, "ChannelLabel"])
         raise ValueError(
@@ -149,7 +134,7 @@ def parse_acquisition_metadata(
     # this important in order for the channels to always be the same
     # and the ilastik models to be reusable
     assert all(
-        reference.query("ilastik == True").index
+        _reference.query("ilastik == True").index
         == joint_panel.query("ilastik == True").index
     )
 
@@ -159,7 +144,7 @@ def parse_acquisition_metadata(
 
 
 def metal_order_to_channel_labels(
-    metal_csv: Path, channel_metadata: Path, roi_number: Union[str, int]
+    metal_csv: Path, channel_metadata: Path, roi_number: tp.Union[str, int]
 ):
 
     order = (
@@ -218,14 +203,14 @@ def align_channels_by_name(res: DataFrame, channel_axis=0) -> DataFrame:
     return res
 
 
-def sorted_nicely(iterable: Sequence[GenericType]) -> Sequence[GenericType]:
+def sorted_nicely(iterable: tp.Sequence[GenericType]) -> tp.Sequence[GenericType]:
     """
     Sort an iterable in the way that humans expect.
 
     Parameters
     ----------
     l : iterable
-        Sequence to be sorted
+        tp.Sequence to be sorted
 
     Returns
     -------
@@ -270,7 +255,7 @@ def read_image_from_file(file: Path, equalize: bool = False) -> Array:
 
 def write_image_to_file(
     arr: Array,
-    channel_labels: Sequence,
+    channel_labels: tp.Sequence,
     output_prefix: Path,
     file_format: str = "png",
 ) -> None:
@@ -382,7 +367,7 @@ def lacunarity(image, box_size=30):
     return np.var(accumulator) / mean_sqrd + 1
 
 
-def get_canny_edge_image(image: Array, mask: Optional[Array], radius=30, sigma=0.5):
+def get_canny_edge_image(image: Array, mask: tp.Optional[Array], radius=30, sigma=0.5):
     """Compute Canny edge image."""
     from skimage.filters.rank import equalize
     from skimage.morphology import disk
@@ -398,7 +383,7 @@ def mcd_to_dir(
     mcd_file: Path,
     pannel_csv: Path = None,
     ilastik_output: bool = True,
-    ilastik_channels: List[str] = None,
+    ilastik_channels: tp.List[str] = None,
     ilastik_compartment: str = None,
     output_dir: Path = None,
     output_format: str = "tiff",
@@ -674,17 +659,17 @@ def txt_to_tiff(
 def plot_panoramas_rois(
     yaml_spec: Path,
     output_prefix: Path,
-    panorama_image_prefix: Optional[Path] = None,
+    panorama_image_prefix: tp.Optional[Path] = None,
     save_roi_arrays: bool = False,
 ) -> None:
     """
     Plot the location of panoramas and ROIs of a IMC sample.
 
-    yaml_spec: Union[str, pathlib.Path]
+    yaml_spec: tp.Union[str, pathlib.Path]
         Path to YAML file containing the spec of the acquired sample.
-    output_prefix: Union[str, pathlib.Path]
+    output_prefix: tp.Union[str, pathlib.Path]
         Prefix path to output the joint image and arrays if `save_roi_arrays` is `True`.
-    panorama_image_prefix: Union[str, pathlib.Path]
+    panorama_image_prefix: tp.Union[str, pathlib.Path]
         Prefix of images of panoramas captured by the Hyperion instrument.
     save_roi_arrays: bool
         Whether to output arrays containing the images captured by the Hyperion instrument
@@ -692,11 +677,8 @@ def plot_panoramas_rois(
     """
     import yaml
     import imageio
-    import matplotlib
-    import matplotlib.pyplot as plt
+    from matplotlib.patches import Rectangle
     import seaborn as sns
-    import numpy as np
-    import pandas as pd
 
     def get_pano_coords(pan):
         x1, y1 = float(pan["SlideX1PosUm"]), float(pan["SlideY1PosUm"])
@@ -755,9 +737,7 @@ def plot_panoramas_rois(
             print(f"Could not find image file for panorama '{i + 1}'")
 
         # Plot rectangles
-        rect = matplotlib.patches.Rectangle(
-            (x, y), width, height, facecolor="none", edgecolor=colors[i]
-        )
+        rect = Rectangle((x, y), width, height, facecolor="none", edgecolor=colors[i])
         ax.add_patch(rect)
         ax.text(
             (x + width / 2),
@@ -787,21 +767,12 @@ def plot_panoramas_rois(
             continue
 
         # Plot rectangle around ROI
-        rect = matplotlib.patches.Rectangle(
-            (x, y),
-            width,
-            height,
-            facecolor="none",
-            edgecolor="black",
-            linestyle="--",
+        rect = Rectangle(
+            (x, y), width, height, facecolor="none", edgecolor="black", linestyle="--"
         )
         ax.add_patch(rect)
         ax.text(
-            x + width / 2,
-            y - height,
-            s=f"ROI '{acq['ID']}'",
-            ha="center",
-            color="black",
+            x + width / 2, y - height, s=f"ROI '{acq['ID']}'", ha="center", color="black"
         )
 
         if not save_roi_arrays:
@@ -823,7 +794,7 @@ def plot_panoramas_rois(
         ## Plot ROI within panorama
         fig2, ax2 = plt.subplots(figsize=(4, 4))
         ax2.imshow(pano_img)
-        rect = matplotlib.patches.Rectangle(
+        rect = Rectangle(
             (x - px, ry),
             width,
             -height,
@@ -865,19 +836,19 @@ def get_mean_expression_per_cluster(a: AnnData) -> DataFrame:
     return mean_expr
 
 
-@overload
-def z_score(x: Array, axis: Union[Literal[0], Literal[1]]) -> Array:
+@tp.overload
+def z_score(x: Array, axis: tp.Union[tp.Literal[0], tp.Literal[1]]) -> Array:
     ...
 
 
-@overload
-def z_score(x: DataFrame, axis: Union[Literal[0], Literal[1]]) -> DataFrame:
+@tp.overload
+def z_score(x: DataFrame, axis: tp.Union[tp.Literal[0], tp.Literal[1]]) -> DataFrame:
     ...
 
 
 def z_score(
-    x: Union[Array, DataFrame], axis: Union[Literal[0], Literal[1]] = 0
-) -> Union[Array, DataFrame]:
+    x: tp.Union[Array, DataFrame], axis: tp.Union[tp.Literal[0], tp.Literal[1]] = 0
+) -> tp.Union[Array, DataFrame]:
     """
     Standardize and center an array or dataframe.
 
@@ -1004,7 +975,7 @@ def filter_hot_pixels(img, n_bins=1000):
 
 #     # alternatively with CellProfiler
 #     from cellprofiler.workspace import Workspace
-#     from cellprofiler.image import ImageSet, ImageSetList
+#     from cellprofiler.image import ImageSet, ImageSettp.List
 #     from cellprofiler.modules.identifyprimaryobjects import IdentifyPrimaryObjects
 
 #     w = Workspace(
@@ -1013,30 +984,30 @@ def filter_hot_pixels(img, n_bins=1000):
 #         image_set=ImageSet(0, 0, 0),
 #         object_set=[],
 #         measurements=None,
-#         image_set_list=ImageSetList())
+#         image_set_list=ImageSettp.List())
 
 #     mod = IdentifyPrimaryObjects()
 #     mod.create_settings()
 #     mod.x_name.value = "filepath"
 
 
-@overload
+@tp.overload
 def get_panorama_images(
     mcd_file: Path, output_file_prefix: Path, overwrite: bool
 ) -> None:
     ...
 
 
-@overload
+@tp.overload
 def get_panorama_images(
     mcd_file: Path, output_file_prefix: None, overwrite: bool
-) -> List[Array]:
+) -> tp.List[Array]:
     ...
 
 
 def get_panorama_images(
     mcd_file: Path, output_file_prefix: Path = None, overwrite: bool = False
-) -> Optional[List[Array]]:
+) -> tp.Optional[tp.List[Array]]:
     import imageio
 
     byteoffset = 161
