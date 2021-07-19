@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- 
+### Changed
+- 
+### Removed
+-
+
+## [0.0.12] - 2021-07-19
+### Added
 - functions to handle multi-cell masks (topological domains)
 - napari + napari_imc to view MCD files
 ### Changed
@@ -49,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - rasterized linecollection plots by default
 ### Removed
+-
 - graphics code that was abstracted to `seaborn_extensions` module
 
 ## [0.0.5] - 2020-12-07
