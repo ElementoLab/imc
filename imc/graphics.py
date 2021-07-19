@@ -634,4 +634,12 @@ def add_centroids(
         ax.text(*cent[i], s=clust)
 
 
+def legend_without_duplicate_labels(ax: Axis, **kwargs) -> None:
+    handles, labels = ax.get_legend_handles_labels()
+    unique = [
+        (h, l) for i, (h, l) in enumerate(zip(handles, labels)) if l not in labels[:i]
+    ]
+    ax.legend(*zip(*unique), **kwargs)
+
+
 import imc.data_models.roi as _roi

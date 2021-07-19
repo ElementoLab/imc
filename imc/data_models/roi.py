@@ -225,7 +225,7 @@ class ROI:
             self._channel_exclude = pd.Series(index=self.channel_labels).fillna(False)
             return self._channel_exclude
 
-    def set_channel_exclude(self, values: tp.Union[tp.List[str], Series]):
+    def set_channel_exclude(self, values: tp.Union[tp.Sequence[str], Series]):
         """
         values: tp.List | Series
             tp.Sequence of channels to exclude.
@@ -515,11 +515,11 @@ class ROI:
 
     def read_all_inputs(
         self,
-        only_these_keys: tp.Optional[tp.List[str]] = None,
+        only_these_keys: tp.Optional[tp.Sequence[str]] = None,
         permissive: bool = False,
         set_attribute: bool = True,
         overwrite: bool = False,
-        parameters: tp.Optional[tp.Union[tp.Dict, tp.List]] = None,
+        parameters: tp.Optional[tp.Union[tp.Dict, tp.Sequence]] = None,
     ) -> tp.Optional[tp.Dict[str, Array]]:
         """Reads in all sample-wise inputs:
             - raw stack
@@ -617,7 +617,7 @@ class ROI:
         import numba as nb
 
         def reduce_channels(
-            stack: Array, red_func: str, ex: tp.Union[tp.List[bool], Series] = None
+            stack: Array, red_func: str, ex: tp.Union[tp.Sequence[bool], Series] = None
         ):
             ex = [False] * stack.shape[0] if ex is None else ex
             m = np.asarray([g(f(x)) for i, x in enumerate(stack) if not ex[i]])
@@ -689,7 +689,7 @@ class ROI:
         return label, arr, vminmax
 
     def _get_channels(
-        self, channels: tp.List[tp.Union[int, str]], **kwargs
+        self, channels: tp.Sequence[tp.Union[int, str]], **kwargs
     ) -> tp.Tuple[str, Array, Array]:
         """
         Convenience function to get signal from various channels.
@@ -751,9 +751,9 @@ class ROI:
 
     def plot_channels(
         self,
-        channels: tp.Optional[tp.List[str]] = None,
+        channels: tp.Optional[tp.Sequence[str]] = None,
         merged: bool = False,
-        axes: tp.List[Axis] = None,
+        axes: tp.Sequence[Axis] = None,
         equalize: bool = None,
         log: bool = True,
         minmax: bool = True,
@@ -914,15 +914,15 @@ class ROI:
         self,
         cell_type_assignments: Series = None,
         cell_type_combinations: tp.Optional[
-            tp.Union[str, tp.List[tp.Tuple[str, str]]]
+            tp.Union[str, tp.Sequence[tp.Tuple[str, str]]]
         ] = None,
         position: tp.Optional[tp.Tuple[tp.Tuple[int, int], tp.Tuple[int, int]]] = None,
-        ax: tp.Union[Axis, tp.List[Axis]] = None,
+        ax: tp.Union[Axis, tp.Sequence[Axis]] = None,
         palette: tp.Optional[str] = "tab20",
         add_scale: bool = True,
         add_legend: bool = True,
         legend_kwargs: tp.Dict = {},
-    ) -> tp.Union[Figure, tp.List[Patch]]:
+    ) -> tp.Union[Figure, tp.Sequence[Patch]]:
         """
         If ax is given it must match number of `cell_type_combinations`.
         """
@@ -1011,7 +1011,7 @@ class ROI:
 
     def get_distinct_marker_sets(
         self, n_groups: int = 4, group_size: int = 4, save_plot: bool = False
-    ) -> tp.Tuple[DataFrame, tp.Dict[int, tp.List[str]]]:
+    ) -> tp.Tuple[DataFrame, tp.Dict[int, tp.Sequence[str]]]:
         """Use cross-channel correlation to pick `n` clusters of distinct channels to overlay"""
         xcorr = pd.DataFrame(
             np.corrcoef(self.stack.reshape((self.channel_number, -1))),
@@ -1041,7 +1041,7 @@ class ROI:
             index=xcorr.index,
         )
 
-        marker_sets: tp.Dict[int, tp.List[str]] = dict()
+        marker_sets: tp.Dict[int, tp.Sequence[str]] = dict()
         for _sp in range(1, n_groups + 1):
             marker_sets[_sp] = list()
             for i in np.random.choice(np.unique(c), group_size, replace=True):
@@ -1160,9 +1160,9 @@ class ROI:
 
     def quantify_cell_intensity(
         self,
-        channel_include: tp.List[str] = None,
-        channel_exclude: tp.List[str] = None,
-        layers: tp.List[str] = ["cell"],
+        channel_include: tp.Sequence[str] = None,
+        channel_exclude: tp.Sequence[str] = None,
+        layers: tp.Sequence[str] = ["cell"],
         **kwargs,
     ) -> DataFrame:
         """Quantify intensity of each cell in each channel."""
@@ -1195,7 +1195,7 @@ class ROI:
         return quant
 
     def quantify_cell_morphology(
-        self, layers: tp.List[str] = ["cell"], **kwargs
+        self, layers: tp.Sequence[str] = ["cell"], **kwargs
     ) -> DataFrame:
         """
         Quantify shape attributes of each cell.

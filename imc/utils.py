@@ -1080,3 +1080,89 @@ def get_distance_to_lumen_border(roi):
     nuclear_channels = ["DNA", "Histone"]
     cyto_channels = chs[~chs.str.contains("|".join(nuclear_channels), case=False)]
     roi._get_channels(cyto_channels.index.tolist())[1]
+
+
+def polygon_to_mask(
+    polygon_vertices: tp.Sequence[tp.Sequence[float]],
+    shape: tp.Tuple[int, int],
+    including_edges: bool = True,
+) -> Array:
+    """
+    Convert a set of vertices to a binary array.
+
+    Adapted and extended from: https://stackoverflow.com/a/36759414/1469535.
+    """
+    from shapely.geometry import Polygon, MultiPolygon
+
+    if including_edges:
+        # This makes sure edge pixels are also positive
+        grid = Polygon([(0, 0), (shape[0], 0), (shape[0], shape[1]), (0, shape[1])])
+        poly = Polygon(polygon_vertices)
+        if not poly.is_valid:
+            poly = poly.buffer(0)
+        inter = grid.intersection(poly)
+        if isinstance(inter, MultiPolygon):
+            return np.asarray([polygon_to_mask(x, shape) for x in inter.geoms]).sum(0) > 0
+        inter_verts = np.asarray(inter.exterior.coords.xy).T.tolist()
+    else:
+        inter_verts = polygon_vertices
+    x, y = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]))
+    x, y = x.flatten(), y.flatten()
+    points = np.vstack((x, y)).T
+    path = matplotlib.path.Path(inter_verts)
+    grid = path.contains_points(points, radius=-1)
+    return grid.reshape((shape[1], shape[0]))
+
+
+def mask_to_labelme(
+    labeled_image: Array,
+    filename: Path,
+    overwrite: bool = False,
+    simplify: bool = True,
+    simplification_threshold: float = 5.0,
+) -> None:
+    import io
+    import base64
+
+    import imageio
+    from imantics import Mask
+    from shapely.geometry import Polygon
+
+    output_file = filename.replace_(".tif", ".json")
+    if overwrite or output_file.exists():
+        return
+    polygons = Mask(labeled_image).polygons()
+    shapes = list()
+    for point in polygons.points:
+
+        if not simplify:
+            poly = np.asarray(point).tolist()
+        else:
+            poly = np.asarray(
+                Polygon(point).simplify(simplification_threshold).exterior.coords.xy
+            ).T.tolist()
+        shape = {
+            "label": "A",
+            "points": poly,
+            "group_id": None,
+            "shape_type": "polygon",
+            "flags": {},
+        }
+        shapes.append(shape)
+
+    f = io.BytesIO()
+    imageio.imwrite(f, tifffile.imread(filename), format="PNG")
+    f.seek(0)
+    encoded = base64.encodebytes(f.read())
+
+    payload = {
+        "version": "4.5.6",
+        "flags": {},
+        "shapes": shapes,
+        "imagePath": filename.name,
+        "imageData": encoded.decode("ascii"),
+        "imageHeight": labeled_image.shape[0],
+        "imageWidth": labeled_image.shape[1],
+    }
+    with open(output_file.as_posix(), "w") as fp:
+        json.dump(payload, fp, indent=2)
