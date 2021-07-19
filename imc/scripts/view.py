@@ -25,11 +25,19 @@ def main(cli: tp.Sequence[str] = None) -> int:
         params = [x.split("=") for x in args.kwargs.split(",")]
         kwargs = {y[0]: y[1] for y in params}
 
-    fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
-    print(f"Starting viewers for {len(args.tiffs)} TIFF files: {fs}!")
+    fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.input_files])
+    print(f"Starting viewers for {len(args.input_files)} files: {fs}!")
+
+    if args.napari:
+        import napari
+
+        viewer = napari.Viewer()
+        viewer.open(args.input_files)
+        napari.run()
+        return 0
 
     # Prepare ROI objects
-    rois = [ROI.from_stack(tiff) for tiff in args.tiffs]
+    rois = [ROI.from_stack(tiff) for tiff in args.input_files]
 
     # Generate viewer instances
     viewers = list()

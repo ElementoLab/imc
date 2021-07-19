@@ -389,10 +389,10 @@ cli_config = {
         "view": [
             {
                 "kwargs": {
-                    "dest": "tiffs",
+                    "dest": "input_files",
                     "nargs": "+",
                     "type": Path,
-                    "help": "TIFF files with array stack.",
+                    "help": "MCD, or TIFF files with array stack. MCD requires --napari option.",
                 }
             },
             {
@@ -414,6 +414,14 @@ cli_config = {
                 "kwargs": {
                     "default": "l",
                     "help": "Key to toggle log transformation.",
+                },
+            },
+            {
+                "args": ["--napari"],
+                "kwargs": {
+                    "dest": "napari",
+                    "action": "store_true",
+                    "help": "Use napari and napari-imc to view MCD files.",
                 },
             },
             {

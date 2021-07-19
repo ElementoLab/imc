@@ -2126,17 +2126,14 @@ def export_images_for_topological_labeling(
 
 
 def collect_domains(
-    input_dir: Path = None, rois: tp.Sequence[_roi.ROI] = None, output_file: Path = None
+    input_dir: Path, rois: tp.Sequence[_roi.ROI] = None, output_file: Path = None
 ) -> tp.Dict[str, tp.Dict]:
     if rois is not None:
         roi_names = [r.name for r in rois]
 
-    if input_dir is not None:
-        filenames = list(input_dir.glob("*.json"))
-        if rois is not None:
-            filenames = [f for f in filenames if f.stem in roi_names]
-    else:
-        assert rois is not None, "One of `input_dir` or `rois` must be given."
+    filenames = list(input_dir.glob("*.json"))
+    if rois is not None:
+        filenames = [f for f in filenames if f.stem in roi_names]
 
     topo_annots = dict()
     for filename in tqdm(filenames):
