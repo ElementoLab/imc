@@ -612,7 +612,8 @@ def mcd_to_dir(
             print(msg)
             continue
 
-        (output_dir / "ilastik").mkdir()
+        if n_crops > 0:
+            (output_dir / "ilastik").mkdir()
         for _ in range(n_crops):
             x = np.random.choice(range(s[0] - crop_width))
             y = np.random.choice(range(s[1] - crop_height))
