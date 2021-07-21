@@ -172,7 +172,7 @@ class ROI:
         stack_file = stack_file.absolute()
         reason = "Stack file must end with '_full.tiff' for the time being."
         assert stack_file.endswith("_full.tiff"), reason
-        roi_numbers = re.findall(r".*-(\d+)", stack_file.as_posix())
+        roi_numbers = re.findall(r".*-(\d+)$", stack_file.as_posix())
         reason = "Could not determine ROI number."
         assert len(roi_numbers) == 1, reason
         return ROI(

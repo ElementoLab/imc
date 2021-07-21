@@ -137,7 +137,7 @@ class IMCSample:
         )
         try:
             df[DEFAULT_ROI_NUMBER_ATTRIBUTE] = (
-                df[DEFAULT_ROI_NAME_ATTRIBUTE].str.extract(r"-(\d+)")[0].astype(int)
+                df[DEFAULT_ROI_NAME_ATTRIBUTE].str.extract(r"-(\d+)$")[0].astype(int)
             )
         except ValueError:
             pass
