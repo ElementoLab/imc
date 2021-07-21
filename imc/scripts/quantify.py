@@ -25,7 +25,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
-    print(f"Starting quantification step for {len(args.tiffs)} TIFF files: {fs}!")
+    print(f"Starting quantification step for {len(args.tiffs)} TIFF files:{fs}!")
 
     # Prepare ROI objects
     rois = list()
@@ -40,7 +40,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
 
     # reorder columns for nice effect
     ext = ["roi", "obj_id"] + (["X_centroid", "Y_centroid"] if args.morphology else [])
-    rem = [x for x in quant.columns.tolist() if x not in ext]
+    rem = [x for x in quant.columns if x not in ext]
     quant = quant[ext + rem]
 
     if args.output is None:

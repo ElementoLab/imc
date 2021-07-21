@@ -15,11 +15,10 @@ from imc.scripts import build_cli
 def main(cli: tp.Sequence[str] = None) -> int:
     """Generate probability maps for each ROI using ilastik."""
     parser = build_cli("predict")
-    print(cli)
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
-    print(f"Starting predict step for {len(args.tiffs)} TIFF files: {fs}!")
+    print(f"Starting predict step for {len(args.tiffs)} TIFF files:{fs}!")
 
     # Prepare ROI objects
     rois = list()

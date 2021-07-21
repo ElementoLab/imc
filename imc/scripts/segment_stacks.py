@@ -25,7 +25,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
-    print(f"Starting segmentation step for {len(args.tiffs)} TIFF files: {fs}!")
+    print(f"Starting segmentation step for {len(args.tiffs)} TIFF files:{fs}!")
 
     # Prepare ROI objects
     rois = list()

@@ -15,6 +15,7 @@ from imc.scripts.prepare_mcds import main as prepare
 from imc.scripts.predict import main as predict
 from imc.scripts.segment_stacks import main as segment
 from imc.scripts.quantify import main as quantify
+from imc.scripts.phenotype import main as phenotype
 from imc.scripts.view import main as view
 
 cli_config: tp.Dict[str, tp.Any]
@@ -37,6 +38,8 @@ def main(cli: tp.Sequence[str] = None) -> int:
         segment(cmd_args)
     elif main_args.command == "quantify":
         quantify(cmd_args)
+    elif main_args.command == "phenotype":
+        phenotype(cmd_args)
     elif main_args.command == "view":
         view(cmd_args)
     else:

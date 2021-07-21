@@ -25,7 +25,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     args = parser.parse_args(cli)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
-    print(f"Starting inspection step for {len(args.mcd_files)} MCD files: {fs}!")
+    print(f"Starting inspection step for {len(args.mcd_files)} MCD files:{fs}!")
 
     # Inspect each MCD
     metas = dict()

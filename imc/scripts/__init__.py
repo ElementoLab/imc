@@ -79,6 +79,11 @@ cli_config = {
             "description": "Quantify channel intensity in segmented cells.",
             "epilog": epilog,
         },
+        "phenotype": {
+            "prog": "imc phenotype",
+            "description": "Phenotype cells.",
+            "epilog": epilog,
+        },
         "view": {
             "prog": "imc view",
             "description": "Visualize an image stack interactively using a matplotlib frontend.",
@@ -370,7 +375,7 @@ cli_config = {
                 "args": ["--output"],
                 "kwargs": {
                     "dest": "output",
-                    "help": "Output file with quantification. Will default to 'results/quantification.csv'.",
+                    "help": "Output file with quantification. Will default to 'processed/quantification.csv'.",
                 },
             },
             {
@@ -384,6 +389,122 @@ cli_config = {
             {
                 "args": ["--overwrite"],
                 "kwargs": {"dest": "overwrite", "action": "store_true"},
+            },
+        ],
+        "phenotype": [
+            {
+                "kwargs": {
+                    "dest": "a",
+                    "type": Path,
+                    "help": "h5ad file with quantification.",
+                }
+            },
+            {
+                "args": ["--output-dir"],
+                "kwargs": {
+                    "default": "processed/phenotyping",
+                    "type": Path,
+                    "dest": "output_dir",
+                    "help": "Output directory. Will default to 'processed/phnotyping'.",
+                },
+            },
+            {
+                "args": ["-i", "--channel-include"],
+                "kwargs": {
+                    "dest": "channels_include",
+                    "default": None,
+                    "help": "Comma-delimited list of channels to include from stack.",
+                },
+            },
+            {
+                "args": ["-e", "--channel-exclude"],
+                "kwargs": {
+                    "dest": "channels_exclude",
+                    "default": "80ArAr(ArAr80),89Y(Y89),120Sn(Sn120),127I(I127),131Xe(Xe131),138Ba(Ba138),140Ce(Ce140),190BCKG(BCKG190),202Hg(Hg202),208Pb(Pb208),209Bi(Bi209)",
+                    "help": "Comma-delimited list of channels to exclude from stack.",
+                },
+            },
+            {
+                "args": ["--no-filter-cells"],
+                "kwargs": {
+                    "dest": "filter_cells",
+                    "action": "store_false",
+                    "help": "Whether to filter dubious cells out. Defaults to True.",
+                },
+            },
+            {
+                "args": ["--no-z-score"],
+                "kwargs": {
+                    "dest": "z_score",
+                    "action": "store_false",
+                    "help": "Whether to Z-score transform the intensity values. Defaults to True.",
+                },
+            },
+            {
+                "args": ["--z-score-by"],
+                "kwargs": {
+                    "dest": "z_score_per",
+                    "default": "roi",
+                    "choices": ["roi", "sample"],
+                    "help": "Whether to z-score values per ROI or per Sample.",
+                },
+            },
+            {
+                "args": ["--z-score-cap"],
+                "kwargs": {
+                    "dest": "z_score_cap",
+                    "default": 3.0,
+                    "help": "Absolute value to cap z-scores at.",
+                },
+            },
+            {
+                "args": ["--no-remove-batch"],
+                "kwargs": {
+                    "dest": "remove_batch",
+                    "action": "store_false",
+                    "help": "Whether to remove batch effects. Defaults to True.",
+                },
+            },
+            {
+                "args": ["--batch-variable"],
+                "kwargs": {
+                    "dest": "batch_variable",
+                    "default": "sample",
+                    "help": "Which variable to use for batch effect removal.",
+                },
+            },
+            {
+                "args": ["--dim-res-algos"],
+                "kwargs": {
+                    "dest": "dim_res_algos",
+                    "default": "umap",
+                    "help": "Comma-delimited string with algorithms to use for dimensionality reduction. Choose a combination of 'umap', 'diffmap', 'pymde'. Default is only 'umap'.",
+                },
+            },
+            {
+                "args": ["--clustering-method"],
+                "kwargs": {
+                    "dest": "clustering_method",
+                    "default": "leiden",
+                    "choices": ["leiden", "parc"],
+                    "help": "Method to use for cell clustering.",
+                },
+            },
+            {
+                "args": ["--clustering-resolutions"],
+                "kwargs": {
+                    "dest": "clustering_resolutions",
+                    "default": "0.5,1.0,1.5,2.5",
+                    "help": "Comma-delimited list of floats with various resolutions to do clustering at.",
+                },
+            },
+            {
+                "args": ["--no-plot"],
+                "kwargs": {
+                    "dest": "plot",
+                    "action": "store_false",
+                    "help": "Whether to plot phenotypes. Defaults to True.",
+                },
             },
         ],
         "view": [

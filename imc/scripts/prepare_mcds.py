@@ -30,7 +30,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
         args.sample_names = [None] * len(args.mcd_files)
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
-    print(f"Starting prepare step for {len(args.mcd_files)} MCD files: {fs}!")
+    print(f"Starting prepare step for {len(args.mcd_files)} MCD files:{fs}!")
 
     for mcd_file, pannel_csv, sample_name in zip(
         args.mcd_files, args.pannel_csvs, args.sample_names
