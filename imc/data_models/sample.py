@@ -39,7 +39,7 @@ DEFAULT_TOGGLE_ATTRIBUTE = "toggle"
 class IMCSample:
     """
 
-    If `csv_metadata` is given, it will initialize `ROI` objects for each row.
+    If `metadata` is given, it will initialize `ROI` objects for each row.
 
     If `panel_metadata` is given, it will use that
     """
@@ -59,7 +59,7 @@ class IMCSample:
         self,
         sample_name: str = DEFAULT_SAMPLE_NAME,
         root_dir: tp.Optional[Path] = None,
-        csv_metadata: tp.Optional[tp.Union[Path, DataFrame]] = None,
+        metadata: tp.Optional[tp.Union[Path, DataFrame]] = None,
         subfolder_per_sample: bool = True,
         roi_name_atribute: str = DEFAULT_ROI_NAME_ATTRIBUTE,
         roi_number_atribute: str = DEFAULT_ROI_NUMBER_ATTRIBUTE,
@@ -72,9 +72,7 @@ class IMCSample:
         self.sample_name: str = sample_name
         self.root_dir = Path(root_dir).absolute() if root_dir is not None else None
         self.metadata: tp.Optional[DataFrame] = (
-            pd.read_csv(csv_metadata)
-            if isinstance(csv_metadata, (str, Path))
-            else csv_metadata
+            pd.read_csv(metadata) if isinstance(metadata, (str, Path)) else metadata
         )
         self.subfolder_per_sample = subfolder_per_sample
         self.roi_name_atribute = roi_name_atribute
@@ -100,7 +98,7 @@ class IMCSample:
         self.__dict__.update(kwargs)
 
         # initialize
-        self._initialize_sample_from_annotation()
+        self._initialize_sample_from_annotation(values_to_propagate=kwargs.keys())
 
         self.quantification = None
 
@@ -147,7 +145,7 @@ class IMCSample:
         return df
 
     def _initialize_sample_from_annotation(
-        self, toggle: tp.Optional[bool] = None
+        self, toggle: bool = None, values_to_propagate: tp.Sequence[str] = []
     ) -> None:
         if self.metadata is None:
             metadata = self._detect_rois()
@@ -169,6 +167,7 @@ class IMCSample:
                     [DEFAULT_ROI_NAME_ATTRIBUTE, DEFAULT_ROI_NUMBER_ATTRIBUTE],
                     errors="ignore",
                 ).to_dict(),
+                **{k: getattr(self, k) for k in values_to_propagate},
             )
             self.rois.append(roi)
 
