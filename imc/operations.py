@@ -2432,6 +2432,7 @@ def get_domain_mask(
     topo_annot: tp.Dict,
     roi: _roi.ROI,
     exclude_domains: tp.Sequence[str],
+    fill_remaining: str = None,
     per_domain: bool = False,
 ) -> Array:
     """ """
@@ -2439,35 +2440,39 @@ def get_domain_mask(
     from imc.utils import polygon_to_mask
 
     _, h, w = roi.shape
-    regions = list()
+    masks = list()
     region_types = list()
+    region_names = list()
     count: Counter[str] = Counter()
     for shape in topo_annot:
         shape["points"] += [shape["points"][0]]
         region = polygon_to_mask(shape["points"], (w, h))
         label = shape["label"]
-        if not per_domain:
-            regions.append(region)
-            region_types.append(label)
-        else:
-            count[label] += 1
-            regions.append(region)
-            region_types.append(label + str(count[label]))
+        count[label] += 1
+        masks.append(region)
+        region_types.append(label)
+        region_names.append(label + str(count[label]))
 
     for_mask = np.asarray(
-        [m for l, m in zip(region_types, regions) if l not in exclude_domains]
+        [m for l, m in zip(region_types, masks) if l not in exclude_domains]
     ).sum(0)
+    if fill_remaining is not None:
+        masks += [for_mask == 0]
+        region_types += [fill_remaining]
+        for_mask[for_mask == 0] = -1
     exc_mask = np.asarray(
-        [m for l, m in zip(region_types, regions) if l in exclude_domains]
+        [m for l, m in zip(region_types, masks) if l in exclude_domains]
     ).sum(0)
     mask: Array = (
-        (for_mask & ~exc_mask) if isinstance(exc_mask, np.ndarray) else for_mask
+        ((for_mask != 0) & ~(exc_mask != 0))
+        if isinstance(exc_mask, np.ndarray)
+        else for_mask
     ).astype(bool)
 
     if per_domain:
         nmask = np.empty_like(mask, dtype="object")
-        for r, l in zip(regions, region_types):
-            if l.startswith("A"):
+        for r, l in zip(masks, region_types):
+            if l not in exclude_domains:
                 nmask[mask & r] = l
         mask = np.ma.masked_array(nmask, mask=nmask == None)
 
