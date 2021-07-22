@@ -34,11 +34,10 @@ def main(cli: tp.Sequence[str] = None) -> int:
     if args.plot:
         print(f"Plotting phenotypes in directory '{args.output_dir}'.")
         output_prefix = args.output_dir / "phenotypes."
+        if args.compute:
+            args.a = a
         pkwargs = filter_kwargs_by_callable(args.__dict__, plot_phenotyping)
-        if not args.compute:
-            a = args.a
-            del pkwargs["a"]
-        plot_phenotyping(a, output_prefix=output_prefix, **pkwargs)
+        plot_phenotyping(output_prefix=output_prefix, **pkwargs)
 
     print("Finished phenotyping step.")
     return 0

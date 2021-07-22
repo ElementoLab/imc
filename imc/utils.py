@@ -594,16 +594,7 @@ def mcd_to_dir(
             nchannels = 2 if ilastik_compartment == "both" else 1
 
         # Make input for ilastik training
-        # # zoom 2x
-        s = tuple(x * 2 for x in ac.image_data.shape[1:])
-        full = np.moveaxis(np.asarray([resize(x, s) for x in full]), 0, -1)
-
-        # # Save input for ilastik prediction
-        with h5py.File(
-            output_dir / "tiffs" / prefix + "_ilastik_s2.h5", mode="w"
-        ) as handle:
-            d = handle.create_dataset("stacked_channels", data=full)
-            d.attrs["axistags"] = H5_YXC_AXISTAG
+        stack_to_ilastik_h5(full, output_dir / "tiffs" / prefix + "_ilastik_s2.h5")
 
         # # random crops
         # # # make sure height/width are smaller or equal to acquisition dimensions
@@ -614,6 +605,7 @@ def mcd_to_dir(
 
         if n_crops > 0:
             (output_dir / "ilastik").mkdir()
+            s = tuple(x * 2 for x in full.shape[1:])
         for _ in range(n_crops):
             x = np.random.choice(range(s[0] - crop_width))
             y = np.random.choice(range(s[1] - crop_height))
@@ -636,6 +628,44 @@ def mcd_to_dir(
     #     for ac_id in partition:
     #         ac = mcd.get_imc_acquisition(ac_id)
     #         ac.save_image(pjoin(output_dir, f"partition_{partition_id}", ""))
+
+
+def stack_to_ilastik_h5(stack: Array, output_file: Path) -> None:
+    resize
+    H5_YXC_AXISTAG = json.dumps(
+        {
+            "axes": [
+                {
+                    "key": "y",
+                    "typeFlags": 2,
+                    "resolution": 0,
+                    "description": "",
+                },
+                {
+                    "key": "x",
+                    "typeFlags": 2,
+                    "resolution": 0,
+                    "description": "",
+                },
+                {
+                    "key": "c",
+                    "typeFlags": 1,
+                    "resolution": 0,
+                    "description": "",
+                },
+            ]
+        }
+    )
+
+    # Make input for ilastik training
+    # # zoom 2x
+    s = tuple(x * 2 for x in stack.shape[1:])
+    full = np.moveaxis(np.asarray([resize(x, s) for x in stack]), 0, -1)
+
+    # # Save input for ilastik prediction
+    with h5py.File(output_file, mode="w") as handle:
+        d = handle.create_dataset("stacked_channels", data=full)
+        d.attrs["axistags"] = H5_YXC_AXISTAG
 
 
 def txt_to_tiff(

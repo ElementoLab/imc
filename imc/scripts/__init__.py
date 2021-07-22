@@ -122,10 +122,10 @@ cli_config = {
         "prepare": [
             {
                 "kwargs": {
-                    "dest": "mcd_files",
+                    "dest": "input_files",
                     "nargs": "+",
                     "type": Path,
-                    "help": "MCD files to process.",
+                    "help": "Files to process. Either MCD of TIFF.",
                 }
             },
             {

@@ -40,17 +40,19 @@ def main(cli: tp.Sequence[str] = None) -> int:
     # If given MCD files, run inspect and prepare steps
     mcds = [file for file in args.files if file.endswith(MCD_FILE_ENDINGS)]
     mcds_s = list(map(str, mcds))
-    inspect(defaults["inspect"] + mcds_s)
-    prepare(defaults["prepare"] + mcds_s)
+    tiffs = [file for file in args.files if file.endswith(TIFF_FILE_ENDINGS)]
+    tiffs_s = list(map(str, tiffs))
+    if mcds:
+        inspect(defaults["inspect"] + mcds_s)
+    prepare(defaults["prepare"] + mcds_s + tiffs_s)
 
     # Now run remaining for all
-    given_tiffs = [file for file in args.files if file.endswith(TIFF_FILE_ENDINGS)]
     new_tiffs = list()
     for mcd in mcds:
         new_tiffs += list(
             (PROCESSED_DIR / mcd.stem / "tiffs").glob(f"{mcd.stem}*_full.tiff")
         )
-    tiffs = list(map(str, set(given_tiffs + new_tiffs)))
+    tiffs = list(map(str, set(tiffs + new_tiffs)))
 
     predict(defaults["predict"] + tiffs)
     segment(defaults["segment"] + tiffs)

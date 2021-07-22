@@ -9,10 +9,16 @@ import argparse
 import typing as tp
 
 import pandas as pd
+import numpy as np
+import tifffile
 
 from imc.types import Path
-from imc.utils import mcd_to_dir, plot_panoramas_rois
+from imc.segmentation import prepare_stack
+from imc.utils import mcd_to_dir, plot_panoramas_rois, stack_to_ilastik_h5
 from imc.scripts import build_cli
+
+MCD_FILE_ENDINGS = (".mcd", ".MCD")
+TIFF_FILE_ENDINGS = (".tiff", ".TIFF", ".tif", ".TIF")
 
 
 def main(cli: tp.Sequence[str] = None) -> int:
@@ -20,23 +26,30 @@ def main(cli: tp.Sequence[str] = None) -> int:
     args = parser.parse_args(cli)
 
     if not args.pannel_csvs:
-        args.pannel_csvs = [None] * len(args.mcd_files)
+        args.pannel_csvs = [None] * len(args.input_files)
     elif len(args.pannel_csvs) == 1:
-        args.pannel_csvs = args.pannel_csvs * len(args.mcd_files)
+        args.pannel_csvs = args.pannel_csvs * len(args.input_files)
     else:
-        assert len(args.mcd_files) == len(args.pannel_csvs)
+        assert len(args.input_files) == len(args.pannel_csvs)
 
-    if (args.sample_names is None) or (len(args.mcd_files) != len(args.sample_names)):
-        args.sample_names = [None] * len(args.mcd_files)
+    if (args.sample_names is None) or (len(args.input_files) != len(args.sample_names)):
+        args.sample_names = [None] * len(args.input_files)
 
-    fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
-    print(f"Starting prepare step for {len(args.mcd_files)} MCD files:{fs}!")
+    mcds = [file for file in args.input_files if file.endswith(MCD_FILE_ENDINGS)]
+    tiffs = [file for file in args.input_files if file.endswith(TIFF_FILE_ENDINGS)]
+    if mcds and tiffs:
+        raise ValueError(
+            "Mixture of MCD and TIFFs were given. Not yet supported, please run them separately."
+        )
+
+    fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.input_files])
+    print(f"Starting prepare step for {len(args.input_files)} files:{fs}!")
 
     for mcd_file, pannel_csv, sample_name in zip(
-        args.mcd_files, args.pannel_csvs, args.sample_names
+        mcds, args.pannel_csvs, args.sample_names
     ):
         sargs = args.__dict__.copy()
-        del sargs["mcd_files"]
+        del sargs["input_files"]
         del sargs["pannel_csvs"]
         del sargs["root_output_dir"]
         del sargs["sample_names"]
@@ -57,6 +70,23 @@ def main(cli: tp.Sequence[str] = None) -> int:
             save_roi_arrays=False,
         )
         print(f"Finished with '{mcd_file}'.")
+
+    for tiff in tiffs:
+        stack = tifffile.imread(tiff)
+        # TODO: with OME-TIFF not required
+        try:
+            channels = pd.read_csv(
+                tiff.replace_(".tiff", ".csv"), index_col=0, squeeze=True
+            )
+        except FileNotFoundError:
+            raise ValueError(
+                "Given TIFF file does not have a '.csv' file describing the channels!"
+            )
+        # TODO: connect to CLI options to get different ilastik stacks
+        s = prepare_stack(stack, channels)
+        stack_to_ilastik_h5(
+            s[np.newaxis, ...], tiff.replace_("_full.tiff", "_ilastik_s2.h5")
+        )
 
     print("Finished prepare step!")
     return 0
