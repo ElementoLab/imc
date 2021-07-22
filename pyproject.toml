@@ -42,6 +42,7 @@ dependencies = [
     "fastcluster",
     "parmap",
     "scanpy",
+    "bbknn",
     "numpy_groupies",
     "tifffile==2020.6.3"
 ]
