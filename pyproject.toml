@@ -44,7 +44,8 @@ dependencies = [
     "scanpy",
     "bbknn",
     "numpy_groupies",
-    "tifffile==2020.6.3"
+    "tifffile==2020.6.3",
+    "seaborn-extensions"
 ]
 dynamic = ['version']
 
