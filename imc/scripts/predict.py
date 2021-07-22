@@ -182,12 +182,14 @@ def run_shell_command(cmd: str, dry_run: bool = False) -> int:
         " in shell" if shell else "",
         textwrap.dedent(cmd) + "\n",
     )
-    c = re.findall(r"\S+", cmd.replace("\\\n", ""))
     if not dry_run:
         if shell:
             print("Running command in shell.")
             code = subprocess.call(cmd, shell=shell)
         else:
+            # Allow spaces in file names
+            c = re.findall(r"\S+", cmd.replace(r"\ ", "__space__").replace("\\\n", ""))
+            c = [x.replace("__space__", " ") for x in c]
             code = subprocess.call(c, shell=shell)
         if code != 0:
             print(
