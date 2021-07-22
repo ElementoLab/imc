@@ -11,7 +11,7 @@ import typing as tp
 
 from imc.scripts.process import main as process
 from imc.scripts.inspect_mcds import main as inspect
-from imc.scripts.prepare_mcds import main as prepare
+from imc.scripts.prepare import main as prepare
 from imc.scripts.predict import main as predict
 from imc.scripts.segment_stacks import main as segment
 from imc.scripts.quantify import main as quantify

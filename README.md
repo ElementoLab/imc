@@ -37,7 +37,7 @@ One-line IMC data processing:
 pip install git+https://github.com/ElementoLab/imc.git#egg=imc[deepcell]
 
 # Download some example data
-SAMPLE=20200629_NL1915A
+SAMPLE=20200612_FLU_1923
 MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
 mkdir -p imctest/data
 wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL

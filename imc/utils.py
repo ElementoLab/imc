@@ -598,14 +598,18 @@ def mcd_to_dir(
 
         # # random crops
         # # # make sure height/width are smaller or equal to acquisition dimensions
-        if (full.shape[1] < crop_width) or (full.shape[0] < crop_height):
-            msg = "Image is smaller than the requested crop size for ilastik training."
-            print(msg)
-            continue
 
         if n_crops > 0:
             (output_dir / "ilastik").mkdir()
             s = tuple(x * 2 for x in full.shape[1:])
+        else:
+            if (full.shape[1] < crop_width) or (full.shape[0] < crop_height):
+                msg = (
+                    "Image is smaller than the requested crop size for ilastik training."
+                )
+                print(msg)
+                continue
+
         for _ in range(n_crops):
             x = np.random.choice(range(s[0] - crop_width))
             y = np.random.choice(range(s[1] - crop_height))
@@ -689,8 +693,8 @@ def txt_to_tiff(
     df = df.drop(
         ["Start_push", "End_push", "Pushes_duration", "Z"], axis=1, errors="ignore"
     )
-    df = df.pivot_table(index="X", columns="Y")
-    chs = df.columns.levels[0]
+    df = df.pivot_table(index="X", columns="Y")[df.columns.drop(["X", "Y"])]
+    chs = df.columns.get_level_values(0).unique()
     stack = np.asarray([df[c].values for c in chs])
 
     tifffile.imwrite(tiff_file, stack)

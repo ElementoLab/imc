@@ -14,11 +14,12 @@ import tifffile
 
 from imc.types import Path
 from imc.segmentation import prepare_stack
-from imc.utils import mcd_to_dir, plot_panoramas_rois, stack_to_ilastik_h5
+from imc.utils import mcd_to_dir, plot_panoramas_rois, stack_to_ilastik_h5, txt_to_tiff
 from imc.scripts import build_cli
 
 MCD_FILE_ENDINGS = (".mcd", ".MCD")
 TIFF_FILE_ENDINGS = (".tiff", ".TIFF", ".tif", ".TIF")
+TXT_FILE_ENDINGS = (".txt", ".TXT")
 
 
 def main(cli: tp.Sequence[str] = None) -> int:
@@ -37,9 +38,11 @@ def main(cli: tp.Sequence[str] = None) -> int:
 
     mcds = [file for file in args.input_files if file.endswith(MCD_FILE_ENDINGS)]
     tiffs = [file for file in args.input_files if file.endswith(TIFF_FILE_ENDINGS)]
-    if mcds and tiffs:
+    txts = [file for file in args.input_files if file.endswith(TXT_FILE_ENDINGS)]
+    if mcds and (tiffs or txts):
         raise ValueError(
-            "Mixture of MCD and TIFFs were given. Not yet supported, please run them separately."
+            "Mixture of MCD and TIFFs/TXTs were given. "
+            "Not yet supported, please run prepare step for each file type separately."
         )
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.input_files])
@@ -70,6 +73,11 @@ def main(cli: tp.Sequence[str] = None) -> int:
             save_roi_arrays=False,
         )
         print(f"Finished with '{mcd_file}'.")
+
+    for txt in txts:
+        tiff_f = txt.replace_(".txt", "_full.tiff")
+        txt_to_tiff(txt, tiff_f, write_channel_labels=True)
+        tiffs.append(tiff_f)
 
     for tiff in tiffs:
         stack = tifffile.imread(tiff)

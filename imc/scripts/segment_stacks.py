@@ -38,12 +38,12 @@ def main(cli: tp.Sequence[str] = None) -> int:
     for roi in rois:
         if args.compartment == "both":
             mask_files = {
-                "cell": roi._get_input_filename("cell_mask"),
-                "nuclei": roi._get_input_filename("nuclei_mask"),
+                "cell": roi.get_input_filename("cell_mask"),
+                "nuclei": roi.get_input_filename("nuclei_mask"),
             }
         else:
             mask_files = {
-                args.compartment: roi._get_input_filename(args.compartment + "_mask")
+                args.compartment: roi.get_input_filename(args.compartment + "_mask")
             }
         exists = all(f.exists() for f in mask_files.values())
         if exists and not args.overwrite:
@@ -61,6 +61,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
                 save=args.save,
                 overwrite=args.overwrite,
                 plot_segmentation=args.plot,
+                verbose=not args.quiet,
             )
         except ValueError as e:
             print("Error segmenting stack. Perhaps XY shape is not compatible?")

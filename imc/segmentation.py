@@ -26,10 +26,7 @@ def normalize(image, mode="cyx"):
             return np.asarray([minmax_scale(eq(x)) for x in image])
         elif mode == "yxc":
             return np.stack(
-                [
-                    minmax_scale(eq(image[..., i]))
-                    for i in range(image.shape[-1])
-                ],
+                [minmax_scale(eq(image[..., i])) for i in range(image.shape[-1])],
                 axis=-1,
             )
     raise ValueError("Unknown image shape.")
@@ -63,61 +60,12 @@ def prepare_stack(
     return np.stack((nucl, cyto))
 
 
-def stardist_segment_nuclei(
-    image: Array, model_str: str = "2D_versatile_fluo"
-) -> Array:
+def stardist_segment_nuclei(image: Array, model_str: str = "2D_versatile_fluo") -> Array:
     from stardist.models import StarDist2D
 
     model = StarDist2D.from_pretrained(model_str)
-    mask, output = model.predict_instances(image)
-    mask = model.predict(image)
-    return mask
-    # # visualize probs
-    # mask2 = np.zeros(mask.shape, dtype=float)
-    # for c, p in zip(np.unique(mask)[1:], output['prob']):
-    #     mask2[mask == c] = p
-
-    # # to change thresholds without training
-    # from attmap import AttMap
-    # model._thresholds = AttMap(dict(
-    #     prob = model.thresholds.prob,
-    #     nms  = model.thresholds.nms
-    # ))
-
-    # # to re-train thresholds
-    # from imc import Project
-
-    # # covidimc = Project(processed_dir="~/projects/covid-imc/processed")
-    # covidimc.samples = [
-    #     s for s in covidimc.samples if "20200708_COVID_21_LATE" in s.name
-    # ]
-    # X = [
-    #     prepare_stack(roi.stack, roi.channel_labels, "nuclear")
-    #     for roi in covidimc.rois
-    # ]
-    # Y = [roi.mask for roi in covidimc.rois]
-    # Y = [(roi.mask > 0).astype(int) for roi in covidimc.rois]
-    # # model.optimize_thresholds(X[:1], Y[:1])
-    # model.optimize_thresholds(X, Y)
-    # thres = {"prob": 0.5328677624109023, "nms": 0.5}  # 20 ROIs, labels
-    # thres = {"prob": 0.4871256780834209, "nms": 0.5}  # 2 ROIs, labels
-    # thres = {"prob": 0.46877386118214825, "nms": 0.3}  # 2 ROIs, > 0, int
-    # thres = {"prob": 0.4742475427753275, "nms": 0.3}  # 20 ROIs, > 0, int
-    # thres = {'prob': 0.46877386118214825, 'nms': 0.3}  #  2 ROIS, > 0, int from scratch
-
-    # from attmap import AttMap
-
-    # model._thresholds = AttMap(thres)
-    # mask, output = model.predict(X[0])
-    # plot_image_and_mask(X[0], {"nuclear": resize(Y[0], X[0].shape)})
-    # plot_image_and_mask(X[0], {"nuclear": resize(mask, X[0].shape)})
-    # plot_image_and_mask(X[0], {"nuclear": resize(normalize(mask), X[0].shape)})
-
-    # lungdev = Project(processed_dir="~/projects/lung-dev/processed")
-    # roi = lungdev.rois[0]
-    # image = prepare_stack(roi.stack, roi.channel_labels, "nuclear")
-    # mask, output = model.predict(image)
-    # plot_image_and_mask(image, {"nuclear": resize(mask, image.shape)}).show()
+    mask, _ = model.predict_instances(image)
+    return mask.astype("uint")
 
 
 def deepcell_resize_to_predict_shape(image: Array) -> Array:
@@ -148,12 +96,8 @@ def split_image_into_tiles(
             offsets = overlap[0] * i, overlap[1] * j
             start = (max(i * x - offsets[0], 0), max(j * y - offsets[1], 0))
             end = (
-                ((i + 1) * x - offsets[0])
-                if (i + 2) < n
-                else shape[0] - start[0],
-                ((j + 1) * y - offsets[1])
-                if (j + 2) < m
-                else shape[1] - start[1],
+                ((i + 1) * x - offsets[0]) if (i + 2) < n else shape[0] - start[0],
+                ((j + 1) * y - offsets[1]) if (j + 2) < m else shape[1] - start[1],
             )
             tile = image[start[0] : end[0], start[1] : end[1]]
             if pad_to_tile_shape:
@@ -362,9 +306,7 @@ def inflection_point(curve):
     line_vec = all_coord[-1] - all_coord[0]
     line_vec_norm = line_vec / np.sqrt(np.sum(line_vec ** 2))
     vec_from_first = all_coord - all_coord[0]
-    scalar_product = np.sum(
-        vec_from_first * repmat(line_vec_norm, n_points, 1), axis=1
-    )
+    scalar_product = np.sum(vec_from_first * repmat(line_vec_norm, n_points, 1), axis=1)
     vec_to_line = vec_from_first - np.outer(scalar_product, line_vec_norm)
     return np.argmax(np.sqrt(np.sum(vec_to_line ** 2, axis=1)))
 
@@ -385,13 +327,9 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
         image = np.moveaxis(image, 0, -1)
 
     for comp in mask_dict:
-        mask_dict[comp] = np.ma.masked_array(
-            mask_dict[comp], mask_dict[comp] == 0
-        )
+        mask_dict[comp] = np.ma.masked_array(mask_dict[comp], mask_dict[comp] == 0)
 
-    fig, axes = plt.subplots(
-        1, cols, figsize=(4 * cols, 4), sharex=True, sharey=True
-    )
+    fig, axes = plt.subplots(1, cols, figsize=(4 * cols, 4), sharex=True, sharey=True)
     axes[0].imshow(image, rasterized=True)
     axes[0].set(title=f"Original signal")
     cmap = random_label_cmap()
@@ -415,9 +353,7 @@ def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
     return fig
 
 
-def deepcell_segment_probabilities(
-    probabilities: Array, compartment: str
-) -> Array:
+def deepcell_segment_probabilities(probabilities: Array, compartment: str) -> Array:
     """"""
     from deepcell.applications import MultiplexSegmentation
 
@@ -455,9 +391,7 @@ def deepcell_postprocess_both_compartments(
     import seaborn as sns
     from skimage.segmentation import find_boundaries
 
-    def inspect_mask_pair(
-        cell_mask: Array, nuclei_mask: Array
-    ) -> Tuple[int, list, dict]:
+    def inspect_mask_pair(cell_mask: Array, nuclei_mask: Array) -> Tuple[int, list, dict]:
         match = 0
         unpaireds = list()
         multiplets = dict()
@@ -496,9 +430,7 @@ def deepcell_postprocess_both_compartments(
                 if verbose:
                     print("Reached maximum number of iterations.")
                 break
-            match, unpaireds, multiplets = inspect_mask_pair(
-                cell_mask, nuclei_mask
-            )
+            match, unpaireds, multiplets = inspect_mask_pair(cell_mask, nuclei_mask)
             # # 1. fix cells without nuclei
             if complement_singlets:
                 # # # set nuclei to the whole mask minus one
@@ -518,9 +450,7 @@ def deepcell_postprocess_both_compartments(
             # # # If the matching is above threshold (i.e. 80%) then remove non-dominant nuclei
             # # # Else remove nuclei and cell
             if remove_ambigous:
-                match, unpaireds, multiplets = inspect_mask_pair(
-                    cell_mask, nuclei_mask
-                )
+                match, unpaireds, multiplets = inspect_mask_pair(cell_mask, nuclei_mask)
                 n_removed = 0
                 for cell, props in multiplets.items():
                     if max(props.values()) > dominant_nuclei_threshold:
@@ -538,9 +468,7 @@ def deepcell_postprocess_both_compartments(
                         nuclei_mask[np.isin(nuclei_mask, rem)] = 0
                         n_removed += 1
                 if verbose:
-                    print(
-                        f"Removed {n_removed} cells with ambiguous nuclei assignments."
-                    )
+                    print(f"Removed {n_removed} cells with ambiguous nuclei assignments.")
             it += 1
         return cell_mask, nuclei_mask
 
@@ -555,20 +483,19 @@ def deepcell_postprocess_both_compartments(
     # Inspect cell-nuclei relationship
     lc = len(np.unique(cell_mask)) - 1
     ln = len(np.unique(nuclei_mask)) - 1
-    pre_match, pre_unpaireds, pre_multiplets = inspect_mask_pair(
-        cell_mask, nuclei_mask
-    )
+    pre_match, pre_unpaireds, pre_multiplets = inspect_mask_pair(cell_mask, nuclei_mask)
 
-    print(f"Statistics prior postprocessing:")
-    print(f"\tSegmentation has {lc} cells and {ln} nuclei.")
-    print(f"\t{pre_match} exact matches between cells and nuclei.")
-    print(f"\t{len(pre_unpaireds)} cells without nuclei.")
-    print(f"\t{len(pre_multiplets)} cells overlaping more than one nuclei.")
-    fracts = np.asarray([max(v.values()) for k, v in pre_multiplets.items()])
-    print(
-        "Found mean overlap between cells and nuclei in "
-        f"multiplets to be {fracts.mean():.3f}(+/-){fracts.std():.3f}."
-    )
+    if verbose:
+        print(f"Statistics prior postprocessing:")
+        print(f"\tSegmentation has {lc} cells and {ln} nuclei.")
+        print(f"\t{pre_match} exact matches between cells and nuclei.")
+        print(f"\t{len(pre_unpaireds)} cells without nuclei.")
+        print(f"\t{len(pre_multiplets)} cells overlaping more than one nuclei.")
+        fracts = np.asarray([max(v.values()) for k, v in pre_multiplets.items()])
+        print(
+            "Found mean overlap between cells and nuclei in "
+            f"multiplets to be {fracts.mean():.3f}(+/-){fracts.std():.3f}."
+        )
 
     # Postprocess
     print("Applying postprocessing to segmentation masks...")
@@ -590,21 +517,23 @@ def deepcell_postprocess_both_compartments(
     post_match, post_unpaireds, post_multiplets = inspect_mask_pair(
         cell_mask, nuclei_mask
     )
-    lc = len(np.unique(cell_mask)) - 1
-    ln = len(np.unique(nuclei_mask)) - 1
-    print("After postprocessing stats:")
-    print(f"\tSegmentation has {lc} cells and {ln} nuclei.")
-    print(f"\t{post_match} exact matches between cells and nuclei.")
-    print(f"\t{len(post_unpaireds)} cells without nuclei.")
-    print(f"\t{len(post_multiplets)} cells overlaping more than one nucleus.")
+    if verbose:
+        lc = len(np.unique(cell_mask)) - 1
+        ln = len(np.unique(nuclei_mask)) - 1
+        print("After postprocessing stats:")
+        print(f"\tSegmentation has {lc} cells and {ln} nuclei.")
+        print(f"\t{post_match} exact matches between cells and nuclei.")
+        print(f"\t{len(post_unpaireds)} cells without nuclei.")
+        print(f"\t{len(post_multiplets)} cells overlaping more than one nucleus.")
 
     # Report postprocessed stats:
     post_match, post_unpaireds, post_multiplets = inspect_mask_pair(
         nuclei_mask, cell_mask
     )
-    print(f"\t{post_match} exact matches between nuclei and cells.")
-    print(f"\t{len(post_unpaireds)} nuclei without cells.")
-    print(f"\t{len(post_multiplets)} nuclei overlaping more than one cell.")
+    if verbose:
+        print(f"\t{post_match} exact matches between nuclei and cells.")
+        print(f"\t{len(post_unpaireds)} nuclei without cells.")
+        print(f"\t{len(post_multiplets)} nuclei overlaping more than one cell.")
 
     # # 3. align nuclei and cell integer IDs
     new_cell = np.zeros(cell_mask.shape, dtype="uint64")
@@ -638,13 +567,9 @@ def deepcell_postprocess_both_compartments(
             axes[0][i].set(title=f"Prior: {layer}")
 
         c_unpaired = mask[..., 0].copy()
-        c_unpaired[
-            ~np.isin(mask[..., 0], np.unique(np.asarray(pre_unpaireds)))
-        ] = 0
+        c_unpaired[~np.isin(mask[..., 0], np.unique(np.asarray(pre_unpaireds)))] = 0
         c_multiplets = mask[..., 0].copy()
-        c_multiplets[
-            ~np.isin(mask[..., 0], np.unique(list(pre_multiplets.keys())))
-        ] = 0
+        c_multiplets[~np.isin(mask[..., 0], np.unique(list(pre_multiplets.keys())))] = 0
         axes[1][0].imshow(c_multiplets, cmap=cmap, interpolation="none")
         axes[1][0].set(title="Cells overlapping multiple nuclei")
         axes[1][1].imshow(c_unpaired, cmap=cmap, interpolation="none")
@@ -707,6 +632,7 @@ def segment_roi(
     save: bool = True,
     overwrite: bool = True,
     plot_segmentation: bool = True,
+    verbose: bool = False,
 ) -> Dict[str, Array]:
     """
     Segment the area of an ROI.
@@ -735,17 +661,16 @@ def segment_roi(
         image = roi.probabilities
         shape = tuple([int(x / 2) for x in image.shape[1:]])
         image = resize(image / image.max(), (3,) + shape)
-        mask = deepcell_segment_probabilities(
-            np.moveaxis(image, 0, -1), compartment
-        )
+        mask = deepcell_segment_probabilities(np.moveaxis(image, 0, -1), compartment)
         if postprocessing:
             mask = deepcell_postprocess_both_compartments(
                 mask,
                 plot=False,
                 roi=roi,
-                fig_output_prefix=roi._get_input_filename("stack").replace_(
+                fig_output_prefix=roi.get_input_filename("stack").replace_(
                     ".tiff", "_segmentation."
                 ),
+                verbose=verbose,
             )
     else:
         assert model in ["deepcell", "stardist", "cellpose"]
@@ -779,16 +704,15 @@ def segment_roi(
         mask_dict["cell"] = mask
 
     if save:
-        for comp in mask_dict:
-            mask_file = roi._get_input_filename(comp + "_mask")
+        for comp, mask in mask_dict.items():
+            mask_file = roi.get_input_filename(comp + "_mask")
             if overwrite or (not overwrite and not mask_file.exists()):
-                print(mask_file)
-                tifffile.imwrite(mask_file, mask_dict[comp])
+                tifffile.imwrite(mask_file, mask)
 
     if plot_segmentation:
         fig = plot_image_and_mask(image, mask_dict)
         if save:
-            fig_file = roi._get_input_filename("stack").replace_(
+            fig_file = roi.get_input_filename("stack").replace_(
                 ".tiff",
                 f"_segmentation_{model}_{compartment}.svg",
             )
@@ -850,9 +774,7 @@ def segment_decomposition():
     axes[0][1].imshow(reconstruction.mean(0))
     axes[1][0].imshow(stack[-1])
     v = np.absolute(reconstruction[-1]).max()
-    axes[1][1].imshow(
-        reconstruction[-1], cmap="RdBu_r", vmin=-v, vmax=v
-    )  # .clip(min=0))
+    axes[1][1].imshow(reconstruction[-1], cmap="RdBu_r", vmin=-v, vmax=v)  # .clip(min=0))
 
     channel_imp = pd.Series(factors[0].squeeze(), index=r.channel_labels[~exc])
     channel_mean = pd.Series(stack.mean((1, 2)), index=r.channel_labels[~exc])

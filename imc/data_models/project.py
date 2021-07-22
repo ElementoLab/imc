@@ -278,7 +278,7 @@ class Project:
             if r in (rois or sample.rois)
         ]
 
-    def _get_input_filename(self, input_type: str) -> Path:
+    def get_input_filename(self, input_type: str) -> Path:
         """Get path to file with data for Sample.
 
         Available `input_type` values are:
@@ -692,7 +692,7 @@ class Project:
         )
         # save clusters as CSV in default file
         clusters.reset_index().to_csv(
-            self._get_input_filename("cell_cluster_assignments"), index=False
+            self.get_input_filename("cell_cluster_assignments"), index=False
         )
         if not set_attribute:
             return clusters
@@ -722,10 +722,10 @@ class Project:
         propagate it to the Samples and their ROIs.
 
         If not given, `clusters` is the output of
-        :func:`Project._get_input_filename`("cell_cluster_assignments").
+        :func:`Project.get_input_filename`("cell_cluster_assignments").
         """
         id_cols = ["sample", "roi", "obj_id"]
-        fn = self._get_input_filename("cell_cluster_assignments")
+        fn = self.get_input_filename("cell_cluster_assignments")
         fn.parent.mkdir()
         if clusters is None:
             clusters = (
@@ -764,7 +764,7 @@ class Project:
         clusters = cast(self.clusters).replace(new_labels)
         if save:
             clusters.reset_index().to_csv(
-                self._get_input_filename("cell_cluster_assignments"),
+                self.get_input_filename("cell_cluster_assignments"),
                 index=False,
             )
         self.set_clusters(clusters)

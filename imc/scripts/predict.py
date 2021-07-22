@@ -24,7 +24,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     rois = list()
     for tiff in args.tiffs:
         roi = ROI.from_stack(tiff)
-        out = roi._get_input_filename("probabilities")
+        out = roi.get_input_filename("probabilities")
         if not args.overwrite and out.exists():
             continue
         rois.append(roi)
@@ -42,13 +42,13 @@ def main(cli: tp.Sequence[str] = None) -> int:
 
     # Predict
     print("Starting ilastik pixel classification.")
-    tiff_files = [roi._get_input_filename("ilastik_input") for roi in rois]
+    tiff_files = [roi.get_input_filename("ilastik_input") for roi in rois]
     predict_with_ilastik(tiff_files, ilastik_sh, model_ilp, args.quiet)
 
     for roi in rois:
         _in = roi.root_dir / roi.name + "_ilastik_s2_Probabilities.tiff"
         if _in.exists():
-            _in.rename(roi._get_input_filename("probabilities"))
+            _in.rename(roi.get_input_filename("probabilities"))
 
     print("Finished predict step!")
     return 0

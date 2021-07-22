@@ -214,13 +214,13 @@ class IMCSample:
             self.prj.set_clusters(samples=[self])
         except KeyError:
             self._clusters = pd.read_csv(
-                self._get_input_filename("cell_type_assignments"),
+                self.get_input_filename("cell_type_assignments"),
                 index_col=[0, 1, 2],
             ).loc[self.name]
             self.set_clusters(self._clusters)
         return self._clusters
 
-    def _get_input_filename(self, input_type: str) -> Path:
+    def get_input_filename(self, input_type: str) -> Path:
         """Get path to file with data for Sample.
 
         Available `input_type` values are:
@@ -283,7 +283,7 @@ class IMCSample:
 
             res = dict()
             for ftype in only_these_keys:
-                _path = self._get_input_filename(ftype)
+                _path = self.get_input_filename(ftype)
                 try:
                     # TODO: logger.info()
                     v = pd.read_csv(_path, index_col=0)
@@ -484,7 +484,7 @@ class IMCSample:
         )
         # save clusters as CSV in default file
         clusters.reset_index().to_csv(
-            self._get_input_filename("cell_type_assignments"), index=False
+            self.get_input_filename("cell_type_assignments"), index=False
         )
         if not set_attribute:
             return clusters

@@ -165,21 +165,23 @@ class ROI:
 
     @classmethod
     def from_stack(self, stack_file: tp.Union[Path, str], **kwargs) -> ROI:
-        import re
-
         if isinstance(stack_file, str):
             stack_file = Path(stack_file)
         stack_file = stack_file.absolute()
         reason = "Stack file must end with '_full.tiff' for the time being."
         assert stack_file.endswith("_full.tiff"), reason
         roi_numbers = re.findall(r".*-(\d+)_full\.tiff", stack_file.as_posix())
-        reason = "Could not determine ROI number."
-        assert len(roi_numbers) == 1, reason
+        if len(roi_numbers) != 1:
+            print("Could not determine ROI number.")
+            roi_number = None
+        else:
+            roi_number = int(roi_numbers[0])
+
         return ROI(
             name=stack_file.stem.replace("_full", ""),
             root_dir=stack_file.parent,
             stacks_dir=stack_file.parent,
-            roi_number=int(roi_numbers[0]),
+            roi_number=roi_number,
         )
 
     # TODO: read from OME-TIFF
@@ -190,7 +192,7 @@ class ROI:
             return self._channel_labels
 
         # read channel labels specifically for ROI
-        channel_labels_file = self._get_input_filename("stack").replace_(".tiff", ".csv")
+        channel_labels_file = self.get_input_filename("stack").replace_(".tiff", ".csv")
         if not channel_labels_file.exists():
             msg = (
                 "`channel_labels` was not given upon initialization "
@@ -429,7 +431,7 @@ class ROI:
             return self._adjacency_graph
         try:
             self._adjacency_graph = nx.readwrite.read_gpickle(
-                self._get_input_filename("adjacency_graph")
+                self.get_input_filename("adjacency_graph")
             )
         except FileNotFoundError:
             return None
@@ -439,7 +441,7 @@ class ROI:
         """Get area of ROI"""
         return np.multiply(*self.shape[1:])  # type: ignore[no-any-return]
 
-    def _get_input_filename(self, input_type: str) -> Path:
+    def get_input_filename(self, input_type: str) -> Path:
         """Get path to file with data for ROI.
 
         Available `input_type` values are:
@@ -460,6 +462,7 @@ class ROI:
             # "cell_mask": (self.masks_dir, "_ilastik_s2_Probabilities_mask.tiff"),
             "cell_mask": (self.masks_dir, "_full_mask.tiff"),
             "nuclei_mask": (self.masks_dir, "_full_nucmask.tiff"),
+            "nuclear_mask": (self.masks_dir, "_full_nucmask.tiff"),
             "cell_type_assignments": (
                 self.single_cell_dir,
                 ".cell_type_assignment_against_reference.csv",
@@ -498,7 +501,7 @@ class ROI:
         if set_attribute and not overwrite and hasattr(self, key):
             return None
         try:
-            value = read_image_from_file(self._get_input_filename(key), **parameters)
+            value = read_image_from_file(self.get_input_filename(key), **parameters)
         except FileNotFoundError:
             if permissive:
                 return None
@@ -1115,7 +1118,7 @@ class ROI:
 
         dna_label, dna, minmax = self._get_channel("DNA", dont_warn=True)
 
-        nuclei = self._get_input_filename("nuclei_mask").exists()
+        nuclei = self.get_input_filename("nuclei_mask").exists()
         ncols = 5 if nuclei else 4
 
         if axes is None:

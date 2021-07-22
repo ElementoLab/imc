@@ -287,6 +287,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "from_probabilities",
                     "action": "store_true",
+                    "help": "Whether to use a probability file as the input for segmentation. That's the output of `imc predict`.",
                 },
             },
             {
@@ -294,6 +295,7 @@ cli_config = {
                 "kwargs": {
                     "choices": ["stardist", "deepcell", "cellpose"],
                     "default": "stardist",
+                    "help": "Which model to use for segmentation. Defaults to 'stardist'.",
                 },
             },
             {
@@ -301,6 +303,7 @@ cli_config = {
                 "kwargs": {
                     "choices": ["nuclear", "cytoplasm", "both"],
                     "default": "nuclear",
+                    "help": "Which cellular compartment to segment. Defaults to 'nuclear'.",
                 },
             },
             {
@@ -310,10 +313,20 @@ cli_config = {
                     "help": "Comma-delimited list of channels to exclude from stack.",
                 },
             },
-            {"args": ["--output-mask-suffix"], "kwargs": {"default": ""}},
+            {
+                "args": ["--output-mask-suffix"],
+                "kwargs": {
+                    "default": "",
+                    "help": "An optional additional suffix for the output mask.",
+                },
+            },
             {
                 "args": ["--no-save"],
-                "kwargs": {"dest": "save", "action": "store_false"},
+                "kwargs": {
+                    "dest": "save",
+                    "action": "store_false",
+                    "help": "Whether to not save segmentation.",
+                },
             },
             {
                 "args": ["--overwrite"],
@@ -337,6 +350,14 @@ cli_config = {
                     "dest": "postprocessing",
                     "action": "store_false",
                     "help": "Whether postprocessing of DeepCell segmentation for compartment 'both' should not be performed.",
+                },
+            },
+            {
+                "args": ["--verbose"],
+                "kwargs": {
+                    "dest": "quiet",
+                    "action": "store_false",
+                    "help": "Whether to output more detail of the process.",
                 },
             },
         ],

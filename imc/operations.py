@@ -547,7 +547,7 @@ def phenotyping(
         a = sc.read(a)
 
     if "sample" not in a.obs.columns:
-        a.obs["sample"] = a.obs["roi"].str.extract(r"(.*)-\d+")[0]
+        a.obs["sample"] = a.obs["roi"].str.extract(r"(.*)-\d+")[0].fillna("")
     if a.raw is None:
         a.raw = a
 
@@ -589,14 +589,15 @@ def phenotyping(
         a = anndata.concat(_ads)
         sc.pp.scale(a)
     if remove_batch:
-        sc.pp.combat(a, batch_variable)
-        sc.pp.scale(a)
+        if a.obs[batch_variable].nunique() > 1:
+            sc.pp.combat(a, batch_variable)
+            sc.pp.scale(a)
 
     # Dimensionality reduction
     print("Performing dimensionality reduction.")
     sc.pp.pca(a)
     if remove_batch:
-        sc.external.pp.bbknn(a, batch_key="sample")
+        sc.external.pp.bbknn(a, batch_key=batch_variable)
     else:
         sc.pp.neighbors(a)
     if "umap" in dim_res_algos:
@@ -646,14 +647,7 @@ def plot_phenotyping(
     dim_res_algos: tp.Sequence[str] = ("umap",),
     clustering_resolutions: tp.Sequence[float] = None,
 ):
-    # TODO: replace call to get_scanpy_func with sc.pl.embedding
-    def get_scanpy_func(algo: str) -> tp.Callable:
-        from functools import partial
-
-        if algo != "pymde":
-            return getattr(sc.pl, algo)
-        return partial(sc.pl.scatter, basis="pymde")
-
+    from matplotlib.backends.backend_pdf import PdfPages
     from imc.graphics import add_centroids
     from seaborn_extensions import clustermap
 
@@ -673,7 +667,7 @@ def plot_phenotyping(
     output_prefix.parent.mkdir()
 
     if "sample" not in a.obs.columns:
-        a.obs["sample"] = a.obs["roi"].str.extract(r"(.*)-\d+")[0]
+        a.obs["sample"] = a.obs["roi"].str.extract(r"(.*)-\d+")[0].fillna("")
 
     if tech_channels is None:
         tech_channels = [
@@ -695,7 +689,6 @@ def plot_phenotyping(
 
     # Plot projections
     non_tech_channels = a.var.index[~a.var.index.isin(tech_channels)].tolist()
-    vmin = None
     vmax = (
         [None]
         + np.percentile(a.raw[:, non_tech_channels].X, 95, axis=0).tolist()
@@ -712,24 +705,23 @@ def plot_phenotyping(
     )
     for algo in tqdm(dim_res_algos):
         f = output_prefix + f"{algo}.pdf"
-        projf = get_scanpy_func(algo)
-        axes = projf(
-            a,
-            color=color,
-            show=False,
-            vmin=vmin,
-            vmax=vmax,
-            use_raw=True,
-        )
-        fig = axes[0].figure
-        for ax, res in zip(axes[-len(clustering_resolutions) :], clustering_resolutions):
-            add_centroids(a, res=res, ax=ax, algo=algo)
-
-        rasterize_scanpy(fig)
-
-        # fig.savefig(f.replace_(".pdf", "nofilter.pdf"), **figkws)
-        fig.savefig(f, **figkws)
-        plt.close(fig)
+        with PdfPages(f) as pdf:
+            for i, col in enumerate(color):
+                fig = sc.pl.embedding(
+                    a,
+                    basis=algo,
+                    color=col,
+                    show=False,
+                    vmax=vmax[i],
+                    use_raw=True,
+                ).figure
+                rasterize_scanpy(fig)
+                if i >= len(color) - len(clustering_resolutions):
+                    res = clustering_resolutions[i - len(color)]
+                    add_centroids(a, res=res, ax=fig.axes[0], algo=algo)
+                plt.figure(fig)
+                pdf.savefig()
+                plt.close(fig)
 
         # Plot ROIs separately
         f = output_prefix + f"{algo}.sample_roi.pdf"
