@@ -3,6 +3,7 @@ Segmentation of image stacks using pretrained deep learning models
 such as Stardist and DeepCell.
 """
 
+
 from typing import Union, Literal, Dict, Tuple
 from functools import partial
 
@@ -12,6 +13,7 @@ import matplotlib.pyplot as plt
 from skimage.exposure import equalize_hist as eq
 from skimage.transform import resize
 import tifffile
+import tensorflow as tf
 
 from imc.types import Array, Figure, Path, Series
 from imc.graphics import random_label_cmap

@@ -50,6 +50,10 @@ def main(cli: tp.Sequence[str] = None) -> int:
         if _in.exists():
             _in.rename(roi.get_input_filename("probabilities"))
 
+    if args.cleanup:
+        for roi in rois:
+            roi.get_input_filename("ilastik_input").unlink()
+
     print("Finished predict step!")
     return 0
 

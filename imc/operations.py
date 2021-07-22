@@ -720,7 +720,7 @@ def plot_phenotyping(
                     res = clustering_resolutions[i - len(color)]
                     add_centroids(a, res=res, ax=fig.axes[0], algo=algo)
                 plt.figure(fig)
-                pdf.savefig()
+                pdf.savefig(**figkws)
                 plt.close(fig)
 
         # Plot ROIs separately

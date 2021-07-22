@@ -5,6 +5,17 @@ import getpass
 
 from imc.types import Path
 
+import os
+import logging
+
+# Suppress tensorflow inital output
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # FATAL
+logging.getLogger("tensorflow").setLevel(logging.FATAL)
+
+# Suppress tensorflow GPU use
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+
 # TODO: move to global package __init__/config
 if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
     try:
@@ -271,6 +282,14 @@ cli_config = {
             {
                 "args": ["--overwrite"],
                 "kwargs": {"dest": "overwrite", "action": "store_true"},
+            },
+            {
+                "args": ["--no-cleanup"],
+                "kwargs": {
+                    "dest": "cleanup",
+                    "action": "store_false",
+                    "help": "Whether to not cleanup ilastik input files. Default is to clean them.",
+                },
             },
         ],
         "segment": [
