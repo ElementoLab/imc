@@ -646,6 +646,14 @@ def plot_phenotyping(
     dim_res_algos: tp.Sequence[str] = ("umap",),
     clustering_resolutions: tp.Sequence[float] = None,
 ):
+    # TODO: replace call to get_scanpy_func with sc.pl.embedding
+    def get_scanpy_func(algo: str) -> tp.Callable:
+        from functools import partial
+
+        if algo != "pymde":
+            return getattr(sc.pl, algo)
+        return partial(sc.pl.scatter, basis="pymde")
+
     from imc.graphics import add_centroids
     from seaborn_extensions import clustermap
 

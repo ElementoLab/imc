@@ -499,6 +499,14 @@ cli_config = {
                 },
             },
             {
+                "args": ["--no-compute"],
+                "kwargs": {
+                    "dest": "compute",
+                    "action": "store_false",
+                    "help": "Whether to comput phenotypes. Defaults to True.",
+                },
+            },
+            {
                 "args": ["--no-plot"],
                 "kwargs": {
                     "dest": "plot",
