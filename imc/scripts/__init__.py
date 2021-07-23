@@ -1,12 +1,14 @@
+import os
 import sys
+import logging
 import typing as tp
 import argparse
 import getpass
+import json
+from argparse import RawTextHelpFormatter
 
 from imc.types import Path
 
-import os
-import logging
 
 # Suppress tensorflow inital output
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # FATAL
@@ -52,6 +54,18 @@ DEFAULT_LIB_DIR = (DEFAULT_IMC_DIR / "lib").mkdir()
 DEFAULT_MODELS_DIR = (DEFAULT_IMC_DIR / "models").mkdir()
 
 
+json_example = {
+    "segment": ["--model", "stardist"],
+    "quantify": ["--no-morphology", "--layers", "nuclei"],
+    "phenotype": [
+        "--dim-res-algos",
+        "umap,diffmap",
+        "--clustering-resolutions",
+        "0.5,1.0",
+    ],
+}
+process_step_order = ["inspect", "prepare", "predict", "segment", "quantify", "phenotype"]
+
 epilog = "https://github.com/ElementoLab/imc"
 cli_config = {
     "main": {
@@ -62,7 +76,8 @@ cli_config = {
     "subcommands": {
         "process": {
             "prog": "imc process",
-            "description": "Process raw IMC files end-to-end.",
+            "description": "Process raw IMC files end-to-end (raw signal to cell phenotypes).\n"
+            "Supports MCD, TIFF or TXT as input.",
             "epilog": epilog,
         },
         "inspect": {
@@ -92,7 +107,7 @@ cli_config = {
         },
         "phenotype": {
             "prog": "imc phenotype",
-            "description": "Phenotype cells.",
+            "description": "Phenotype cells in quantification matrix.",
             "epilog": epilog,
         },
         "view": {
@@ -108,9 +123,52 @@ cli_config = {
                     "dest": "files",
                     "nargs": "+",
                     "type": Path,
-                    "help": "Input files to process. Can be MCD or TIFF.",
+                    "help": "Input files to process. Can be MCD, TIFF, or TXT.",
                 }
-            }
+            },
+            {
+                "args": ["-s", "--steps"],
+                "kwargs": {
+                    "dest": "steps",
+                    "default": None,
+                    "help": "Comma-delimited list of processing steps to perform.\n"
+                    "By default this will be:\n\t- "
+                    + "\n\t- ".join(process_step_order)
+                    + "\nunless overwridden by this option.",
+                },
+            },
+            {
+                "args": ["--start-step"],
+                "kwargs": {
+                    "dest": "start_step",
+                    "default": None,
+                    "help": "Step at which to start processing. "
+                    "Default is to run all steps.",
+                },
+            },
+            {
+                "args": ["--stop-step"],
+                "kwargs": {
+                    "dest": "stop_step",
+                    "default": None,
+                    "help": "Step at which to stop processing. "
+                    "Default is to run all steps.",
+                },
+            },
+            {
+                "args": ["-c", "--config"],
+                "kwargs": {
+                    "dest": "config",
+                    "default": None,
+                    "type": Path,
+                    "help": "Path to JSON file with configuration for the various steps.\n"
+                    "Each step will be run with the options provided.\n"
+                    "Keys are steps and values are lists of command-line options.\n"
+                    "\nFor example:\n$> cat config.json\n"
+                    + json.dumps(json_example, indent=4)
+                    + "\n$> imc process -c config.json file1.mcd file2.mcd",
+                },
+            },
         ],
         "inspect": [
             {"kwargs": {"dest": "mcd_files", "nargs": "+", "type": Path}},
@@ -288,7 +346,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "cleanup",
                     "action": "store_false",
-                    "help": "Whether to not cleanup ilastik input files. Default is to clean them.",
+                    "help": "Whether to not cleanup ilastik input files. "
+                    "Default is to clean them.",
                 },
             },
         ],
@@ -306,7 +365,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "from_probabilities",
                     "action": "store_true",
-                    "help": "Whether to use a probability file as the input for segmentation. That's the output of `imc predict`.",
+                    "help": "Whether to use a probability file as the input for segmentation. "
+                    "That's the output of `imc predict`.",
                 },
             },
             {
@@ -314,7 +374,8 @@ cli_config = {
                 "kwargs": {
                     "choices": ["stardist", "deepcell", "cellpose"],
                     "default": "stardist",
-                    "help": "Which model to use for segmentation. Defaults to 'stardist'.",
+                    "help": "Which model to use for segmentation. "
+                    "Default is 'stardist'.",
                 },
             },
             {
@@ -322,7 +383,8 @@ cli_config = {
                 "kwargs": {
                     "choices": ["nuclear", "cytoplasm", "both"],
                     "default": "nuclear",
-                    "help": "Which cellular compartment to segment. Defaults to 'nuclear'.",
+                    "help": "Which cellular compartment to segment. "
+                    "Default is 'nuclear'.",
                 },
             },
             {
@@ -368,7 +430,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "postprocessing",
                     "action": "store_false",
-                    "help": "Whether postprocessing of DeepCell segmentation for compartment 'both' should not be performed.",
+                    "help": "Whether postprocessing of DeepCell segmentation when using compartment 'both' should not be performed.",
                 },
             },
             {
@@ -401,7 +463,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "layers",
                     "default": "cell",
-                    "help": "Comma-delimited list of layers of segmentation to quantify. Defaults to 'cell'.",
+                    "help": "Comma-delimited list of layers of segmentation to quantify. "
+                    "Default is 'cell'.",
                 },
             },
             {
@@ -415,7 +478,8 @@ cli_config = {
                 "args": ["--output"],
                 "kwargs": {
                     "dest": "output",
-                    "help": "Output file with quantification. Will default to 'processed/quantification.csv'.",
+                    "help": "Output file with quantification. "
+                    "Default is 'processed/quantification.csv'.",
                 },
             },
             {
@@ -423,7 +487,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "output_h5ad",
                     "action": "store_false",
-                    "help": "Don't output quantification in h5ad format. Default is to write h5ad.",
+                    "help": "Don't output quantification in h5ad format. "
+                    "Default is to write h5ad.",
                 },
             },
             {
@@ -436,7 +501,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "a",
                     "type": Path,
-                    "help": "h5ad file with quantification.",
+                    "help": "Path to H5ad file with quantification.",
                 }
             },
             {
@@ -445,7 +510,7 @@ cli_config = {
                     "default": "processed/phenotyping",
                     "type": Path,
                     "dest": "output_dir",
-                    "help": "Output directory. Will default to 'processed/phnotyping'.",
+                    "help": "Output directory. " "Default is 'processed/phenotyping'.",
                 },
             },
             {
@@ -469,7 +534,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "filter_cells",
                     "action": "store_false",
-                    "help": "Whether to filter dubious cells out. Defaults to True.",
+                    "help": "Whether to filter dubious cells out." " Default is True.",
                 },
             },
             {
@@ -477,7 +542,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "z_score",
                     "action": "store_false",
-                    "help": "Whether to Z-score transform the intensity values. Defaults to True.",
+                    "help": "Whether to Z-score transform the intensity values. "
+                    "Default is True.",
                 },
             },
             {
@@ -486,7 +552,8 @@ cli_config = {
                     "dest": "z_score_per",
                     "default": "roi",
                     "choices": ["roi", "sample"],
-                    "help": "Whether to z-score values per ROI or per Sample.",
+                    "help": "Whether to z-score values per ROI or per Sample. "
+                    "Default is 'roi'.",
                 },
             },
             {
@@ -494,7 +561,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "z_score_cap",
                     "default": 3.0,
-                    "help": "Absolute value to cap z-scores at.",
+                    "help": "Absolute value to cap z-scores at." " Default is '3.0'.",
                 },
             },
             {
@@ -502,7 +569,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "remove_batch",
                     "action": "store_false",
-                    "help": "Whether to remove batch effects. Defaults to True.",
+                    "help": "Whether to remove batch effects." " Default is True.",
                 },
             },
             {
@@ -510,7 +577,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "batch_variable",
                     "default": "sample",
-                    "help": "Which variable to use for batch effect removal.",
+                    "help": "Which variable to use for batch effect removal. "
+                    "Default is 'sample'.",
                 },
             },
             {
@@ -518,7 +586,9 @@ cli_config = {
                 "kwargs": {
                     "dest": "dim_res_algos",
                     "default": "umap",
-                    "help": "Comma-delimited string with algorithms to use for dimensionality reduction. Choose a combination of 'umap', 'diffmap', 'pymde'. Default is only 'umap'.",
+                    "help": "Comma-delimited string with algorithms to use for dimensionality reduction. "
+                    "Choose a combination from 'umap', 'diffmap', 'pymde'. "
+                    "Default is only 'umap'.",
                 },
             },
             {
@@ -527,7 +597,8 @@ cli_config = {
                     "dest": "clustering_method",
                     "default": "leiden",
                     "choices": ["leiden", "parc"],
-                    "help": "Method to use for cell clustering.",
+                    "help": "Method to use for cell clustering. "
+                    "Default is 'leiden'. 'parc' requires that package to be installed.",
                 },
             },
             {
@@ -535,7 +606,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "clustering_resolutions",
                     "default": "0.5,1.0,1.5,2.5",
-                    "help": "Comma-delimited list of floats with various resolutions to do clustering at.",
+                    "help": "Comma-delimited list of floats with various resolutions to do clustering at. "
+                    "Default is '0.5,1.0,1.5,2.5'.",
                 },
             },
             {
@@ -543,7 +615,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "compute",
                     "action": "store_false",
-                    "help": "Whether to comput phenotypes. Defaults to True.",
+                    "help": "Whether to comput phenotypes." " Default is True.",
                 },
             },
             {
@@ -551,7 +623,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "plot",
                     "action": "store_false",
-                    "help": "Whether to plot phenotypes. Defaults to True.",
+                    "help": "Whether to plot phenotypes." " Default is True.",
                 },
             },
         ],
@@ -568,21 +640,21 @@ cli_config = {
                 "args": ["-u", "--up-key"],
                 "kwargs": {
                     "default": "w",
-                    "help": "Key to get previous channel.",
+                    "help": "Key to get previous channel." " Default is 'w'.",
                 },
             },
             {
                 "args": ["-d", "--down-key"],
                 "kwargs": {
                     "default": "s",
-                    "help": "Key to get next channel.",
+                    "help": "Key to get next channel." " Default is 's'.",
                 },
             },
             {
                 "args": ["-l", "--log-key"],
                 "kwargs": {
                     "default": "l",
-                    "help": "Key to toggle log transformation.",
+                    "help": "Key to toggle log transformation." " Default is 'l'.",
                 },
             },
             {
@@ -590,7 +662,9 @@ cli_config = {
                 "kwargs": {
                     "dest": "napari",
                     "action": "store_true",
-                    "help": "Use napari and napari-imc to view MCD files.",
+                    "help": "Use napari and napari-imc to view MCD files. "
+                    "Default is not to use napari. "
+                    "This requires napari package to be installed.",
                 },
             },
             {
@@ -598,7 +672,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "kwargs",
                     "default": None,
-                    "help": "Additional parameters for plot customization passed in the form 'key1=value1,key2=value2'. For example '--kwargs \"cmap=RdBu_r,vmin=0,vmax=3\"'.",
+                    "help": "Additional parameters for plot customization passed in the form 'key1=value1,key2=value2'. "
+                    "For example '--kwargs \"cmap=RdBu_r,vmin=0,vmax=3\"'.",
                 },
             },
         ],
@@ -607,7 +682,7 @@ cli_config = {
 
 
 def build_cli(cmd: tp.Sequence[str]) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(**cli_config["subcommands"][cmd])  # type: ignore[index]
+    parser = argparse.ArgumentParser(**cli_config["subcommands"][cmd], formatter_class=RawTextHelpFormatter)  # type: ignore[index]
     parser = build_params(parser, cli_config["subcommand_arguments"][cmd])  # type: ignore[index]
     return parser
 

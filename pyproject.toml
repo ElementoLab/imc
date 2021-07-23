@@ -51,11 +51,14 @@ dynamic = ['version']
 
 [project.optional-dependencies]
 # not yet supported by pip!
+stardist = [
+    "stardist>=0.7.1,<1.0.0",
+]
 deepcell = [
     "DeepCell>=0.8.3,<1.0.0",
 ]
 cellpose = [
-    "cellpose>=0.1.0.1,<1.0.0",
+    "cellpose>=0.6.5,<1.0.0",
 ]
 dev = [
     "wheel",
@@ -147,6 +150,9 @@ sphinx-issues = "^1.2.0"
 sphinx-rtd-theme = "^0.5.0"
 
 [tool.poetry.extras]
+stardist = [
+    "stardist",
+]
 deepcell = [
     "DeepCell",
 ]

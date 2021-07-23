@@ -571,9 +571,14 @@ def phenotyping(
 
     # Filter out cells
     if filter_cells:
-        exclude = a.obs["solidity"] == 1
-        p = (exclude).sum() / a.shape[0] * 100
-        print(f"Filtered out {exclude.sum()} cells ({p:.2f} %)")
+        if "solidity" not in a.obs.columns:
+            print(
+                "Could not filter cells based on solidity likely because morphological quantification was not performed!"
+            )
+        else:
+            exclude = a.obs["solidity"] == 1
+            p = (exclude).sum() / a.shape[0] * 100
+            print(f"Filtered out {exclude.sum()} cells ({p:.2f} %)")
 
     # Scaling/Normalization
     print("Performing data scaling/normalization.")

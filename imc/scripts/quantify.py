@@ -62,7 +62,8 @@ def main(cli: tp.Sequence[str] = None) -> int:
         cols = ["roi", "obj_id"] + (
             ["X_centroid", "Y_centroid"] if args.morphology else []
         )
-        ann = AnnData(quant.drop(cols, axis=1), obs=quant[cols])
+        cols += ["layer"] if "layer" in quant.columns else []
+        ann = AnnData(quant.drop(cols, axis=1, errors="ignore"), obs=quant[cols])
         f = Path("processed").mkdir() / "quantification.h5ad"
         sc.write(f, ann)
         print(f"Wrote h5ad file to '{f.absolute()}'.")

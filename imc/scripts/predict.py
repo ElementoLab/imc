@@ -73,7 +73,7 @@ def predict_with_ilastik(
         """
     # Shell expansion of input files won't happen in subprocess call
     cmd += " ".join([x.replace_(" ", r"\ ").as_posix() for x in tiff_files])
-    return run_shell_command(cmd)
+    return run_shell_command(cmd, quiet=True)
 
 
 def get_ilastik(lib_dir: Path, version: str = "1.3.3post2") -> Path:
@@ -160,7 +160,7 @@ def download_file(url: str, output_file: tp.Union[Path, str], chunk_size=1024) -
             outfile.writelines(response.iter_content(chunk_size=chunk_size))
 
 
-def run_shell_command(cmd: str, dry_run: bool = False) -> int:
+def run_shell_command(cmd: str, dry_run: bool = False, quiet: bool = False) -> int:
     """
     Run a system command.
 
@@ -177,14 +177,16 @@ def run_shell_command(cmd: str, dry_run: bool = False) -> int:
     symbol = any(x in cmd for x in ["&", "&&", "|"])
     source = cmd.startswith("source")
     shell = bool(symbol or source)
-    print(
-        "Running command:\n",
-        " in shell" if shell else "",
-        textwrap.dedent(cmd) + "\n",
-    )
+    if not quiet:
+        print(
+            "Running command:\n",
+            " in shell" if shell else "",
+            textwrap.dedent(cmd) + "\n",
+        )
     if not dry_run:
         if shell:
-            print("Running command in shell.")
+            if not quiet:
+                print("Running command in shell.")
             code = subprocess.call(cmd, shell=shell)
         else:
             # Allow spaces in file names

@@ -355,7 +355,8 @@ class ROI:
         if self._nuclei_mask is not None:
             return self._nuclei_mask
         nucl = self.nuclei_mask_o
-        nucl[~np.isin(nucl, np.unique(self.cell_mask)[1:])] = 0
+        if self.get_input_filename("cell_mask").exists():
+            nucl[~np.isin(nucl, np.unique(self.cell_mask)[1:])] = 0
         self._nuclei_mask = nucl
         return self._nuclei_mask
 

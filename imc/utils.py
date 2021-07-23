@@ -602,7 +602,6 @@ def mcd_to_dir(
         if n_crops > 0:
             (output_dir / "ilastik").mkdir()
             s = tuple(x * 2 for x in full.shape[1:])
-        else:
             if (full.shape[1] < crop_width) or (full.shape[0] < crop_height):
                 msg = (
                     "Image is smaller than the requested crop size for ilastik training."
@@ -775,7 +774,7 @@ def plot_panoramas_rois(
         try:
             pano_img = imageio.imread(f"{panorama_image_prefix}{i + 1}.png")
             pano_imgs[pano["ID"]] = pano_img
-            print(f"Read image file for panorama '{i + 1}'")
+            # print(f"Read image file for panorama '{i + 1}'")
             ax.imshow(pano_img, extent=(x, x + width, y, y + height))
         except FileNotFoundError:
             # # First panorama is the slide (won't be available)
