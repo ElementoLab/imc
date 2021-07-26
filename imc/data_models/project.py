@@ -15,6 +15,7 @@ import parmap  # type: ignore
 
 import matplotlib.pyplot as plt  # type: ignore
 import seaborn as sns  # type: ignore
+from seaborn_extensions import clustermap
 
 from imc.data_models.sample import IMCSample
 from imc.data_models.roi import ROI
@@ -412,7 +413,7 @@ class Project:
         n = len(samples)
         m = max([sample.n_rois for sample in samples])
         fig, axes = plt.subplots(n, m, figsize=(3 * m, 3 * n), squeeze=False)
-        patches: tp.List[Patch] = tp.List()
+        patches: tp.List[Patch] = list()
         for i, sample in enumerate(samples):
             for j, roi in enumerate([roi for roi in rois if roi in sample.rois]):
                 patches += roi.plot_cell_types(
@@ -462,7 +463,7 @@ class Project:
         res = res / res.mean()
 
         if plot:
-            res = np.log1p(res)
+            res: DataFrame = np.log1p(res)
             # calculate mean intensity
             channel_mean = res.mean(axis=1).rename("channel_mean")
 
@@ -472,20 +473,20 @@ class Project:
                 index=[roi.name for roi in rois],
                 name="cell_density",
             )
-            if all(cell_density < 0):
+            if all(cell_density < 0.1):
                 cell_density *= 1000
 
             def_kwargs = dict(z_score=0, center=0, robust=True, cmap="RdBu_r")
             def_kwargs.update(kwargs)
             # TODO: add {row,col}_colors colorbar to heatmap
             if output_prefix is None:
-                output_prefix = self.results_dir / "qc" / self.name
+                output_prefix = (self.results_dir / "qc").mkdir() / self.name
             for kws, label, cbar_label in [
-                ({}, "", ""),
+                (dict(), "", ""),
                 (def_kwargs, ".z_score", " (Z-score)"),
             ]:
                 plot_file = output_prefix + f".mean_per_channel.clustermap{label}.svg"
-                grid = sns.clustermap(
+                grid = clustermap(
                     res,
                     cbar_kws=dict(label=red_func.capitalize() + cbar_label),
                     row_colors=channel_mean,

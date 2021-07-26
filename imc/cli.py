@@ -7,6 +7,7 @@ metadata as YAML files, and panel information as CSV files.
 
 import sys
 import argparse
+from argparse import RawTextHelpFormatter
 import typing as tp
 
 from imc.scripts.process import main as process
@@ -49,7 +50,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
 
 
 def get_args() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(**cli_config["main"])  # type: ignore[index]
+    parser = argparse.ArgumentParser(**cli_config["main"], formatter_class=RawTextHelpFormatter)  # type: ignore[index]
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 

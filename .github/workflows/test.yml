@@ -48,6 +48,7 @@ jobs:
         # List output files
         ls -l processed/
         ls -l processed/${SAMPLE}
+        ls -l results/phenotyping
     - name: Cache resources
       id: cache-resources
       uses: actions/cache@v2
@@ -93,7 +94,7 @@ jobs:
         # List output files
         ls -l processed/
         ls -l processed/${SAMPLE}
-        ls -l processed/phenotyping
+        ls -l results/phenotyping
     - name: Cache resources
       id: cache-resources
       uses: actions/cache@v2

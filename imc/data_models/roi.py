@@ -1143,14 +1143,14 @@ class ROI:
         i = 0
         if nuclei:
             _axes[3 + i].set_title("Nuclei")
-            _axes[3 + i].imshow(self.nuclei_mask > 0, cmap=get_random_label_cmap())
+            _axes[3 + i].imshow(
+                self.nuclei_mask, cmap=get_random_label_cmap(), interpolation="none"
+            )
             i += 1
         _axes[3 + i].set_title("Cells")
-        mask = self.cell_mask
-        if mask.dtype == "bool":
-            mask = mask > 0
-        mask = np.ma.masked_array(mask, mask == 0)
-        _axes[3 + i].imshow(mask, cmap=get_random_label_cmap(), interpolation="none")
+        _axes[3 + i].imshow(
+            self.cell_mask, cmap=get_random_label_cmap(), interpolation="none"
+        )
         if add_scale:
             _add_scale(_axes[3 + i])
         # To plot jointly

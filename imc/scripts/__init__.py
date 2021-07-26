@@ -54,6 +54,22 @@ DEFAULT_LIB_DIR = (DEFAULT_IMC_DIR / "lib").mkdir()
 DEFAULT_MODELS_DIR = (DEFAULT_IMC_DIR / "models").mkdir()
 
 
+def build_cli(cmd: tp.Sequence[str]) -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(**cli_config["subcommands"][cmd], formatter_class=RawTextHelpFormatter)  # type: ignore[index]
+    parser = build_params(parser, cli_config["subcommand_arguments"][cmd])  # type: ignore[index]
+    return parser
+
+
+def build_params(
+    parser: argparse.ArgumentParser, config: tp.List[tp.Dict[str, tp.Dict[str, str]]]
+) -> argparse.ArgumentParser:
+    for opt in config:
+        args = opt.get("args") or {}
+        kwargs = opt.get("kwargs") or {}
+        parser.add_argument(*args, **kwargs)  # type: ignore[arg-type]
+    return parser
+
+
 json_example = {
     "segment": ["--model", "stardist"],
     "quantify": ["--no-morphology", "--layers", "nuclei"],
@@ -70,7 +86,8 @@ epilog = "https://github.com/ElementoLab/imc"
 cli_config = {
     "main": {
         "prog": "imc",
-        "description": "A package for the analysis of Imaging Mass Cytometry data.",
+        "description": "A package for the analysis of Imaging Mass Cytometry data.\n"
+        "Select one of the available commands and use '--help' after each to see all available options.\n\n",
         "epilog": epilog,
     },
     "subcommands": {
@@ -507,10 +524,10 @@ cli_config = {
             {
                 "args": ["--output-dir"],
                 "kwargs": {
-                    "default": "processed/phenotyping",
+                    "default": "results/phenotyping",
                     "type": Path,
                     "dest": "output_dir",
-                    "help": "Output directory. " "Default is 'processed/phenotyping'.",
+                    "help": "Output directory. " "Default is 'results/phenotyping'.",
                 },
             },
             {
@@ -679,19 +696,3 @@ cli_config = {
         ],
     },
 }
-
-
-def build_cli(cmd: tp.Sequence[str]) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(**cli_config["subcommands"][cmd], formatter_class=RawTextHelpFormatter)  # type: ignore[index]
-    parser = build_params(parser, cli_config["subcommand_arguments"][cmd])  # type: ignore[index]
-    return parser
-
-
-def build_params(
-    parser: argparse.ArgumentParser, config: tp.List[tp.Dict[str, tp.Dict[str, str]]]
-) -> argparse.ArgumentParser:
-    for opt in config:
-        args = opt.get("args") or {}
-        kwargs = opt.get("kwargs") or {}
-        parser.add_argument(*args, **kwargs)  # type: ignore[arg-type]
-    return parser
