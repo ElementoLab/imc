@@ -354,78 +354,94 @@ def fix_signal_axis_dependency(
     return corr_d
 
 
+def channel_stats(roi: _roi.ROI, channels: tp.Sequence[str] = None):
+    if channels is None:
+        channels = roi.channel_labels.tolist()
+    stack = roi._get_channels(channels)[1]
+    mask = roi.cell_mask == 0
+    res = dict()
+    res["wmeans"] = pd.Series(stack.mean(axis=(1, 2)), index=channels)
+    res["wstds"] = pd.Series(stack.std(axis=(1, 2)), index=channels)
+    res["cmeans"] = pd.Series(
+        [np.ma.masked_array(stack[i], mask=mask).mean() for i in range(len(channels))],
+        index=channels,
+    )
+    res["cstds"] = pd.Series(
+        [np.ma.masked_array(stack[i], mask=mask).std() for i in range(len(channels))],
+        index=channels,
+    )
+    res["emeans"] = pd.Series(
+        [np.ma.masked_array(stack[i], mask=~mask).mean() for i in range(len(channels))],
+        index=channels,
+    )
+    res["estds"] = pd.Series(
+        [np.ma.masked_array(stack[i], mask=~mask).std() for i in range(len(channels))],
+        index=channels,
+    )
+    res["noises"] = pd.Series([estimate_noise(ch) for ch in stack], index=channels)
+    res["sigmas"] = pd.Series(
+        estimate_sigma(np.moveaxis(stack, 0, -1), multichannel=True), index=channels
+    )
+    return res
+
+
 @MEMORY.cache
 def measure_channel_background(
     rois: tp.Sequence[_roi.ROI], plot: bool = True, output_prefix: Path = None
 ) -> Series:
-    # Quantify whole image area
-    _imeans: tp.Dict[str, Series] = dict()
-    _istds: tp.Dict[str, Series] = dict()
-    # Quantify only cell area
-    _cmeans: tp.Dict[str, Series] = dict()
-    _cstds: tp.Dict[str, Series] = dict()
-    for roi in rois:
-        stack = roi.stack
-        mask = roi.cell_mask
-        _imeans[roi.name] = pd.Series(stack.mean(axis=(1, 2)), index=roi.channel_labels)
-        _istds[roi.name] = pd.Series(stack.std(axis=(1, 2)), index=roi.channel_labels)
-        _cmeans[roi.name] = pd.Series(
-            [
-                np.ma.masked_array(stack[i], mask).mean()
-                for i in range(roi.channel_number)
-            ],
-            index=roi.channel_labels,
-        )
-        _cstds[roi.name] = pd.Series(
-            [np.ma.masked_array(stack[i], mask).std() for i in range(roi.channel_number)],
-            index=roi.channel_labels,
-        )
-    imeans = pd.DataFrame(_imeans) + 1
-    istds = pd.DataFrame(_istds)
-    iqv2s = np.sqrt(istds / imeans)
-    cmeans = pd.DataFrame(_cmeans) + 1
-    cstds = pd.DataFrame(_cstds)
-    cqv2s = np.sqrt(cstds / cmeans)
+    from imc.utils import align_channels_by_name
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-    fore_backg = ((imeans - cmeans) / (cmeans + imeans)).mean(1)
-    fore_backg_disp = pd.Series(np.log1p(fore_backg.abs() * 1e4))
+    if plot:
+        assert (
+            output_prefix is not None
+        ), "If `plot` is True, `output_prefix` must be given."
 
-    noise = pd.Series(
-        np.fromiter(
-            map(estimate_noise, [lay for roi in rois for lay in roi.stack]),
-            float,
-        )
-        .reshape(len(rois), -1)
-        .mean(0),
-        index=cmeans.index,
+    _channels = pd.DataFrame(
+        {r.name: r.channel_labels[~r.channel_exclude.values] for r in rois}
     )
+    channels = align_channels_by_name(_channels).dropna().iloc[:, 0].tolist()
+    roi_names = [r.name for r in rois]
 
-    sigmas = pd.DataFrame(
-        parmap.map(
-            estimate_sigma,
-            [np.moveaxis(roi.stack, 0, -1) for roi in rois],
-            multichannel=True,
-        ),
-        index=[roi.name for roi in rois],
-        columns=rois[0].channel_labels,
-    ).T
+    res = parmap.map(channel_stats, rois, channels=channels, pm_pbar=True)
+
+    wmeans = pd.DataFrame((x["wmeans"] for x in res), index=roi_names).T
+    wstds = pd.DataFrame((x["wstds"] for x in res), index=roi_names).T
+    wqv2s = np.sqrt(wstds / wmeans)
+    cmeans = pd.DataFrame((x["cmeans"] for x in res), index=roi_names).T
+    cstds = pd.DataFrame((x["cstds"] for x in res), index=roi_names).T
+    cqv2s = np.sqrt(cstds / cmeans)
+    emeans = pd.DataFrame((x["emeans"] for x in res), index=roi_names).T
+    estds = pd.DataFrame((x["estds"] for x in res), index=roi_names).T
+    eqv2s = np.sqrt(estds / emeans)
+    fore_backg: DataFrame = np.log(cmeans / emeans)
+    # fore_backg_disp = np.log1p(((cmeans / emeans) / (cmeans + emeans))).mean(1)
+    noises = pd.DataFrame((x["noises"] for x in res), index=roi_names).T
+    sigmas = pd.DataFrame((x["sigmas"] for x in res), index=roi_names).T
 
     # Join all metrics
     metrics = (
-        cmeans.mean(1)
-        .to_frame(name="cell_mean")
-        # .join(cstds.mean(1).rename("cell_std"))
+        wmeans.mean(1)
+        .to_frame(name="image_mean")
+        .join(wstds.mean(1).rename("image_std"))
+        .join(wqv2s.mean(1).rename("image_qv2"))
+        .join(cmeans.mean(1).rename("cell_mean"))
+        .join(cstds.mean(1).rename("cell_std"))
         .join(cqv2s.mean(1).rename("cell_qv2"))
-        .join(imeans.mean(1).rename("image_mean"))
-        # .join(istds.mean(1).rename("image_std"))
-        .join(iqv2s.mean(1).rename("image_qv2"))
-        .join(fore_backg_disp.rename("fore_backg"))
-        .join(noise.rename("noise"))
+        .join(emeans.mean(1).rename("extra_mean"))
+        .join(estds.mean(1).rename("extra_std"))
+        .join(eqv2s.mean(1).rename("extra_qv2"))
+        .join(fore_backg.mean(1).rename("fore_backg"))
+        .join(noises.mean(1).rename("noise"))
         .join(sigmas.mean(1).rename("sigma"))
-    )
+    ).rename_axis(index="channel")
     metrics_std = (metrics - metrics.min()) / (metrics.max() - metrics.min())
 
     if not plot:
+        # Invert QV2
+        sel = metrics_std.columns.str.contains("_qv2")
+        metrics_std.loc[:, sel] = 1 - metrics_std.loc[:, sel]
+        # TODO: better decision on which metrics matter
         return metrics_std.mean(1)
 
     output_prefix = cast(output_prefix)
@@ -433,26 +449,32 @@ def measure_channel_background(
         output_prefix += "."
 
     metrics.to_csv(output_prefix + "channel_background_noise_measurements.csv")
-    metrics_std.to_csv(
-        output_prefix + "channel_background_noise_measurements.standardized.csv"
+    metrics = pd.read_csv(
+        output_prefix + "channel_background_noise_measurements.csv", index_col=0
     )
 
     # Plot
-    fig, axes = plt.subplots(2, 2, figsize=(2 * 4, 2 * 4), sharex="col")
-    axes[0, 0].set_title("Image")
+    fig, axes = plt.subplots(2, 3, figsize=(3 * 4.1, 2 * 4), sharex="col")
+    axes[0, 0].set_title("Whole image")
     axes[0, 1].set_title("Cells")
-
-    # plot mean vs std
+    axes[0, 2].set_title("Extracellular")
     for i, (means, stds, qv2s) in enumerate(
-        [(imeans, istds, iqv2s), (cmeans, cstds, cqv2s)]
+        [(wmeans, wstds, wqv2s), (cmeans, cstds, cqv2s), (emeans, estds, eqv2s)]
     ):
+        # plot mean vs variance
         mean = means.mean(1)
-        std = stds.mean(1)
+        std = stds.mean(1) ** 2
         qv2 = qv2s.mean(1)
+        fb = fore_backg.mean(1)
 
         axes[0, i].set_xlabel("Mean")
-        axes[0, i].set_ylabel("Standard deviation")
-        axes[0, i].scatter(mean, std, c=fore_backg_disp)
+        axes[0, i].set_ylabel("Variance")
+        pts = axes[0, i].scatter(mean, std, c=fb)
+        if i == 2:
+            div = make_axes_locatable(axes[0, i])
+            cax = div.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(pts, cax=cax)
+
         for channel in means.index:
             lab = "left" if np.random.rand() > 0.5 else "right"
             axes[0, i].text(
@@ -465,7 +487,7 @@ def measure_channel_background(
         # plot mean vs qv2
         axes[1, i].set_xlabel("Mean")
         axes[1, i].set_ylabel("Squared coefficient of variation")
-        axes[1, i].scatter(mean, qv2, c=fore_backg_disp)
+        axes[1, i].scatter(mean, qv2, c=fb)
         for channel in means.index:
             lab = "left" if np.random.rand() > 0.5 else "right"
             axes[1, i].text(
@@ -473,19 +495,26 @@ def measure_channel_background(
             )
         axes[1, i].axhline(1, linestyle="--", color="grey")
         axes[1, i].set_xscale("log")
-        if qv2.min() > 0.01:
-            axes[1, i].set_yscale("log")
+        # if qv2.min() > 0.01:
+        #     axes[1, i].set_yscale("log")
     fig.savefig(output_prefix + "channel_mean_variation_noise.svg", **FIG_KWS)
 
-    fig, axes = plt.subplots(1, 2, figsize=(2 * 4, 4))
-    p = fore_backg.sort_values()
-    axes[0].scatter(p.rank(), p)
-    axes[1].scatter(p.abs().rank(), p.abs())
+    fig, axes = plt.subplots(1, 2, figsize=(2 * 6.2, 4))
+    p = fore_backg.mean(1).sort_values()
+    r1 = p.rank()
+    r2 = p.abs().rank()
+    axes[0].scatter(r1, p)
+    axes[1].scatter(r2, p.abs())
+    for i in p.index:
+        axes[0].text(r1.loc[i], p.loc[i], s=i, rotation=90, ha="center", va="bottom")
+        axes[1].text(
+            r2.loc[i], p.abs().loc[i], s=i, rotation=90, ha="center", va="bottom"
+        )
     axes[1].set_yscale("log")
     axes[0].set_xlabel("Channel rank")
     axes[1].set_xlabel("Channel rank")
-    axes[0].set_ylabel("Foreground/Background difference")
-    axes[1].set_ylabel("Foreground/Background difference (abs)")
+    axes[0].set_ylabel("Cellular/extracellular difference")
+    axes[1].set_ylabel("Cellular/extracellular difference (abs)")
     axes[0].axhline(0, linestyle="--", color="grey")
     axes[1].axhline(0, linestyle="--", color="grey")
     fig.savefig(
@@ -493,11 +522,21 @@ def measure_channel_background(
         **FIG_KWS,
     )
 
-    grid = sns.clustermap(metrics_std, xticklabels=True, yticklabels=True)
+    grid = sns.clustermap(
+        metrics_std,
+        xticklabels=True,
+        yticklabels=True,
+        metric="correlation",
+        cbar_kws=dict(label="Variable (min-max)"),
+    )
     grid.fig.savefig(
         output_prefix + "channel_mean_variation_noise.clustermap.svg", **FIG_KWS
     )
-    # TODO: review what metrics should be included in the final decision
+
+    # Invert QV2
+    sel = metrics_std.columns.str.contains("_qv2")
+    metrics_std.loc[:, sel] = 1 - metrics_std.loc[:, sel]
+    # TODO: better decision on which metrics matter
     return metrics_std.mean(1)
 
 
@@ -812,7 +851,7 @@ def single_cell_analysis(
     morphology: bool = True,
     filter_channels: bool = False,
     cell_type_channels: tp.List[str] = None,
-    channel_filtering_threshold: float = 0.1,  # 0.12
+    channel_filtering_threshold: float = 0.1,  # 0.05
     channel_include: tp.List[str] = None,
     channel_exclude: tp.Sequence[str] = [
         "<EMPTY>",
