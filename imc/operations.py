@@ -2050,7 +2050,6 @@ def get_best_mixture_number(
     ...
 
 
-@tp.overload
 def get_best_mixture_number(
     x: Series,
     min_mix: int = 2,
