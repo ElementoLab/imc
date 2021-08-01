@@ -670,6 +670,8 @@ def phenotyping(
                 a.obs[f"cluster_{res}"].astype(int) + 1
             )
     elif clustering_method == "parc":
+        from parc import PARC
+
         for res in clustering_resolutions:
             p = PARC(
                 a.X,
@@ -678,7 +680,7 @@ def phenotyping(
                 resolution_parameter=res,
             )
             p.run_PARC()
-            a.obs[f"cluster_{res}"] = pd.Categorical(p.labels + 1)
+            a.obs[f"cluster_{res}"] = pd.Categorical(pd.Series(p.labels) + 1)
 
     print("Finished phenotyping.")
     return a
