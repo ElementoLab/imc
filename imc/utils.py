@@ -1127,6 +1127,7 @@ def polygon_to_mask(
     Adapted and extended from: https://stackoverflow.com/a/36759414/1469535.
     """
     from shapely.geometry import Polygon, MultiPolygon
+    from shapely.geometry.collection import GeometryCollection
 
     if including_edges:
         # This makes sure edge pixels are also positive
@@ -1135,7 +1136,7 @@ def polygon_to_mask(
         if not poly.is_valid:
             poly = poly.buffer(0)
         inter = grid.intersection(poly)
-        if isinstance(inter, MultiPolygon):
+        if isinstance(inter, (MultiPolygon, GeometryCollection)):
             return np.asarray([polygon_to_mask(x, shape) for x in inter.geoms]).sum(0) > 0
         inter_verts = np.asarray(inter.exterior.coords.xy).T.tolist()
     else:
