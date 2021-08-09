@@ -4,7 +4,7 @@ such as Stardist and DeepCell.
 """
 
 
-from typing import Union, Literal, Dict, Tuple
+import typing as tp
 from functools import partial
 
 import numpy as np
@@ -13,14 +13,14 @@ import matplotlib.pyplot as plt
 from skimage.exposure import equalize_hist as eq
 from skimage.transform import resize
 import tifffile
-import tensorflow as tf
 
 from imc.types import Array, Figure, Path, Series
+from imc.data_models import roi as _roi
 from imc.graphics import random_label_cmap
 from imc.utils import minmax_scale
 
 
-def normalize(image, mode="cyx"):
+def normalize(image: Array, mode: str = "cyx") -> Array:
     if len(image.shape) == 2:
         return minmax_scale(eq(image))
     elif len(image.shape) == 3:
@@ -62,6 +62,66 @@ def prepare_stack(
     return np.stack((nucl, cyto))
 
 
+def extract_features(
+    arr: tp.Union[Array, tp.Sequence[Array]],
+    model: str = "VGG19",
+    pyramids: tp.Sequence[int] = (1, 2, 4, 8),
+) -> tp.List[Array]:
+    """
+    Extract features from images using pre-trained deep-learning model
+    """
+    import tensorflow as tf
+
+    assert model in ["VGG16", "VGG19"]
+
+    if isinstance(arr, np.ndarray):
+        assert len(arr[0].shape) == 3
+        arr = [arr]
+    elif isinstance(arr, (list, tuple)):
+        for a in arr:
+            assert len(a.shape) == 3
+    channels = np.unique([a.shape[-1] for a in arr])
+    assert len(channels) == 1, "All arrays must have the same number of channels!"
+    n_channels = channels[0]
+    if n_channels == 1:
+        print("Array contained only one channel. Repeating to RGB channels.")
+        arr = [np.concatenate([a, a, a], axis=2).squeeze() for a in arr]
+    elif n_channels != 3:
+        print("Array did not contain 3 channels. Using mean of all channels.")
+        arr = [a.mean(-1) for a in arr]
+        arr = [np.asarray([a, a, a]).squeeze() for a in arr]
+
+    shapes = {
+        j: [(arr[j].shape[0] // i, (arr[j].shape[1] // i)) for i in pyramids]
+        for j in range(len(arr))
+    }
+    unique_shapes = tuple(
+        map(tuple, np.unique(np.concatenate(list(shapes.values())), axis=0))
+    )
+
+    models = dict()
+    for shape in unique_shapes:
+        f = getattr(getattr(tf.keras.applications, model.lower()), model)
+        m = f(weights="imagenet", include_top=False, input_shape=(shape[0], shape[1], 3))
+        for layer in m.layers:
+            layer.trainable = False
+        models[shape] = tf.keras.models.Model(inputs=m.input, outputs=m.layers[2].output)
+
+    features = list()
+    for img_idx, shpx in shapes.items():
+        orig_shape = arr[img_idx].shape[:-1]
+        _feat = list()
+        for sh in shpx:
+            feat = (
+                models[sh]
+                .predict(resize(arr[img_idx], sh + (3,))[np.newaxis, ...])
+                .squeeze()
+            )
+            _feat.append(resize(feat, orig_shape + (feat.shape[-1],)))
+        features.append(np.concatenate(np.asarray(_feat), axis=-1))
+    return features
+
+
 def stardist_segment_nuclei(image: Array, model_str: str = "2D_versatile_fluo") -> Array:
     from stardist.models import StarDist2D
 
@@ -82,8 +142,11 @@ def deepcell_resize_to_predict_shape(image: Array) -> Array:
 
 
 def split_image_into_tiles(
-    image, tile_shape=(256, 256), overlap=(0, 0), pad_to_tile_shape=False
-) -> Dict[Tuple[int, int], Array]:
+    image: Array,
+    tile_shape: tp.Tuple[int, int] = (256, 256),
+    overlap: tp.Tuple[int, int] = (0, 0),
+    pad_to_tile_shape: bool = False,
+) -> tp.Dict[tp.Tuple[int, int], Array]:
     shape = np.asarray(image.shape)
     x, y = np.asarray(tile_shape)
 
@@ -113,7 +176,7 @@ def split_image_into_tiles(
 
 
 def join_tiles_to_image(
-    tiles: Dict[Tuple[int, int], Array], trim_all_zeros=True
+    tiles: tp.Dict[tp.Tuple[int, int], Array], trim_all_zeros: bool = True
 ) -> Array:
     grid = np.asarray(list(tiles.keys()))
 
@@ -196,7 +259,9 @@ def deepcell_segment(
     return pred
 
 
-def cellpose_segment(image, compartment="nuclear"):
+def cellpose_segment(
+    image: Array, compartment: tp.Union[tp.Literal["nuclear"], tp.Literal["cytoplasm"]]
+) -> Array:
     from cellpose import models
 
     assert compartment in ["nuclear", "cytoplasm"]
@@ -217,7 +282,9 @@ def cellpose_segment(image, compartment="nuclear"):
     return masks[0]
 
 
-def plot_cellpose_output(image, masks, flows) -> Figure:
+def plot_cellpose_output(
+    image: Array, masks: tp.Sequence[Array], flows: tp.Sequence[Array]
+) -> Figure:
     n = len(masks)
 
     fig, axes = plt.subplots(
@@ -247,7 +314,7 @@ def plot_cellpose_output(image, masks, flows) -> Figure:
     return fig
 
 
-def cellpose_postprocessing(image, mask, flow):
+def cellpose_postprocessing(image: Array, mask: Array, flow: Array):
     from skimage import filters
 
     flo = flow[0].mean(-1)
@@ -299,7 +366,7 @@ def cellpose_postprocessing(image, mask, flow):
     return seg_t > 0.5
 
 
-def inflection_point(curve):
+def inflection_point(curve: tp.Sequence[float]) -> int:
     """Return the index of the inflection point of a curve"""
     from numpy.matlib import repmat
 
@@ -313,7 +380,7 @@ def inflection_point(curve):
     return np.argmax(np.sqrt(np.sum(vec_to_line ** 2, axis=1)))
 
 
-def plot_image_and_mask(image: Array, mask_dict: Dict[str, Array]) -> Figure:
+def plot_image_and_mask(image: Array, mask_dict: tp.Dict[str, Array]) -> Figure:
     """
 
     image: np.ndarray
@@ -378,7 +445,7 @@ def deepcell_postprocess_both_compartments(
     mask: Array,
     dominant_nuclei_threshold: float = 0.8,
     plot: bool = False,
-    roi: "ROI" = None,
+    roi: _roi.ROI = None,
     fig_output_prefix: Path = None,
     verbose: bool = False,
 ) -> Array:
@@ -393,7 +460,9 @@ def deepcell_postprocess_both_compartments(
     import seaborn as sns
     from skimage.segmentation import find_boundaries
 
-    def inspect_mask_pair(cell_mask: Array, nuclei_mask: Array) -> Tuple[int, list, dict]:
+    def inspect_mask_pair(
+        cell_mask: Array, nuclei_mask: Array
+    ) -> tp.Tuple[int, list, dict]:
         match = 0
         unpaireds = list()
         multiplets = dict()
@@ -424,7 +493,7 @@ def deepcell_postprocess_both_compartments(
         complement_singlets: bool = True,
         remove_border_from_complement: bool = False,
         remove_ambigous: bool = True,
-    ) -> Tuple[Array, Array]:
+    ) -> tp.Tuple[Array, Array]:
         it = 0
         match, unpaireds, multiplets = inspect_mask_pair(cell_mask, nuclei_mask)
         while not ((len(unpaireds) == 0) and (len(multiplets) == 0)):
@@ -626,16 +695,16 @@ def deepcell_postprocess_both_compartments(
 
 
 def segment_roi(
-    roi: "ROI",
+    roi: _roi.ROI,
     from_probabilities: bool = False,
-    model: Union[Literal["deepcell", "stardist"]] = "deepcell",
+    model: tp.Union[tp.Literal["deepcell"], tp.Literal["stardist"]] = "deepcell",
     compartment: str = "nuclear",
     postprocessing: bool = True,
     save: bool = True,
     overwrite: bool = True,
     plot_segmentation: bool = True,
     verbose: bool = False,
-) -> Dict[str, Array]:
+) -> tp.Dict[str, Array]:
     """
     Segment the area of an ROI.
 
@@ -724,121 +793,121 @@ def segment_roi(
     return mask_dict
 
 
-def segment_decomposition():
-    """Some experiments with tensor decomposition"""
-    import tensorly as tl
-    from tensorly.decomposition import tucker, non_negative_tucker, parafac
+# def segment_decomposition():
+#     """Some experiments with tensor decomposition"""
+#     import tensorly as tl
+#     from tensorly.decomposition import tucker, non_negative_tucker, parafac
 
-    from imc.demo import generate_disk_masks, generate_stack
+#     from imc.demo import generate_disk_masks, generate_stack
 
-    # Synthetic data
-    Y = np.asarray([generate_disk_masks()[np.newaxis, ...] for _ in range(100)])
-    X = np.asarray([generate_stack(m.squeeze()) for m in Y])
+#     # Synthetic data
+#     Y = np.asarray([generate_disk_masks()[np.newaxis, ...] for _ in range(100)])
+#     X = np.asarray([generate_stack(m.squeeze()) for m in Y])
 
-    fig, axes = plt.subplots(1, 3)
-    for ax, a in zip(axes, X[0]):
-        ax.imshow(a)
+#     fig, axes = plt.subplots(1, 3)
+#     for ax, a in zip(axes, X[0]):
+#         ax.imshow(a)
 
-    core, factors = tucker(X[0], [1, 128, 128])
-    core, factors = non_negative_tucker(X[0], [1, 128, 128])
-    reconstruction = tl.tucker_to_tensor((core, factors))
+#     core, factors = tucker(X[0], [1, 128, 128])
+#     core, factors = non_negative_tucker(X[0], [1, 128, 128])
+#     reconstruction = tl.tucker_to_tensor((core, factors))
 
-    fig, axes = plt.subplots(1, 5)
-    for ax, a in zip(axes, X[0]):
-        ax.imshow(a)
-    q = factors[1] @ factors[2].T
-    axes[-2].imshow(q)
-    axes[-1].imshow(q > 1)
+#     fig, axes = plt.subplots(1, 5)
+#     for ax, a in zip(axes, X[0]):
+#         ax.imshow(a)
+#     q = factors[1] @ factors[2].T
+#     axes[-2].imshow(q)
+#     axes[-1].imshow(q > 1)
 
-    factors[0]  # samples
-    factors[1]  # channels
+#     factors[0]  # samples
+#     factors[1]  # channels
 
-    # if decomposing in more than one factor:
-    fig, axes = plt.subplots(1, 4)
-    for ax, dim in zip(axes, factors):
-        ax.scatter(*dim.T, s=2, alpha=0.5)
+#     # if decomposing in more than one factor:
+#     fig, axes = plt.subplots(1, 4)
+#     for ax, dim in zip(axes, factors):
+#         ax.scatter(*dim.T, s=2, alpha=0.5)
 
-    fig, axes = plt.subplots(1, 4)
-    for ax, dim in zip(axes, factors):
-        ax.plot(dim)
+#     fig, axes = plt.subplots(1, 4)
+#     for ax, dim in zip(axes, factors):
+#         ax.plot(dim)
 
-    # Real data
-    r = prj.rois[50]
+#     # Real data
+#     r = prj.rois[50]
 
-    exc = r.channel_exclude.index.str.contains("EMPTY|80|129")
-    stack = normalize(r.stack[~exc])
+#     exc = r.channel_exclude.index.str.contains("EMPTY|80|129")
+#     stack = normalize(r.stack[~exc])
 
-    core, factors = tucker(stack, [3] + list(r.shape[1:]))
-    reconstruction = tl.tucker_to_tensor((core, factors))
+#     core, factors = tucker(stack, [3] + list(r.shape[1:]))
+#     reconstruction = tl.tucker_to_tensor((core, factors))
 
-    fig, axes = plt.subplots(2, 2, sharex=True, sharey=True)
-    axes[0][0].imshow(stack.mean(0))
-    axes[0][1].imshow(reconstruction.mean(0))
-    axes[1][0].imshow(stack[-1])
-    v = np.absolute(reconstruction[-1]).max()
-    axes[1][1].imshow(reconstruction[-1], cmap="RdBu_r", vmin=-v, vmax=v)  # .clip(min=0))
+#     fig, axes = plt.subplots(2, 2, sharex=True, sharey=True)
+#     axes[0][0].imshow(stack.mean(0))
+#     axes[0][1].imshow(reconstruction.mean(0))
+#     axes[1][0].imshow(stack[-1])
+#     v = np.absolute(reconstruction[-1]).max()
+#     axes[1][1].imshow(reconstruction[-1], cmap="RdBu_r", vmin=-v, vmax=v)  # .clip(min=0))
 
-    channel_imp = pd.Series(factors[0].squeeze(), index=r.channel_labels[~exc])
-    channel_mean = pd.Series(stack.mean((1, 2)), index=r.channel_labels[~exc])
+#     channel_imp = pd.Series(factors[0].squeeze(), index=r.channel_labels[~exc])
+#     channel_mean = pd.Series(stack.mean((1, 2)), index=r.channel_labels[~exc])
 
-    plt.scatter(channel_mean, channel_imp)
+#     plt.scatter(channel_mean, channel_imp)
 
-    fig, axes = plt.subplots(1, 8)
-    for ax, a in zip(axes, X[0]):
-        ax.imshow(a)
-    q = factors[1] @ factors[2].T
-    axes[-2].imshow(q)
-    axes[-1].imshow(q > 1)
+#     fig, axes = plt.subplots(1, 8)
+#     for ax, a in zip(axes, X[0]):
+#         ax.imshow(a)
+#     q = factors[1] @ factors[2].T
+#     axes[-2].imshow(q)
+#     axes[-1].imshow(q > 1)
 
-    probs = zoom(r.probabilities, (1, 0.5, 0.5))
-    probs = probs / probs.max()
-    core, factors = tucker(probs, [3] + list(r.shape[1:]))
-    reconstruction = tl.tucker_to_tensor((core, factors))
+#     probs = zoom(r.probabilities, (1, 0.5, 0.5))
+#     probs = probs / probs.max()
+#     core, factors = tucker(probs, [3] + list(r.shape[1:]))
+#     reconstruction = tl.tucker_to_tensor((core, factors))
 
-    fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
-    axes[0].imshow(np.moveaxis(probs, 0, -1))
-    axes[1].imshow(np.moveaxis(reconstruction, 0, -1))
+#     fig, axes = plt.subplots(1, 2, sharex=True, sharey=True)
+#     axes[0].imshow(np.moveaxis(probs, 0, -1))
+#     axes[1].imshow(np.moveaxis(reconstruction, 0, -1))
 
-    weights, factors = parafac(probs, rank=50, init="random", tol=10e-6)
-    cp_reconstruction = tl.cp_to_tensor((weights, factors))
+#     weights, factors = parafac(probs, rank=50, init="random", tol=10e-6)
+#     cp_reconstruction = tl.cp_to_tensor((weights, factors))
 
-    plt.imshow(np.moveaxis(minmax_scale(cp_reconstruction), 0, -1))
+#     plt.imshow(np.moveaxis(minmax_scale(cp_reconstruction), 0, -1))
 
-    def PCA2D_2D(samples, row_top, col_top):
-        """samples are 2d matrices"""
-        size = samples[0].shape
-        # m*n matrix
-        mean = np.zeros(size)
+#     def PCA2D_2D(samples, row_top, col_top):
+#         """samples are 2d matrices"""
+#         size = samples[0].shape
+#         # m*n matrix
+#         mean = np.zeros(size)
 
-        for s in samples:
-            mean = mean + s
+#         for s in samples:
+#             mean = mean + s
 
-        # get the mean of all samples
-        mean /= float(len(samples))
+#         # get the mean of all samples
+#         mean /= float(len(samples))
 
-        # n*n matrix
-        cov_row = np.zeros((size[1], size[1]))
-        for s in samples:
-            diff = s - mean
-            cov_row = cov_row + np.dot(diff.T, diff)
-        cov_row /= float(len(samples))
-        row_eval, row_evec = np.linalg.eig(cov_row)
-        # select the top t evals
-        sorted_index = np.argsort(row_eval)
-        # using slice operation to reverse
-        X = row_evec[:, sorted_index[: -row_top - 1 : -1]]
+#         # n*n matrix
+#         cov_row = np.zeros((size[1], size[1]))
+#         for s in samples:
+#             diff = s - mean
+#             cov_row = cov_row + np.dot(diff.T, diff)
+#         cov_row /= float(len(samples))
+#         row_eval, row_evec = np.linalg.eig(cov_row)
+#         # select the top t evals
+#         sorted_index = np.argsort(row_eval)
+#         # using slice operation to reverse
+#         X = row_evec[:, sorted_index[: -row_top - 1 : -1]]
 
-        # m*m matrix
-        cov_col = np.zeros((size[0], size[0]))
-        for s in samples:
-            diff = s - mean
-            cov_col += np.dot(diff, diff.T)
-        cov_col /= float(len(samples))
-        col_eval, col_evec = np.linalg.eig(cov_col)
-        sorted_index = np.argsort(col_eval)
-        Z = col_evec[:, sorted_index[: -col_top - 1 : -1]]
+#         # m*m matrix
+#         cov_col = np.zeros((size[0], size[0]))
+#         for s in samples:
+#             diff = s - mean
+#             cov_col += np.dot(diff, diff.T)
+#         cov_col /= float(len(samples))
+#         col_eval, col_evec = np.linalg.eig(cov_col)
+#         sorted_index = np.argsort(col_eval)
+#         Z = col_evec[:, sorted_index[: -col_top - 1 : -1]]
 
-        return X, Z
+#         return X, Z
 
 
 # def _segment_probabilities(
