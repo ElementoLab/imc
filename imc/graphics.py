@@ -352,6 +352,52 @@ def rainbow_text(x, y, strings, colors, orientation="horizontal", ax=None, **kwa
             t = text.get_transform() + Affine2D().translate(0, ex.height * 0.5)
 
 
+def get_n_colors(n: int, max_value: float = 1.0) -> Array:
+    """
+    With modifications from https://stackoverflow.com/a/13781114/1469535
+    """
+    import itertools
+    from fractions import Fraction
+
+    def zenos_dichotomy():
+        """
+        http://en.wikipedia.org/wiki/1/2_%2B_1/4_%2B_1/8_%2B_1/16_%2B_%C2%B7_%C2%B7_%C2%B7
+        """
+        for k in itertools.count():
+            yield Fraction(1, 2 ** k)
+
+    def fracs():
+        """
+        [Fraction(0, 1), Fraction(1, 2), Fraction(1, 4), Fraction(3, 4), Fraction(1, 8), Fraction(3, 8), Fraction(5, 8), Fraction(7, 8), Fraction(1, 16), Fraction(3, 16), ...]
+        [0.0, 0.5, 0.25, 0.75, 0.125, 0.375, 0.625, 0.875, 0.0625, 0.1875, ...]
+        """
+        yield Fraction(0)
+        for k in zenos_dichotomy():
+            i = k.denominator  # [1,2,4,8,16,...]
+            for j in range(1, i, 2):
+                yield Fraction(j, i)
+
+    # can be used for the v in hsv to map linear values 0..1 to something that looks equidistant
+    # bias = lambda x: (math.sqrt(x/3)/Fraction(2,3)+Fraction(1,3))/Fraction(6,5)
+    def hue_to_tones(h):
+        for s in [Fraction(6, 10)]:  # optionally use range
+            for v in [Fraction(8, 10), Fraction(5, 10)]:  # could use range too
+                yield (h, s, v)  # use bias for v here if you use range
+
+    def hsv_to_rgb(x):
+        return colorsys.hsv_to_rgb(*map(float, x))
+
+    flatten = itertools.chain.from_iterable
+
+    def hsvs():
+        return flatten(map(hue_to_tones, fracs()))
+
+    def rgbs():
+        return map(hsv_to_rgb, hsvs())
+
+    return np.asarray(list(itertools.islice(rgbs(), n))) * max_value
+
+
 def get_rgb_cmaps() -> tp.Tuple[ColorMap, ColorMap, ColorMap]:
     r = np.linspace(0, 1, 100).reshape((-1, 1))
     r = [
@@ -410,28 +456,36 @@ def cell_labels_to_mask(mask: Array, labels: tp.Union[Series, tp.Dict]) -> Array
     return res
 
 
-def numbers_to_rgb_colors(
-    mask: Array, from_palette: str = "tab20", remove_zero: bool = True
-) -> Array:
-    """Colors each integer in the 2D `mask` array with a unique color by
-    expanding the array to 3 dimensions."""
-
+def values_to_rgb_colors(
+    mask: Array, from_palette: str = None, remove_zero: bool = True
+) -> tp.Tuple[Array, tp.Dict[tp.Any, tp.List[float]]]:
+    """
+    Colors each integer in the 2D `mask` array with a unique color by
+    expanding the array to 3 dimensions.
+    Also returns the mapping of mask identity to color tuple.
+    """
     ident = np.sort(np.unique(mask))
     if remove_zero:
         ident = ident[ident != 0]
     n_colors = len(ident)
 
-    if n_colors > len(sns.color_palette(from_palette)):
+    if from_palette is not None:
+        palette = sns.color_palette(from_palette)
+    else:
+        palette = list(get_n_colors(n_colors))
+
+    if n_colors > len(palette):
         print(
             "Chosen palette has less than the requested number of colors. " "Will reuse!"
         )
+        palette = sns.color_palette(from_palette, ident.max())
 
-    colors = pd.Series(sns.color_palette(from_palette, ident.max())).reindex(ident - 1)
+    colors = pd.Series(palette).reindex(ident - 1)
     res = np.zeros((mask.shape) + (3,))
     for c, i in zip(colors, ident):
         x, y = np.nonzero(np.isin(mask, i))
         res[x, y, :] = c
-    return res
+    return res, dict(zip(ident, palette))
 
 
 @tp.overload

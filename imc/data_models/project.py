@@ -418,7 +418,7 @@ class Project:
         self,
         cell_type_combinations: tp.Union[str, tp.List[tp.Tuple[str, str]]] = None,
         cell_type_assignments: DataFrame = None,
-        palette: tp.Optional[str] = "tab20",
+        palette: tp.Optional[str] = None,
         samples: tp.List[IMCSample] = None,
         rois: tp.List[ROI] = None,
     ):
@@ -699,7 +699,7 @@ class Project:
             if "cell_type" in self.panel_metadata.columns:
                 kwargs["cell_type_channels"] = self.panel_metadata.query(
                     "cell_type == 1"
-                ).index.totp.List()
+                ).index.list()
 
         clusters = single_cell_analysis(
             output_prefix=output_prefix,
@@ -864,7 +864,7 @@ class Project:
 
         # Test difference between channels/clusters
         # # channels
-        _res = tp.List()
+        _res = list()
         for attribute in sample_attributes:
             for channel in channel_df["channel"].unique():
                 for group1, group2 in itertools.permutations(
@@ -923,7 +923,7 @@ class Project:
         )
 
         # # clusters
-        _res = tp.List()
+        _res = list()
         for attribute in sample_attributes:
             for cluster in cluster_df["cluster"].unique():
                 for group1, group2 in itertools.permutations(

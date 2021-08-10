@@ -203,6 +203,40 @@ def align_channels_by_name(res: DataFrame, channel_axis=0) -> DataFrame:
     return res
 
 
+def is_datetime(x: Series) -> bool:
+    if "datetime" in x.dtype.name:
+        return True
+    return False
+
+
+def is_numeric(x: tp.Union[Series, tp.Any]) -> bool:
+    if not isinstance(x, pd.Series):
+        x = pd.Series(x)
+    if (
+        x.dtype.name
+        in [
+            "float",
+            "float32",
+            "float64",
+            "int",
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "Int64",
+        ]
+        or is_datetime(x)
+    ):
+        return True
+    if x.dtype.name in ["object", "string", "boolean", "bool"]:
+        return False
+    if x.dtype.name == "category":
+        if len(set(type(i) for i in x)) != 1:
+            raise ValueError("Series contains mixed types. Cannot transfer to color!")
+        return is_numeric(x.iloc[0])
+    raise ValueError(f"Cannot transfer data type '{x.dtype}' to color!")
+
+
 def sorted_nicely(iterable: tp.Sequence[GenericType]) -> tp.Sequence[GenericType]:
     """
     Sort an iterable in the way that humans expect.
@@ -223,6 +257,9 @@ def sorted_nicely(iterable: tp.Sequence[GenericType]) -> tp.Sequence[GenericType
 
     def alphanum_key(key):
         return [convert(c) for c in re.split("([0-9]+)", key)]
+
+    if isinstance(iterable[0], (int, np.int32, np.int64)):
+        return np.sort(iterable)
 
     return sorted(iterable, key=alphanum_key)
 
@@ -269,6 +306,21 @@ def write_image_to_file(
                 output_prefix + "." + label + "." + file_format,
                 np.multiply(arr[channel], 256).astype(np.uint8),
             )
+
+
+def downcast_int(arr: Array, kind: str = "u") -> Array:
+    """
+    Downcast numpy array of integers dependent
+    on largest number in array compatible with smaller bit depth.
+    """
+    assert kind in ["u", "i"]
+    if kind == "u":
+        assert arr.min() >= 0
+    m = arr.max()
+    for i in [8, 16, 32, 64]:
+        if m <= (2 ** i - 1):
+            return arr.astype(f"{kind}int{i}")
+    return arr
 
 
 def minmax_scale(x, by_channel=True):

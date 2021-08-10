@@ -33,7 +33,7 @@ from imc.graphics import (
     get_transparent_cmaps,
     add_legend as _add_legend,
     cell_labels_to_mask,
-    numbers_to_rgb_colors,
+    values_to_rgb_colors,
     merge_channels,
     rainbow_text,
     get_random_label_cmap,
@@ -929,7 +929,7 @@ class ROI:
         ] = None,
         position: tp.Optional[tp.Tuple[tp.Tuple[int, int], tp.Tuple[int, int]]] = None,
         ax: tp.Union[Axis, tp.Sequence[Axis]] = None,
-        palette: tp.Optional[str] = "tab20",
+        palette: tp.Optional[str] = None,
         add_scale: bool = True,
         add_legend: bool = True,
         legend_kwargs: tp.Dict = {},
@@ -937,6 +937,8 @@ class ROI:
         """
         If ax is given it must match number of `cell_type_combinations`.
         """
+        from imc.utils import is_numeric
+
         if cell_type_assignments is not None:
             clusters = cell_type_assignments
         else:
@@ -945,9 +947,9 @@ class ROI:
             clusters = clusters.loc[self.name]
         clusters.index = clusters.index.astype(int)
 
-        if clusters.dtype.name in ["object", "category"]:
+        if not is_numeric(clusters):
             # Replace the strings with a number
-            labels = pd.Series(sorted_nicely(np.unique(clusters.values)))
+            labels = pd.Series(sorted_nicely(np.unique(clusters.values))).astype(str)
             ns = labels.str.extract(r"(\d+) - .*")[0]
             # If the clusters contain a numeric prefix, use that
             # that will help having consistent color across ROIs
@@ -1000,24 +1002,17 @@ class ROI:
             axes[i, 0].imshow(self.get_mean_all_channels() * 0.1, cmap=bckgd_cmap)
             # plot each of the cell types with different colors
             res = cell_labels_to_mask(self.cell_mask, clusters)
-            rgb = numbers_to_rgb_colors(res, from_palette=cast(palette))
+            rgb, cmap = values_to_rgb_colors(res, from_palette=palette)
             if position is not None:
                 rgb = rgb[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
             axes[i, 0].imshow(rgb)
-            colors = (
-                pd.Series(sns.color_palette(palette, max(ns.values + 1)))
-                .reindex(ns - 1)
-                .values
-            )
-            patches += [
-                mpatches.Patch(color=colors[j], label=l) for j, l in enumerate(labels)
-            ]
+            patches += [mpatches.Patch(color=c, label=l) for l, c in cmap.items()]
             axes[i, 0].axis("off")
             if add_scale:
                 _add_scale(axes[i, 0])
 
         if add_legend:
-            _add_legend(patches, axes[-1, 0], **legend_kwargs)  #
+            _add_legend(patches, axes[-1, 0], **legend_kwargs)
         return fig if ax is None else patches
 
     def get_distinct_marker_sets(

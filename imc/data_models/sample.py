@@ -388,7 +388,7 @@ class IMCSample:
         rois: tp.List[_roi.ROI] = None,
         cell_type_combinations: tp.Union[str, tp.List[tp.Tuple[str, str]]] = None,
         cell_type_assignments: DataFrame = None,
-        palette: tp.Optional[str] = "tab20",
+        palette: tp.Optional[str] = None,
     ) -> Figure:
         rois = rois or self.rois
 
