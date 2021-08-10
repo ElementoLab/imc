@@ -70,6 +70,23 @@ def build_params(
     return parser
 
 
+def find_mcds() -> tp.List[Path]:
+    return list(Path().glob("**/*.mcd"))
+
+
+def find_tiffs() -> tp.List[Path]:
+    return list(Path().glob("**/*_full.tiff"))
+
+
+def find_h5ad() -> tp.Optional[Path]:
+    import numpy as np
+
+    h5ads = [p.as_posix() for p in Path().glob("**/*.h5ad")]
+    if not h5ads:
+        return None
+    return Path(h5ads[np.argmax(list(map(len, h5ads)))])
+
+
 json_example = {
     "segment": ["--model", "stardist"],
     "quantify": ["--no-morphology", "--layers", "nuclei"],
@@ -125,6 +142,11 @@ cli_config = {
         "phenotype": {
             "prog": "imc phenotype",
             "description": "Phenotype cells in quantification matrix.",
+            "epilog": epilog,
+        },
+        "illustrate": {
+            "prog": "imc illustrate",
+            "description": "Illustrate IMC data.",
             "epilog": epilog,
         },
         "view": {
@@ -188,7 +210,14 @@ cli_config = {
             },
         ],
         "inspect": [
-            {"kwargs": {"dest": "mcd_files", "nargs": "+", "type": Path}},
+            {
+                "kwargs": {
+                    "dest": "mcd_files",
+                    "nargs": "?",
+                    "default": None,
+                    "type": Path,
+                }
+            },
             {
                 "args": ["--no-write"],
                 "kwargs": {"dest": "no_write", "action": "store_true"},
@@ -300,7 +329,8 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "tiffs",
-                    "nargs": "+",
+                    "nargs": "?",
+                    "default": None,
                     "type": Path,
                     "help": "TIFF files with array stack.",
                 }
@@ -372,7 +402,8 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "tiffs",
-                    "nargs": "+",
+                    "nargs": "?",
+                    "default": None,
                     "type": Path,
                     "help": "TIFF files with array stack.",
                 },
@@ -463,9 +494,11 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "tiffs",
-                    "nargs": "+",
+                    "nargs": "?",
+                    "default": None,
                     "type": Path,
-                    "help": "TIFF files with array stack.",
+                    "help": "TIFF files with array stack."
+                    "If not given will infer from files in current directory.",
                 }
             },
             {
@@ -644,11 +677,103 @@ cli_config = {
                 },
             },
         ],
+        "illustrate": [
+            {
+                "kwargs": {
+                    "dest": "tiffs",
+                    "nargs": "?",
+                    "default": None,
+                    "type": Path,
+                    "help": "TIFF files with array stack. "
+                    "If not given will infer from files in current directory.",
+                },
+            },
+            {
+                "args": ["--h5ad"],
+                "kwargs": {
+                    "dest": "h5ad",
+                    "default": None,
+                    "type": Path,
+                    "help": "Path to H5ad file with quantification. Will look for default files.",
+                },
+            },
+            {
+                "args": ["--output-dir"],
+                "kwargs": {
+                    "default": "results/illustration",
+                    "type": Path,
+                    "dest": "output_dir",
+                    "help": "Output directory. " "Default is 'results/illustration'.",
+                },
+            },
+            {
+                "args": ["--overwrite"],
+                "kwargs": {
+                    "dest": "overwrite",
+                    "action": "store_true",
+                    "help": "Whether to overwrite existing files or not."
+                    " Default is False.",
+                },
+            },
+            {
+                "args": ["-i", "--channel-include"],
+                "kwargs": {
+                    "dest": "channels_include",
+                    "default": None,
+                    "help": "Comma-delimited list of channels to include from stack.",
+                },
+            },
+            {
+                "args": ["-e", "--channel-exclude"],
+                "kwargs": {
+                    "dest": "channels_exclude",
+                    "default": "80ArAr(ArAr80),89Y(Y89),120Sn(Sn120),127I(I127),131Xe(Xe131),138Ba(Ba138),140Ce(Ce140),190BCKG(BCKG190),202Hg(Hg202),208Pb(Pb208),209Bi(Bi209)",
+                    "help": "Comma-delimited list of channels to exclude from stack.",
+                },
+            },
+            {
+                "args": ["--no-stacks"],
+                "kwargs": {
+                    "dest": "stacks",
+                    "action": "store_false",
+                    "help": "Whether to plot full image stacks for each ROI."
+                    " Default is True.",
+                },
+            },
+            {
+                "args": ["--no-channels"],
+                "kwargs": {
+                    "dest": "channels",
+                    "action": "store_false",
+                    "help": "Whether to plot each channel jointly for all ROIs."
+                    " Default is True.",
+                },
+            },
+            {
+                "args": ["--no-clusters"],
+                "kwargs": {
+                    "dest": "clusters",
+                    "action": "store_false",
+                    "help": "Whether to plot cluster identities of cells on top of channels."
+                    " Default is True.",
+                },
+            },
+            {
+                "args": ["--no-cell-type"],
+                "kwargs": {
+                    "dest": "cell_types",
+                    "action": "store_false",
+                    "help": "Whether to plot cell type identities of cells on top of channels."
+                    " Default is True.",
+                },
+            },
+        ],
         "view": [
             {
                 "kwargs": {
                     "dest": "input_files",
-                    "nargs": "+",
+                    "nargs": "?",
+                    "default": None,
                     "type": Path,
                     "help": "MCD, or TIFF files with array stack. MCD requires --napari option.",
                 }

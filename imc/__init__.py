@@ -63,11 +63,3 @@ MEMORY = Memory(location=JOBLIB_CACHE_DIR, verbose=0)
 from imc.data_models.project import Project
 from imc.data_models.sample import IMCSample
 from imc.data_models.roi import ROI
-from imc.cli import main
-
-
-if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except KeyboardInterrupt:
-        sys.exit(1)

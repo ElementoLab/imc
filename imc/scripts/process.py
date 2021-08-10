@@ -105,4 +105,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         sys.exit(1)
 
+# cd ~/projects/imctest/
 # imc process data/20200629_NL1915A.mcd processed/20200629_NL1915A/tiffs/20200629_NL1915A-01_full.tiff

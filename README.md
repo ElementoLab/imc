@@ -46,7 +46,8 @@ cd imctest/
 # Run pipeline in one step:
 imc process data/${SAMPLE}.mcd
 ```
-Several MCD or TIFF files can be given to `imc process`. See more with the `--help` option.
+Input can be MCD, TIFF, or TXT files.
+Several files can be given to `imc process`. See more with the `--help` option.
 
 `imc` is nonetheless very modular and allows the user to run any of the step seperately as well.
 

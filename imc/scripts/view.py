@@ -18,6 +18,9 @@ from imc.scripts import build_cli
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("view")
     args = parser.parse_args(cli)
+    if len(args.input_files) == 0:
+        print("Input files were not provided and could not be found!")
+        return 1
 
     kwargs = {}
     if args.kwargs is not None:
@@ -29,12 +32,19 @@ def main(cli: tp.Sequence[str] = None) -> int:
     print(f"Starting viewers for {len(args.input_files)} files: {fs}!")
 
     if args.napari:
+        assert all(
+            f.endswith(".mcd") for f in args.input_files
+        ), "If using napari input must be MCD files!"
         import napari
 
         viewer = napari.Viewer()
         viewer.open(args.input_files)
         napari.run()
         return 0
+
+    assert all(
+        f.endswith((".tiff", ".tif")) for f in args.input_files
+    ), "Input must be TIFF files!"
 
     # Prepare ROI objects
     rois = [ROI.from_stack(tiff) for tiff in args.input_files]

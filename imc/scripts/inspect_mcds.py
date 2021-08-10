@@ -23,6 +23,9 @@ from imc.scripts import build_cli
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("inspect")
     args = parser.parse_args(cli)
+    if len(args.mcd_files) == 0:
+        print("MCD files were not provided and could not be found!")
+        return 1
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
     print(f"Starting inspection step for {len(args.mcd_files)} MCD files:{fs}!")

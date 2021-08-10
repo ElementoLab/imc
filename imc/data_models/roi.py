@@ -164,7 +164,9 @@ class ROI:
         )
 
     @classmethod
-    def from_stack(self, stack_file: tp.Union[Path, str], **kwargs) -> ROI:
+    def from_stack(
+        cls, stack_file: tp.Union[Path, str], make_sample: bool = True, **kwargs
+    ) -> ROI:
         if isinstance(stack_file, str):
             stack_file = Path(stack_file)
         stack_file = stack_file.absolute()
@@ -177,12 +179,17 @@ class ROI:
         else:
             roi_number = int(roi_numbers[0])
 
-        return ROI(
+        roi = ROI(
             name=stack_file.stem.replace("_full", ""),
             root_dir=stack_file.parent,
             stacks_dir=stack_file.parent,
             roi_number=roi_number,
+            **kwargs,
         )
+        if make_sample:
+            roi.sample = _sample.IMCSample.from_rois(roi)
+            roi.sample.rois = [roi]
+        return roi
 
     # TODO: read from OME-TIFF
     @property

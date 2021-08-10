@@ -130,9 +130,11 @@ class Project:
             MultiIndexSeries
         ] = None  # MultiIndex: ['sample', 'roi', 'obj_id']
 
-        if not hasattr(self, "samples"):
-            self.samples = tp.List()
+        # Add kwargs as attributes
+        self.__dict__.update(kwargs)
 
+        if "__no_init__" in kwargs:
+            return
         self._initialize_project_from_annotation(**kwargs)
 
         if not self.rois:
@@ -169,6 +171,27 @@ class Project:
     def __iter__(self) -> tp.Iterator[IMCSample]:
         return iter(self.samples)
 
+    @classmethod
+    def from_stacks(cls, tiffs: tp.Union[Path, tp.Sequence[Path]], **kwargs) -> Project:
+        if isinstance(tiffs, Path):
+            tiffs = [tiffs]
+        return Project.from_rois([ROI.from_stack(s) for s in tiffs], **kwargs)
+
+    @classmethod
+    def from_rois(cls, rois: tp.Union[ROI, tp.Sequence[ROI]], **kwargs) -> Project:
+        if isinstance(rois, ROI):
+            rois = [rois]
+        samples = [r.sample for r in rois if r.sample is not None]
+        return Project(samples=samples, __no_init__=True, **kwargs)
+
+    @classmethod
+    def from_samples(
+        cls, samples: tp.Union[IMCSample, tp.Sequence[IMCSample]], **kwargs
+    ) -> Project:
+        if isinstance(samples, IMCSample):
+            samples = [samples]
+        return Project(samples=samples, __no_init__=True, **kwargs)
+
     def _detect_samples(self) -> DataFrame:
         if self.processed_dir is None:
             print("Project does not have `processed_dir`. Cannot find Samples.")
@@ -188,12 +211,7 @@ class Project:
         )
         return df.drop([0], axis=1)  # .sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
 
-    def _initialize_project_from_annotation(
-        self,
-        toggle: tp.Optional[bool] = None,
-        sample_grouping_attributes: tp.Optional[tp.List[str]] = None,
-        **kwargs,
-    ) -> None:
+    def _initialize_project_from_annotation(self, **kwargs) -> None:
         def cols_with_unique_values(dfs: DataFrame) -> set:
             return {col for col in dfs if len(dfs[col].unique()) == 1}
 
@@ -202,14 +220,12 @@ class Project:
         if metadata.empty:
             return
 
-        if (toggle or self.toggle) and ("toggle" in metadata.columns):
+        if self.toggle and ("toggle" in metadata.columns):
             # TODO: logger.info("Removing samples without toggle active")
             metadata = metadata[metadata[DEFAULT_TOGGLE_ATTRIBUTE]]
 
         sample_grouping_attributes = (
-            sample_grouping_attributes
-            or self.sample_grouping_attributes
-            or metadata.columns.totp.List()
+            self.sample_grouping_attributes or metadata.columns.list()
         )
 
         for _, idx in metadata.groupby(

@@ -17,6 +17,7 @@ from imc.scripts.predict import main as predict
 from imc.scripts.segment_stacks import main as segment
 from imc.scripts.quantify import main as quantify
 from imc.scripts.phenotype import main as phenotype
+from imc.scripts.illustrate import main as illustrate
 from imc.scripts.view import main as view
 
 cli_config: tp.Dict[str, tp.Any]
@@ -27,26 +28,9 @@ def main(cli: tp.Sequence[str] = None) -> int:
     parser = get_args()
     main_args, cmd_args = parser.parse_known_args(cli)
 
-    if main_args.command == "process":
-        process(cmd_args)
-    elif main_args.command == "inspect":
-        inspect(cmd_args)
-    elif main_args.command == "prepare":
-        prepare(cmd_args)
-    elif main_args.command == "predict":
-        predict(cmd_args)
-    elif main_args.command == "segment":
-        segment(cmd_args)
-    elif main_args.command == "quantify":
-        quantify(cmd_args)
-    elif main_args.command == "phenotype":
-        phenotype(cmd_args)
-    elif main_args.command == "view":
-        view(cmd_args)
-    else:
-        print("Command not known!")
-        return 1
-    return 0
+    if main_args.command not in cli_config["subcommands"]:
+        raise ValueError(f"Command '{main_args.command}' not known!")
+    return eval(main_args.command)(cmd_args)
 
 
 def get_args() -> argparse.ArgumentParser:

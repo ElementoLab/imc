@@ -23,6 +23,9 @@ from imc.scripts import build_cli
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("segment")
     args = parser.parse_args(cli)
+    if len(args.tiffs) == 0:
+        print("TIFF files were not provided and could not be found!")
+        return 1
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
     print(f"Starting segmentation step for {len(args.tiffs)} TIFF files:{fs}!")

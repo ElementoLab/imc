@@ -4,6 +4,7 @@
 A class to model a imaging mass cytometry sample.
 """
 
+from __future__ import annotations
 import typing as tp
 import numpy as np
 import pandas as pd
@@ -89,18 +90,20 @@ class IMCSample:
             else channel_labels
         )
         self.prj = prj
-        self.rois: tp.List[_roi.ROI] = list()
 
         self.anndata: tp.Optional[AnnData] = None
         self._clusters: tp.Optional[MultiIndexSeries] = None
+        self.quantification = None
 
         # Add kwargs as attributes
         self.__dict__.update(kwargs)
 
-        # initialize
-        self._initialize_sample_from_annotation(values_to_propagate=kwargs.keys())
+        if "__no_init__" in kwargs:
+            return
 
-        self.quantification = None
+        # initialize
+        self.rois: tp.List[_roi.ROI] = list()
+        self._initialize_sample_from_annotation(values_to_propagate=kwargs.keys())
 
     def __repr__(self):
         r = len(self.rois)
@@ -114,6 +117,26 @@ class IMCSample:
 
     def __len__(self) -> int:
         return len(self.rois)
+
+    @classmethod
+    def from_stacks(cls, tiffs: tp.Union[Path, tp.Sequence[Path]], **kwargs) -> IMCSample:
+        if isinstance(tiffs, Path):
+            tiffs = [tiffs]
+        # TODO: assumes all ROIs are from same sample
+        rois = [ROI.from_stack(tiff) for tiff in tiffs]
+        return IMCSample.from_rois(rois, **kwargs)
+
+    @classmethod
+    def from_rois(
+        cls, rois: tp.Union[_roi.ROI, tp.Sequence[_roi.ROI]], **kwargs
+    ) -> IMCSample:
+        if isinstance(rois, _roi.ROI):
+            rois = [rois]
+        # TODO: assumes all ROIs are from same sample
+        name = rois[0].name.split("-")[0]
+        if rois[0].root_dir is not None:
+            root_dir = rois[0].root_dir.parent
+        return IMCSample(sample_name=name, root_dir=root_dir, __no_init__=True, **kwargs)
 
     def _detect_rois(self) -> DataFrame:
         if self.root_dir is None:
