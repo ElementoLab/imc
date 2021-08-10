@@ -86,7 +86,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
             f = dir_ / f"clustering_illustrations.{cluster}.pdf"
             if f.exists() and not args.overwrite:
                 continue
-            # TODO: plot markers in parallel, or overlay
+            # TODO: plot markers next to clusters, or overlay
             prj.set_clusters(a.obs.set_index(id_cols)[cluster].rename("cluster"))
             fig = prj.plot_cell_types()
             for ax in fig.axes[1:]:
@@ -106,7 +106,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
             f = dir_ / f"cell_type_illustrations.{ct}.pdf"
             if f.exists() and not args.overwrite:
                 continue
-            # TODO: plot markers in parallel, or overlay
+            # TODO: plot markers next to cell types, or overlay
             prj.set_clusters(a.obs.set_index(id_cols)[ct].rename("cluster"))
             fig = prj.plot_cell_types()
             for ax in fig.axes[1:]:

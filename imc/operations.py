@@ -25,9 +25,7 @@ import skimage
 from skimage.future import graph
 import skimage.io
 import skimage.measure
-from skimage.restoration import estimate_sigma
 from skimage.segmentation import clear_border
-from sklearn.linear_model import LinearRegression
 
 from anndata import AnnData
 import scanpy as sc
@@ -243,59 +241,59 @@ def quantify_cells_rois(
     ).rename_axis(index="obj_id")
 
 
-def check_channel_axis_correlation(
-    arr: Array, channel_labels: tp.Sequence[str], output_prefix: Path
-) -> DataFrame:
-    # # Plot and regress
-    n, m = get_grid_dims(arr.shape[0])
-    fig, axis = plt.subplots(
-        m, n, figsize=(n * 4, m * 4), squeeze=False, sharex=True, sharey=True
-    )
+# def check_channel_axis_correlation(
+#     arr: Array, channel_labels: tp.Sequence[str], output_prefix: Path
+# ) -> DataFrame:
+#     # # Plot and regress
+#     n, m = get_grid_dims(arr.shape[0])
+#     fig, axis = plt.subplots(
+#         m, n, figsize=(n * 4, m * 4), squeeze=False, sharex=True, sharey=True
+#     )
 
-    res = list()
-    for channel in range(arr.shape[0]):
-        for axs in [0, 1]:
-            s = arr[channel].mean(axis=axs)
-            order = np.arange(s.shape[0])
-            model = LinearRegression()
-            model.fit(order[:, np.newaxis] / max(order), s)
-            res.append(
-                [
-                    channel,
-                    axs,
-                    model.coef_[0],
-                    model.intercept_,
-                    pearsonr(order, s)[0],
-                ]
-            )
+#     res = list()
+#     for channel in range(arr.shape[0]):
+#         for axs in [0, 1]:
+#             s = arr[channel].mean(axis=axs)
+#             order = np.arange(s.shape[0])
+#             model = LinearRegression()
+#             model.fit(order[:, np.newaxis] / max(order), s)
+#             res.append(
+#                 [
+#                     channel,
+#                     axs,
+#                     model.coef_[0],
+#                     model.intercept_,
+#                     pearsonr(order, s)[0],
+#                 ]
+#             )
 
-            axis.flatten()[channel].plot(order, s)
-        axis.flatten()[channel].set_title(
-            f"{channel_labels[channel]}\nr[X] = {res[-2][-1]:.2f}; r[Y] = {res[-1][-1]:.2f}"
-        )
+#             axis.flatten()[channel].plot(order, s)
+#         axis.flatten()[channel].set_title(
+#             f"{channel_labels[channel]}\nr[X] = {res[-2][-1]:.2f}; r[Y] = {res[-1][-1]:.2f}"
+#         )
 
-    axis[int(m / 2), 0].set_ylabel("Mean signal along axis")
-    axis[-1, int(n / 2)].set_xlabel("Order along axis")
-    c = sns.color_palette("colorblind")
-    patches = [
-        mpatches.Patch(color=c[0], label="X"),
-        mpatches.Patch(color=c[1], label="Y"),
-    ]
-    axis[int(m / 2), -1].legend(
-        handles=patches,
-        bbox_to_anchor=(1.05, 1),
-        loc=2,
-        borderaxespad=0.0,
-        title="Axis",
-    )
-    fig.savefig(output_prefix + "channel-axis_correlation.svg", **FIG_KWS)
+#     axis[int(m / 2), 0].set_ylabel("Mean signal along axis")
+#     axis[-1, int(n / 2)].set_xlabel("Order along axis")
+#     c = sns.color_palette("colorblind")
+#     patches = [
+#         mpatches.Patch(color=c[0], label="X"),
+#         mpatches.Patch(color=c[1], label="Y"),
+#     ]
+#     axis[int(m / 2), -1].legend(
+#         handles=patches,
+#         bbox_to_anchor=(1.05, 1),
+#         loc=2,
+#         borderaxespad=0.0,
+#         title="Axis",
+#     )
+#     fig.savefig(output_prefix + "channel-axis_correlation.svg", **FIG_KWS)
 
-    df = pd.DataFrame(res, columns=["channel", "axis", "coef", "intercept", "r"])
-    df["axis_label"] = df["axis"].replace(0, "X_centroid").replace(1, "Y_centroid")
-    df["channel_label"] = [x for x in channel_labels for _ in range(2)]
-    df["abs_r"] = df["r"].abs()
-    df.to_csv(output_prefix + "channel-axis_correlation.csv", index=False)
-    return df
+#     df = pd.DataFrame(res, columns=["channel", "axis", "coef", "intercept", "r"])
+#     df["axis_label"] = df["axis"].replace(0, "X_centroid").replace(1, "Y_centroid")
+#     df["channel_label"] = [x for x in channel_labels for _ in range(2)]
+#     df["abs_r"] = df["r"].abs()
+#     df.to_csv(output_prefix + "channel-axis_correlation.csv", index=False)
+#     return df
 
 
 def fix_signal_axis_dependency(
@@ -355,6 +353,8 @@ def fix_signal_axis_dependency(
 
 
 def channel_stats(roi: _roi.ROI, channels: tp.Sequence[str] = None):
+    from skimage.restoration import estimate_sigma
+
     if channels is None:
         channels = roi.channel_labels.tolist()
     stack = roi._get_channels(channels)[1]
@@ -541,7 +541,7 @@ def measure_channel_background(
 
 
 def anndata_to_cluster_means(
-    ann: AnnData, raw: bool = False, cluster_label: str = "cluster"
+    ann: AnnData, cluster_label: str, raw: bool = False
 ) -> DataFrame:
     means = dict()
     obj = ann if not raw else ann.raw
@@ -961,7 +961,7 @@ def single_cell_analysis(
     # Generate marker-based labels for clusters
     if label_clusters:
         new_labels = derive_reference_cell_type_labels(
-            mean_expr=anndata_to_cluster_means(ann),
+            mean_expr=anndata_to_cluster_means(ann, "cluster"),
             cluster_assignments=ann.obs["cluster"],
             cell_type_channels=ann_ct.var.index,
             output_prefix=output_prefix,
@@ -1068,7 +1068,7 @@ def single_cell_analysis(
     fig.savefig(output_prefix + "cell.counts_per_cluster_per_roi.svg", **FIG_KWS)
 
     # # Plot heatmaps with mean expression per cluster
-    mean_expr = anndata_to_cluster_means(ann)
+    mean_expr = anndata_to_cluster_means(ann, "cluster")
     mean_expr.to_csv(output_prefix + "cell.mean_expression_per_cluster.csv")
     row_means = mean_expr.mean(1).sort_index().rename("channel_mean")
     col_counts = ann.obs["cluster"].value_counts().rename("cells_per_cluster")
@@ -1140,9 +1140,11 @@ def derive_reference_cell_type_labels(
     cell_type_channels: tp.List[str] = None,
     output_prefix: Path = None,
     plot: bool = True,
-    std_threshold: float = 1.5,
+    std_threshold: float = None,
     cluster_min_percentage: float = 0.0,
 ) -> Series:
+    from seaborn_extensions import clustermap
+
     if plot and output_prefix is None:
         raise ValueError("If `plot` if True, `output_prefix` must be given.")
 
@@ -1169,18 +1171,22 @@ def derive_reference_cell_type_labels(
         fractions = cluster["cluster"].value_counts()
 
         # # get cluster means
-        mean_expr = anndata_to_cluster_means(ann)
+        mean_expr = anndata_to_cluster_means(ann, "cluster")
     elif mean_expr is not None:
         mean_expr = cast(mean_expr)
         fractions = cluster_assignments.value_counts()
+
+    mean_expr = mean_expr.rename_axis(index="Channel", columns="Cluster")
 
     if cell_type_channels is None:
         cell_type_channels = mean_expr.index.tolist()
 
     # Remove clusters below a certain percentage if requested
-    fractions = fractions[
-        (fractions / fractions.sum()) > (cluster_min_percentage / 100)
-    ].rename("Cells per cluster")
+    fractions = (
+        fractions[(fractions / fractions.sum()) > (cluster_min_percentage / 100)]
+        .rename("Cells per cluster")
+        .rename_axis("Cluster")
+    )
 
     # make sure indexes match
     _mean_expr = mean_expr.reindex(fractions.index, axis=1)
@@ -1191,7 +1197,7 @@ def derive_reference_cell_type_labels(
     # use a simple STD threshold for "positiveness"
     v = mean_expr_z.values.flatten()
     if std_threshold is None:
-        v1 = get_threshold_from_gaussian_mixture(v)
+        v1 = get_threshold_from_gaussian_mixture(pd.Series(v)).squeeze()
     else:
         v1 = v.std() * std_threshold
 
@@ -1242,7 +1248,7 @@ def derive_reference_cell_type_labels(
         output_prefix + "mean_expression_per_cluster.both_z.threshold_position.svg"
     )
 
-    cmeans = mean_expr.mean(1).rename("Channel mean")
+    cmeans = mean_expr.mean(1).rename("Channel mean").rename_axis("Channel")
 
     t = mean_expr_z >= v1
     kwargs = dict(
@@ -1250,8 +1256,8 @@ def derive_reference_cell_type_labels(
         robust=True,
         xticklabels=True,
         yticklabels=True,
-        row_colors=cmeans,
-        col_colors=fractions,
+        row_colors=cmeans.to_frame(),
+        col_colors=fractions.to_frame(),
     )
     opts = [
         (mean_expr, "original", dict()),
@@ -1275,7 +1281,8 @@ def derive_reference_cell_type_labels(
         ),
     ]
     for df, label, kwargs2 in opts:
-        grid = sns.clustermap(df, **kwargs, **kwargs2)
+        df = df.loc[df.var(1) > 0, df.var() > 0]
+        grid = clustermap(df, **kwargs, **kwargs2)
         grid.savefig(output_prefix + f"mean_expression_per_cluster.{label}.svg")
 
     # replot now with labels
@@ -1298,11 +1305,12 @@ def derive_reference_cell_type_labels(
         (t.loc[t.any(1), t.any(0)], "labeled.both_z.thresholded", dict()),
     ]
     for df, label, kwargs2 in opts:
-        grid = sns.clustermap(df, **kwargs, **kwargs2)
+        df = df.loc[df.var(1) > 0, df.var() > 0]
+        grid = clustermap(df, **kwargs, **kwargs2)
         grid.savefig(output_prefix + f"mean_expression_per_cluster.{label}.svg")
 
     # pairwise cluster correlation
-    grid = sns.clustermap(
+    grid = clustermap(
         mean_expr_z_l.corr(),
         center=0,
         cmap="RdBu_r",
