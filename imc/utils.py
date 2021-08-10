@@ -633,8 +633,7 @@ def mcd_to_dir(
     #         ac.save_image(pjoin(output_dir, f"partition_{partition_id}", ""))
 
 
-def stack_to_ilastik_h5(stack: Array, output_file: Path) -> None:
-    resize
+def stack_to_ilastik_h5(stack: Array, output_file: Path = None) -> Array:
     H5_YXC_AXISTAG = json.dumps(
         {
             "axes": [
@@ -664,11 +663,14 @@ def stack_to_ilastik_h5(stack: Array, output_file: Path) -> None:
     # # zoom 2x
     s = tuple(x * 2 for x in stack.shape[1:])
     full = np.moveaxis(np.asarray([resize(x, s) for x in stack]), 0, -1)
+    if output_file is None:
+        return full
 
     # # Save input for ilastik prediction
     with h5py.File(output_file, mode="w") as handle:
         d = handle.create_dataset("stacked_channels", data=full)
         d.attrs["axistags"] = H5_YXC_AXISTAG
+    return full
 
 
 def txt_to_tiff(

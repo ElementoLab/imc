@@ -8,11 +8,13 @@ import typing as tp
 from functools import partial
 
 import numpy as np
+import pandas as pd
 import scipy.ndimage as ndi
 import matplotlib.pyplot as plt
 from skimage.exposure import equalize_hist as eq
 from skimage.transform import resize
 import tifffile
+import sklearn
 
 from imc.types import Array, Figure, Path, Series
 from imc.data_models import roi as _roi
@@ -65,7 +67,7 @@ def prepare_stack(
 def extract_features(
     arr: tp.Union[Array, tp.Sequence[Array]],
     model: str = "VGG19",
-    pyramids: tp.Sequence[int] = (1, 2, 4, 8),
+    pyramids: tp.Sequence[int] = (1, 2, 4),
 ) -> tp.List[Array]:
     """
     Extract features from images using pre-trained deep-learning model
@@ -79,7 +81,7 @@ def extract_features(
         arr = [arr]
     elif isinstance(arr, (list, tuple)):
         for a in arr:
-            assert len(a.shape) == 3
+            assert len(a.shape) == 3, "Input must be of shape YXC or list of YXC arrays!"
     channels = np.unique([a.shape[-1] for a in arr])
     assert len(channels) == 1, "All arrays must have the same number of channels!"
     n_channels = channels[0]
@@ -120,6 +122,109 @@ def extract_features(
             _feat.append(resize(feat, orig_shape + (feat.shape[-1],)))
         features.append(np.concatenate(np.asarray(_feat), axis=-1))
     return features
+
+
+def train_pixel_classifier(
+    x: Array,
+    y: Array,
+    save_model: bool,
+    output_file: Path,
+    model: str = "RandomForestClassifier",
+    subsample_frac: float = None,
+    subsample_n: float = None,
+) -> sklearn.base.BaseEstimator:
+    """
+    Train classifier to predict pixel classes from image stacks (x) and sparse labels (y).
+
+    Parameters
+    ----------
+    x: np.ndarray, list
+        Array with shape BCXY (smaple,channel,X,Y) of signal
+    y: np.ndarray, list
+        Array with shape BXY (smaple,X,Y) of cellular compartments (nucleus, cytoplasm, background).
+    save_model: bool
+        Whether to save the trained model.
+    output_file: pathlib.Path
+        File to save model to. Traditionally ends in '.sav'.
+    model: str
+        Type of model to use. Only 'RandomForestClassifier' available for the time being.
+    subsample_frac: float
+        Fraction of pixels to train on. Defaults to all.
+    subsample_n: float
+        Number of pixels to train on. Defaults to all.
+    """
+    from sklearn.ensemble import RandomForestClassifier
+    import joblib
+
+    assert model == "RandomForestClassifier"
+
+    if subsample_frac is not None:
+        assert subsample_n is None
+
+    if subsample_n is not None:
+        assert subsample_frac is None
+
+    # TODO: make sure unequally shaped samples are supported
+    print("Extracting features.")
+    xf = np.asarray(extract_features([xx for xx in x]))
+    xf = xf.reshape((-1, xf.shape[-1]))
+    yf = y.reshape((xf.shape[0],))
+
+    # remove null pixels
+    nan = pd.isnull(xf).any(1)
+    xf = xf[~nan, :]
+    yf = yf[~nan]
+
+    # select only pixels with class
+    sel = yf > 0
+    xf = xf[sel, :]
+    yf = yf[sel]
+
+    # subsample if requested
+    if subsample_frac is not None:
+        subsample_n = int(yf.shape[0] * subsample_frac)
+
+    if subsample_n is not None:
+        c = np.random.choice(range(yf.shape[0]), subsample_n)
+        xf = xf[c, :]
+        yf = yf[c]
+
+    print("Training model.")
+    _model = RandomForestClassifier(n_jobs=-1)
+    _model.fit(xf, yf)
+
+    if save_model:
+        print("Saving model.")
+        joblib.dump(_model, output_file)
+    return _model
+
+
+def predict_pixel_classifier(x: Array, model_file: Path) -> Array:
+    """
+    Predict pixel classes from image stacks (x) using trained model.
+
+    Parameters
+    ----------
+    x: np.ndarray, list
+        Array with shape BCXY (smaple,channel,X,Y) of signal
+    model_file: pathlib.Path
+        File with trained model to load.
+    """
+    import joblib
+
+    print("Loading model.")
+    _model = joblib.load(model_file)
+
+    print("Extracting features.")
+    xf = np.asarray(extract_features([xx for xx in x]))
+    shape = xf.shape[:-1] + (3,)
+    xf = xf.reshape((-1, xf.shape[-1]))
+    # fill null pixels with 0
+    xf[pd.isnull(xf)] = 0
+    print("Predicting.")
+    probs = _model.predict_proba(xf)
+    probs = probs.reshape(shape)
+    return probs
 
 
 def stardist_segment_nuclei(image: Array, model_str: str = "2D_versatile_fluo") -> Array:

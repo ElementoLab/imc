@@ -87,6 +87,12 @@ There are many customization options for each step. Do `imc --help` or `imc <sub
 imc view $TIFFS
 ```
 
+There is also an interface to the more full fledged `napari` image viwer:
+```bash
+imc view --napari data/${SAMPLE}.mcd  # view MCD file
+napari $TIFFS  # view TIFF files directly with napari. Requires napari
+```
+
 A quick example of further analysis steps of single cell data downstream in IPython/Jupyter notebook:
 ```python
 import scanpy as sc
