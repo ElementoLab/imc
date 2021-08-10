@@ -78,7 +78,7 @@ imc segment \
 imc quantify $TIFFS
 
 ## Phenotype cells into clusters
-imc phenotype $TIFFS
+imc phenotype processed/quantification.h5ad
 ```
 There are many customization options for each step. Do `imc --help` or `imc <subcommand> --help` to see all.
 
