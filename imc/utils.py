@@ -725,6 +725,78 @@ def stack_to_ilastik_h5(stack: Array, output_file: Path = None) -> Array:
     return full
 
 
+def stack_to_probabilities(
+    stack: Array,
+    channel_labels: Series,
+    nuclear_channels: tp.Sequence[str] = None,
+    cytoplasm_channels: tp.Sequence[str] = None,
+    log: bool = True,
+    # scale: bool = True,
+) -> Array:
+    """
+    Very simple way to go from a channel stack to nuclei, cytoplasm and background probabilities.
+    """
+    from skimage.exposure import equalize_hist as eq
+
+    # nuclear_channels = ["DNA", "Histone", "pCREB", "cKIT", "pSTAT3"]
+    nuclear_channels = nuclear_channels or ["DNA", "Histone"]
+    _nuclear_channels = channel_labels[
+        channel_labels.str.contains("|".join(nuclear_channels))
+    ]
+    if cytoplasm_channels is None:
+        _cytoplasm_channels = channel_labels[~channel_labels.isin(_nuclear_channels)]
+    else:
+        _cytoplasm_channels = channel_labels[
+            channel_labels.str.contains("|".join(cytoplasm_channels))
+        ]
+
+    if log:
+        stack = np.log1p(stack)
+
+    # if scale:
+    #     stack = saturize(stack)
+
+    # # mean of nuclear signal
+    ns = stack[_nuclear_channels.index].mean(0)
+    # # mean of cytoplasmatic signal
+    cs = stack[_cytoplasm_channels.index].mean(0)
+
+    # # normalize
+    ns = minmax_scale(ns)
+    cs = minmax_scale(eq(cs, 256 * 4))
+
+    # # convert into probabilities
+    pn = ns
+    pb = 1 - minmax_scale(pn + cs)
+    # pb = (pb - pb.min()) / pb.max()
+    # pc = minmax_scale(cs - (pn + pb))
+    pc = 1 - (pn + pb)
+    rgb = np.asarray([pn, pc, pb])
+
+    # pnf = ndi.gaussian_filter(pn, 1)
+    # pcf = ndi.gaussian_filter(pc, 1)
+    # pbf = ndi.gaussian_filter(pb, 1)
+    # rgb = np.asarray([pnf, pcf, pbf])
+    # return saturize(rgb)
+    return np.clip(rgb, 0, 1)
+
+    # # pp = ndi.zoom(roi.probabilities, (1, 0.5, 0.5))
+    # # pp = pp / pp.max()
+    # p = get_input_filename(roi.stack, roi.channel_labels)
+    # fig, axes = plt.subplots(1, 4, sharex=True, sharey=True)
+    # # axes[0].imshow(np.moveaxis(pp / pp.max(), 0, -1))
+    # axes[1].imshow(np.moveaxis(p, 0, -1))
+    # from skimage.exposure import equalize_hist as eq
+    # axes[2].imshow(minmax_scale(eq(roi._get_channel("mean")[1])))
+    # axes[3].imshow(roi.mask)
+
+
+def save_probabilities(probs: Array, output_tiff: Path):
+    import tifffile
+
+    tifffile.imsave(output_tiff, np.moveaxis((probs * 2 ** 16).astype("uint16"), 0, -1))
+
+
 def txt_to_tiff(
     txt_file: Path, tiff_file: Path, write_channel_labels: bool = True
 ) -> None:

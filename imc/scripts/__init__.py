@@ -506,6 +506,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "morphology",
                     "action": "store_false",
+                    "help": "Whether to quantify object morphology or not. "
+                    "Default is to quantify.",
                 },
             },
             {

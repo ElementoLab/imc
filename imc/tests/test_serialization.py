@@ -5,7 +5,7 @@ import parmap
 import pandas as pd
 
 from imc import Project, IMCSample, ROI
-from imc.operations import _quantify_cell_intensity__roi
+from imc.ops.quant import _quantify_cell_intensity__roi
 from imc.types import Path
 
 
