@@ -24,7 +24,6 @@ from skimage.segmentation import clear_border  # type: ignore
 from imc.types import Path, Figure, Axis, Patch, Array, DataFrame, Series
 import imc.data_models.sample as _sample
 import imc.data_models.project as _project
-from imc.operations import quantify_cell_intensity, quantify_cell_morphology
 from imc.utils import read_image_from_file, sorted_nicely, minmax_scale
 from imc.graphics import (
     add_scale as _add_scale,
@@ -39,10 +38,8 @@ from imc.graphics import (
     get_random_label_cmap,
 )
 
-from imc.exceptions import (
-    cast,
-    AttributeNotSetError,
-)  # TODO: replace with typing.cast
+# TODO: replace exceptions.cast with typing.cast
+from imc.exceptions import cast, AttributeNotSetError
 
 
 FIG_KWS = dict(dpi=300, bbox_inches="tight")
@@ -1172,6 +1169,8 @@ class ROI:
         **kwargs,
     ) -> DataFrame:
         """Quantify intensity of each cell in each channel."""
+        from imc.ops.quant import quantify_cell_intensity
+
         if channel_include is not None:
             kwargs["channel_include"] = self.channel_labels.str.contains(
                 channel_include
@@ -1208,6 +1207,8 @@ class ROI:
         Additional keyword arguments are passed to
         `imc.operations.quantify_cell_morphology`.
         """
+        from imc.ops.quant import quantify_cell_morphology
+
         _quant = list()
         for layer in layers:
             quant = (

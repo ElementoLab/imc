@@ -34,6 +34,10 @@ plt.rcParams["font.family"] = "sans-serif"
 plt.rcParams["font.sans-serif"] = ["Arial"]
 plt.rcParams["text.usetex"] = False
 
+import scanpy as _sc
+
+_sc.settings.n_jobs = -1
+
 
 def setup_logger(name: str = "imc", level: int = logging.INFO) -> logging.Logger:
     """Setup the logger for the package."""

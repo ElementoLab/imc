@@ -17,15 +17,17 @@ from imctools.io.mcd.mcdparser import McdParser
 
 from imc.types import Path, DataFrame, Args
 from imc.utils import cleanup_channel_names, build_channel_name
-from imc.scripts import build_cli
+from imc.scripts import build_cli, find_mcds
 
 
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("inspect")
     args = parser.parse_args(cli)
     if len(args.mcd_files) == 0:
-        print("MCD files were not provided and could not be found!")
-        return 1
+        args.mcd_files = find_mcds()
+        if len(args.mcd_files) == 0:
+            print("MCD files were not provided and could not be found!")
+            return 1
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.mcd_files])
     print(f"Starting inspection step for {len(args.mcd_files)} MCD files:{fs}!")

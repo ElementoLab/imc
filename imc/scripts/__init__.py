@@ -213,7 +213,7 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "mcd_files",
-                    "nargs": "?",
+                    "nargs": "*",
                     "default": None,
                     "type": Path,
                 }
@@ -329,7 +329,7 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "tiffs",
-                    "nargs": "?",
+                    "nargs": "*",
                     "default": None,
                     "type": Path,
                     "help": "TIFF files with array stack.",
@@ -402,7 +402,7 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "tiffs",
-                    "nargs": "?",
+                    "nargs": "*",
                     "default": None,
                     "type": Path,
                     "help": "TIFF files with array stack.",
@@ -494,7 +494,7 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "tiffs",
-                    "nargs": "?",
+                    "nargs": "*",
                     "default": None,
                     "type": Path,
                     "help": "TIFF files with array stack."
@@ -681,7 +681,7 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "tiffs",
-                    "nargs": "?",
+                    "nargs": "*",
                     "default": None,
                     "type": Path,
                     "help": "TIFF files with array stack. "
@@ -772,7 +772,7 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "input_files",
-                    "nargs": "?",
+                    "nargs": "*",
                     "default": None,
                     "type": Path,
                     "help": "MCD, or TIFF files with array stack. MCD requires --napari option.",

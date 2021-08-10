@@ -10,7 +10,7 @@ import typing as tp
 import matplotlib.pyplot as plt
 
 from imc import Project
-from imc.operations import phenotyping, plot_phenotyping
+from imc.ops.clustering import phenotyping, plot_phenotyping
 from imc.scripts import build_cli
 from imc.utils import filter_kwargs_by_callable
 

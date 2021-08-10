@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import scanpy as sc
 
 from imc import Project, ROI
-from imc.operations import phenotyping, plot_phenotyping
+from imc.ops.clustering import phenotyping, plot_phenotyping
 from imc.scripts import build_cli, find_tiffs, find_h5ad
 from imc.utils import filter_kwargs_by_callable
 

@@ -20,10 +20,6 @@ from imc.data_models.roi import ROI
 from imc.types import Path, Figure, Patch, DataFrame, Series, MultiIndexSeries
 import imc.data_models.project as _project
 import imc.data_models.roi as _roi
-from imc.operations import (
-    single_cell_analysis,
-    predict_cell_types_from_reference,
-)
 from imc.utils import parse_acquisition_metadata
 from imc.graphics import get_grid_dims, add_legend, share_axes_by
 from imc.exceptions import cast  # TODO: replace with typing.cast
@@ -489,6 +485,8 @@ class IMCSample:
         """
         Derive clusters of single cells based on their channel intensity.
         """
+        from imc.ops.clustering import single_cell_analysis
+
         output_prefix = Path(output_prefix or self.root_dir / "single_cell" / self.name)
 
         if "quantification" not in kwargs and self.quantification is not None:
@@ -535,6 +533,8 @@ class IMCSample:
             roi.set_clusters(clusters=self.clusters.loc[roi.name].squeeze())
 
     def predict_cell_types_from_reference(self, **kwargs) -> None:
+        from imc.ops.clustering import predict_cell_types_from_reference
+
         predict_cell_types_from_reference(self, **kwargs)
 
     def cell_type_adjancency(

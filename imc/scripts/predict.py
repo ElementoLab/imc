@@ -9,13 +9,18 @@ import typing as tp
 
 from imc import ROI
 from imc.types import Path
-from imc.scripts import build_cli
+from imc.scripts import build_cli, find_tiffs
 
 
 def main(cli: tp.Sequence[str] = None) -> int:
     """Generate probability maps for each ROI using ilastik."""
     parser = build_cli("predict")
     args = parser.parse_args(cli)
+    if not args.tiffs:
+        args.tiffs = find_tiffs()
+        if not args.tiffs:
+            print("Input files were not provided and cannot be found!")
+            return 1
 
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.tiffs])
     print(f"Starting predict step for {len(args.tiffs)} TIFF files:{fs}!")
