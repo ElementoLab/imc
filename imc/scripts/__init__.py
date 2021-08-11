@@ -667,7 +667,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "compute",
                     "action": "store_false",
-                    "help": "Whether to comput phenotypes." " Default is True.",
+                    "help": "Whether to compute phenotypes." " Default is True.",
                 },
             },
             {

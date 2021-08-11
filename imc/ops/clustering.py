@@ -16,6 +16,7 @@ from anndata import AnnData
 import scanpy as sc
 
 import imc.data_models.sample as _sample
+import imc.data_models.roi as _roi
 from imc.exceptions import cast
 from imc.types import DataFrame, Series, Path, MultiIndexSeries
 from imc.utils import minmax_scale
@@ -335,7 +336,7 @@ def plot_phenotyping(
 def single_cell_analysis(
     output_prefix: Path,
     quantification: DataFrame = None,
-    rois: tp.List["ROI"] = None,
+    rois: tp.List[_roi.ROI] = None,
     label_clusters: bool = True,
     plot: bool = True,
     intensity: bool = True,

@@ -25,11 +25,46 @@ In addition, the `imc.operations` module contains several analysis-independent m
 ```
 
 ## imc.operations
+### imc.ops.signal
 ```{eval-rst}
-.. automodule:: imc.operations
+.. automodule:: imc.ops.signal
    :members:
 ```
-
+### imc.ops.compensation
+```{eval-rst}
+.. automodule:: imc.ops.compensation
+   :members:
+```
+### imc.ops.mixture
+```{eval-rst}
+.. automodule:: imc.ops.mixture
+   :members:
+```
+### imc.ops.domain
+```{eval-rst}
+.. automodule:: imc.ops.domain
+   :members:
+```
+### imc.ops.quant
+```{eval-rst}
+.. automodule:: imc.ops.quant
+   :members:
+```
+### imc.ops.clustering
+```{eval-rst}
+.. automodule:: imc.ops.clustering
+   :members:
+```
+### imc.ops.adjacency
+```{eval-rst}
+.. automodule:: imc.ops.adjacency
+   :members:
+```
+### imc.ops.community
+```{eval-rst}
+.. automodule:: imc.ops.community
+   :members:
+```
 ## imc.graphics
 ```{eval-rst}
 .. automodule:: imc.graphics

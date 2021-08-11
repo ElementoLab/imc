@@ -1205,7 +1205,7 @@ class ROI:
         """
         Quantify shape attributes of each cell.
         Additional keyword arguments are passed to
-        `imc.operations.quantify_cell_morphology`.
+        `imc.ops.quant.quantify_cell_morphology`.
         """
         from imc.ops.quant import quantify_cell_morphology
 

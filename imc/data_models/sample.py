@@ -443,7 +443,7 @@ class IMCSample:
         """
         Measure the intensity of each channel in each single cell.
         """
-        from imc.operations import quantify_cells_rois
+        from imc.ops.quant import quantify_cells_rois
 
         quantification = quantify_cells_rois(rois or self.rois, intensity, morphology)
         if set_attribute:
@@ -458,7 +458,7 @@ class IMCSample:
         """
         Measure the intensity of each channel in each single cell.
         """
-        from imc.operations import quantify_cell_intensity_rois
+        from imc.ops.quant import quantify_cell_intensity_rois
 
         return quantify_cell_intensity_rois(rois or self.rois, **kwargs)
 
@@ -470,7 +470,7 @@ class IMCSample:
         """
         Measure the shape parameters of each single cell.
         """
-        from imc.operations import quantify_cell_morphology_rois
+        from imc.ops.quant import quantify_cell_morphology_rois
 
         return quantify_cell_morphology_rois(rois or self.rois, **kwargs)
 

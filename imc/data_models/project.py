@@ -555,7 +555,7 @@ class Project:
         """
         Observe the pairwise correlation of channels across ROIs.
         """
-        from imc.operations import _correlate_channels__roi
+        from imc.ops.quant import _correlate_channels__roi
 
         rois = self._get_rois(samples, rois)
         _res = parmap.map(_correlate_channels__roi, rois, pm_pbar=True)
@@ -632,7 +632,7 @@ class Project:
         """
         Measure the intensity of each channel in each single cell.
         """
-        from imc.operations import quantify_cells_rois
+        from imc.ops.quant import quantify_cells_rois
 
         quantification = quantify_cells_rois(
             self._get_rois(samples, rois),
@@ -656,7 +656,7 @@ class Project:
         """
         Measure the intensity of each channel in each single cell.
         """
-        from imc.operations import quantify_cell_intensity_rois
+        from imc.ops.quant import quantify_cell_intensity_rois
 
         return quantify_cell_intensity_rois(self._get_rois(samples, rois), **kwargs)
 
@@ -669,7 +669,7 @@ class Project:
         """
         Measure the shape parameters of each single cell.
         """
-        from imc.operations import quantify_cell_morphology_rois
+        from imc.ops.quant import quantify_cell_morphology_rois
 
         return quantify_cell_morphology_rois(self._get_rois(samples, rois), **kwargs)
 
