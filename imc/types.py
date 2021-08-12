@@ -59,6 +59,18 @@ class Path(pathlib.Path):
         super().mkdir(mode=mode, parents=parents, exist_ok=exist_ok)
         return self
 
+    def glob(self, pattern: str) -> tp.Generator:
+        # to support ** with symlinks: https://bugs.python.org/issue33428
+        from glob import glob
+
+        if "**" in pattern:
+            sep = "/" if self.is_dir() else ""
+            yield from map(
+                Path,
+                glob(self.as_posix() + sep + pattern, recursive=True),
+            )
+        yield from super().glob(pattern)
+
 
 GenericType = tp.TypeVar("GenericType")
 
