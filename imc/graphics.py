@@ -458,7 +458,7 @@ def cell_labels_to_mask(mask: Array, labels: tp.Union[Series, tp.Dict]) -> Array
 
 def values_to_rgb_colors(
     mask: Array, from_palette: str = None, remove_zero: bool = True
-) -> tp.Tuple[Array, tp.Dict[tp.Any, tp.List[float]]]:
+) -> tp.Tuple[Array, tp.Dict[tp.Any, tp.Tuple[float, float, float]]]:
     """
     Colors each integer in the 2D `mask` array with a unique color by
     expanding the array to 3 dimensions.
@@ -480,12 +480,12 @@ def values_to_rgb_colors(
         )
         palette = sns.color_palette(from_palette, ident.max())
 
-    colors = pd.Series(palette).reindex(ident - 1)
+    colors = pd.Series(palette, index=ident)
     res = np.zeros((mask.shape) + (3,))
     for c, i in zip(colors, ident):
         x, y = np.nonzero(np.isin(mask, i))
         res[x, y, :] = c
-    return res, dict(zip(ident, palette))
+    return res, colors.to_dict()
 
 
 @tp.overload

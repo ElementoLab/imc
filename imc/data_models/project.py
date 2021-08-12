@@ -120,7 +120,6 @@ class Project:
         self.subfolder_per_sample = subfolder_per_sample
         self.processed_dir = Path(processed_dir).expanduser().absolute()
         self.results_dir = Path(results_dir).expanduser().absolute()
-        self.results_dir.mkdir()
         self.quantification: tp.Optional[DataFrame] = None
         self._clusters: tp.Optional[
             MultiIndexSeries

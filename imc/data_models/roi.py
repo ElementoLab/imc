@@ -24,7 +24,7 @@ from skimage.segmentation import clear_border  # type: ignore
 from imc.types import Path, Figure, Axis, Patch, Array, DataFrame, Series
 import imc.data_models.sample as _sample
 import imc.data_models.project as _project
-from imc.utils import read_image_from_file, sorted_nicely, minmax_scale
+from imc.utils import read_image_from_file, minmax_scale
 from imc.graphics import (
     add_scale as _add_scale,
     add_minmax as _add_minmax,
@@ -934,7 +934,7 @@ class ROI:
         """
         If ax is given it must match number of `cell_type_combinations`.
         """
-        from imc.utils import is_numeric
+        from imc.utils import is_numeric, sorted_nicely
 
         if cell_type_assignments is not None:
             clusters = cell_type_assignments
@@ -962,6 +962,9 @@ class ROI:
 
         if ns.min() == 0:
             ns += 1
+
+        if (ns.iloc[0] != 0) and (ns.index.min() == 0):
+            ns.index += 1
 
         # simply plot all cell types jointly
         # TODO: fix use of cell_type_combinations

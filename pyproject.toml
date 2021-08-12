@@ -68,7 +68,6 @@ dev = [
     "pandas-stubs",
     "pylint",
     "git-lint",
-    "pytest",
     "pydocstyle",
     "rich",
     # data-science-types
@@ -162,7 +161,7 @@ cellpose = [
 
 [tool.black]
 line-length = 90
-target-version = ['py37']
+target-version = ['py39']
 include = '\.pyi?$'
 exclude = '''
 
@@ -213,10 +212,20 @@ ignore_missing_imports = true
 minversion = "6.0"
 addopts = "-ra -q --strict-markers"
 testpaths = [
-    "tests",
-    "integration",
+    "imc/tests"
 ]
 markers = [
     'slow', # 'marks tests as slow (deselect with "-m 'not slow'")',
     'serial'
 ]
+
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py39
+
+[testenv]
+deps = pytest >= 6, <7
+commands = pytest
+"""

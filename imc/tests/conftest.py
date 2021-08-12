@@ -3,6 +3,11 @@ import pytest
 from imc.demo import generate_project
 
 
+# # To run manually:
+# import tempfile
+# tmp_path = tempfile.TemporaryDirectory().name
+
+
 @pytest.fixture
 def project(tmp_path):
     return generate_project(root_dir=tmp_path)

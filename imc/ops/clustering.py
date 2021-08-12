@@ -19,7 +19,7 @@ import imc.data_models.sample as _sample
 import imc.data_models.roi as _roi
 from imc.exceptions import cast
 from imc.types import DataFrame, Series, Path, MultiIndexSeries
-from imc.utils import minmax_scale
+from imc.utils import minmax_scale, double_z_score
 from imc.graphics import rasterize_scanpy
 
 
@@ -187,8 +187,6 @@ def plot_phenotyping(
     from imc.graphics import add_centroids
     from seaborn_extensions import clustermap
 
-    figkws = dict(dpi=300, bbox_inches="tight")
-
     # Read in
     if isinstance(a, Path):
         print(f"Reading h5ad file: '{a}'.")
@@ -256,7 +254,7 @@ def plot_phenotyping(
                     res = clustering_resolutions[i - len(color)]
                     add_centroids(a, res=res, ax=fig.axes[0], algo=algo)
                 plt.figure(fig)
-                pdf.savefig(**figkws)
+                pdf.savefig(**FIG_KWS)
                 plt.close(fig)
 
         # Plot ROIs separately
@@ -264,7 +262,7 @@ def plot_phenotyping(
         projf = getattr(sc.pl, algo)
         fig = projf(a, color=["sample", "roi"], show=False)[0].figure
         rasterize_scanpy(fig)
-        fig.savefig(f, **figkws)
+        fig.savefig(f, **FIG_KWS)
         plt.close(fig)
 
     # Plot average phenotypes
@@ -367,10 +365,13 @@ def single_cell_analysis(
                      `channel_filtering_threshold`.
     channel_exclude: These channels will not be used either for quantification.
     """
-    os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
+    from imc.ops.quant import quantify_cells_rois
+    from imc.ops.signal import measure_channel_background
 
-    if not str(output_prefix).endswith("."):
-        output_prefix = Path(str(output_prefix) + ".")
+    output_prefix.parent.mkdir()
+
+    if not output_prefix.endswith("."):
+        output_prefix = output_prefix + "."
 
     if quantification is None and rois is None:
         raise ValueError("One of `quantification` or `rois` must be given.")
@@ -634,6 +635,7 @@ def derive_reference_cell_type_labels(
     cluster_min_percentage: float = 0.0,
 ) -> Series:
     from seaborn_extensions import clustermap
+    from imc.ops.mixture import get_threshold_from_gaussian_mixture
 
     if plot and output_prefix is None:
         raise ValueError("If `plot` if True, `output_prefix` must be given.")
@@ -731,7 +733,7 @@ def derive_reference_cell_type_labels(
 
     fig, axs = plt.subplots(1, 1, figsize=(3, 3))
     axs.set_title("Distribution of mean expressions")
-    sns.distplot(v, ax=axs)
+    sns.histplot(v, ax=axs)
     axs.axvline(v.mean(), linestyle="--", color="grey")
     axs.axvline(v1, linestyle="--", color="red")
     fig.savefig(
