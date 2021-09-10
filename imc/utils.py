@@ -24,7 +24,6 @@ from skimage.exposure import equalize_hist as eq
 import skimage.io
 import skimage.measure
 from skimage.transform import resize
-from sklearn.linear_model import LinearRegression
 import tifffile
 from tqdm import tqdm
 

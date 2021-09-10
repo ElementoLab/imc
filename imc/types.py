@@ -14,6 +14,22 @@ import numpy
 from anndata import AnnData as _AnnData
 
 
+__all__ = [
+    "Path",
+    "GenericType",
+    "Args",
+    "Array",
+    "MultiIndexSeries",
+    "Series",
+    "DataFrame",
+    "AnnData",
+    "Figure",
+    "Axis",
+    "Patch",
+    "ColorMap",
+]
+
+
 class Path(pathlib.Path):
     """
     A pathlib.Path child class that allows concatenation with strings
@@ -69,7 +85,8 @@ class Path(pathlib.Path):
                 Path,
                 glob(self.as_posix() + sep + pattern, recursive=True),
             )
-        yield from super().glob(pattern)
+        else:
+            yield from super().glob(pattern)
 
 
 GenericType = tp.TypeVar("GenericType")
