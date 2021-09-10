@@ -561,7 +561,6 @@ def deepcell_postprocess_both_compartments(
     The major goal is the alignment of the cellular and nuclear masks
     as much as possible.
     """
-    import pandas as pd
     import seaborn as sns
     from skimage.segmentation import find_boundaries
 
@@ -662,7 +661,7 @@ def deepcell_postprocess_both_compartments(
     pre_match, pre_unpaireds, pre_multiplets = inspect_mask_pair(cell_mask, nuclei_mask)
 
     if verbose:
-        print(f"Statistics prior postprocessing:")
+        print("Statistics prior postprocessing:")
         print(f"\tSegmentation has {lc} cells and {ln} nuclei.")
         print(f"\t{pre_match} exact matches between cells and nuclei.")
         print(f"\t{len(pre_unpaireds)} cells without nuclei.")
@@ -838,7 +837,7 @@ def segment_roi(
         shape = tuple([int(x / 2) for x in image.shape[1:]])
         image = resize(image / image.max(), (3,) + shape)
         mask = deepcell_segment_probabilities(np.moveaxis(image, 0, -1), compartment)
-        if postprocessing:
+        if postprocessing and compartment in ["both"]:
             mask = deepcell_postprocess_both_compartments(
                 mask,
                 plot=False,
