@@ -345,6 +345,7 @@ def single_cell_analysis(
     channel_include: tp.List[str] = None,
     channel_exclude: tp.Sequence[str] = [
         "<EMPTY>",
+        "_EMPTY_",
         "EMPTY",
         "Ar80",
         "Ru9",

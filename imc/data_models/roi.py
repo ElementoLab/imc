@@ -188,18 +188,36 @@ class ROI:
             roi.sample.rois = [roi]
         return roi
 
-    # TODO: read from OME-TIFF
     @property
     def channel_labels(self) -> Series:
-        """Return a Series with a string for each channel in the ROIs stack."""
+        """
+        Return a Series with a string for each channel in the ROIs stack.
+        """
+        import tifffile
+        from xml.etree import ElementTree
+
         if self._channel_labels is not None:
             return self._channel_labels
 
-        # read channel labels specifically for ROI
+        # Read channel names from OME-TIFF XML metadata
+        t = tifffile.TiffFile(self.get_input_filename("stack"))
+        if t.is_ome:
+            et = ElementTree.fromstring(t.ome_metadata)
+            preview = pd.Series()
+            preview = (
+                pd.Series([e.get("Name") for e in et.iter() if e.tag.endswith("Channel")])
+                .rename("channel")
+                .rename_axis("index")
+            )
+            if not preview.empty:
+                self._channel_labels = preview
+                return self._channel_labels
+
+        # Read channel labels from CSV file
         channel_labels_file = self.get_input_filename("stack").replace_(".tiff", ".csv")
         if not channel_labels_file.exists():
             msg = (
-                "`channel_labels` was not given upon initialization "
+                "File is not OME-TIFF, `channel_labels` was not given upon initialization "
                 f"and '{channel_labels_file}' could not be found!"
             )
             raise FileNotFoundError(msg)

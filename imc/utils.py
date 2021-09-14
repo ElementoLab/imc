@@ -594,6 +594,7 @@ def mcd_to_dir(
                 ~(
                     channel_labels.str.contains(r"^\d")
                     | channel_labels.str.contains("<EMPTY>")
+                    | channel_labels.str.contains("_EMPTY_")
                 )
             ].reset_index(drop=True)
 
@@ -710,6 +711,7 @@ def write_ometiff(
     **kwargs:
         Additional arguments to tifffile.imwrite.
     """
+    # TODO: Add to OME XML: ROI number
     output_path = Path(output_path)
     labels = pd.Series(labels).str.replace("<", "_").str.replace(">", "_").tolist()
 
