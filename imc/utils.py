@@ -434,11 +434,12 @@ def mcd_to_dir(
     mcd_file: Path,
     pannel_csv: Path = None,
     ilastik_output: bool = True,
-    ilastik_channels: tp.List[str] = None,
+    ilastik_channels: tp.Sequence[str] = None,
     ilastik_compartment: str = None,
     output_dir: Path = None,
     output_format: str = "tiff",
     overwrite: bool = False,
+    compression_level: int = 3,
     sample_name: str = None,
     partition_panels: bool = False,
     filter_full: bool = True,
@@ -579,7 +580,7 @@ def mcd_to_dir(
             prefix = Path(sample_name + "-" + str(i + 1).zfill(2))
 
         # Skip if not overwrite
-        file_ending = "ome.tiff" if output_format == "ome-tiff" else "tiff"
+        file_ending = "tiff"
         if (prefix + "_full." + file_ending).exists() and not overwrite:
             print("TIFF images exist and overwrite is set to `False`. Continuing.")
             continue
@@ -608,13 +609,18 @@ def mcd_to_dir(
                     ac.save_tiff(
                         p + file_ending,
                         names=channel_labels.str.extract(r"\((.*)\)")[0],
+                        compression=compression_level,
                     )
             elif output_format == "ome-tiff":
                 if (overwrite) or not (p + file_ending).exists():
-                    ac.save_ome_tiff(
-                        p + file_ending,
-                        names=channel_labels.str.extract(r"\((.*)\)")[0],
-                        xml_metadata=mcd.get_mcd_xml(),
+                    write_ometiff(
+                        arr=ac._image_data,
+                        labels=channel_labels.tolist(),
+                        output_path=p + file_ending,
+                        compression_level=compression_level,
+                        description="; ".join(
+                            [f"{k}={v}" for k, v in ac.acquisition.metadata.items()]
+                        ),
                     )
 
         # Save channel labels for the stack
@@ -682,6 +688,93 @@ def mcd_to_dir(
     #     for ac_id in partition:
     #         ac = mcd.get_imc_acquisition(ac_id)
     #         ac.save_image(pjoin(output_dir, f"partition_{partition_id}", ""))
+
+
+def write_ometiff(
+    arr: Array,
+    labels: tp.Sequence[str],
+    output_path: tp.Union[Path, str],
+    compression_level: int = 3,
+    description: str = None,
+    **tiff_kwargs,
+) -> None:
+    """
+    Write DataArray to a multi-page OME-TIFF file.
+
+    Parameters
+    ----------
+    arr: np.ndarray
+        Array of dimensions CYX.
+    output_path: str | pathlib.Path
+        File to write TIFF file to.
+    **kwargs:
+        Additional arguments to tifffile.imwrite.
+    """
+    output_path = Path(output_path)
+    labels = pd.Series(labels).str.replace("<", "_").str.replace(">", "_").tolist()
+
+    # Generate standard OME-XML
+    channels_xml = "".join(
+        [
+            f"""
+                <Channel
+                        ID="Channel:0:{i}"
+                        Name="{channel}"
+                        SamplesPerPixel="1"/>"""
+            for i, channel in enumerate(labels)
+        ]
+    )
+    xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+    <OME
+            xmlns="http://www.openmicroscopy.org/Schemas/OME/2016-06"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
+        <Image
+                Name="{output_path.stem}"
+                ID="Image:0"
+                Description="{description or ''}">
+            <Pixels
+                    Type="float"
+                    BigEndian="false"
+                    DimensionOrder="XYZCT"
+                    ID="Pixels:0"
+                    Interleaved="false"
+                    SizeX="{arr.shape[1]}"
+                    SizeY="{arr.shape[2]}"
+                    SizeZ="1"
+                    SizeC="{arr.shape[0]}"
+                    SizeT="1"
+                    PhysicalSizeX="1.0"
+                    PhysicalSizeY="1.0">
+                    {channels_xml}
+                <TiffData/>
+            </Pixels>
+        </Image>
+    </OME>
+    """
+    output_path.parent.mkdir()
+
+    # Notes:
+    ## resolution: 1 um/px = 25400 px/inch;
+    ## even though DimensionOrder is XYZCT, it is read as CYX.
+    tifffile.imwrite(
+        output_path,
+        data=arr,
+        description=xml,
+        contiguous=True,
+        photometric="minisblack",
+        resolution=(25400, 25400, "inch"),
+        metadata=None,
+        compress=compression_level,
+        **tiff_kwargs,
+    )
+
+    # To validate the XML:
+    # # Write to disk:
+    # with open(output_path.replace_(".tiff", ".xml"), "w") as handle:
+    #     handle.write(xml)
+    # # Validate:
+    # $> xmlvalid file.xml
 
 
 def stack_to_ilastik_h5(stack: Array, output_file: Path = None) -> Array:

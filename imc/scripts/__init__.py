@@ -216,11 +216,17 @@ cli_config = {
                     "nargs": "*",
                     "default": None,
                     "type": Path,
+                    "help": "Input files in MCD format to be inspected. "
+                    "Several files can be provided in a space-separated manner.",
                 }
             },
             {
                 "args": ["--no-write"],
-                "kwargs": {"dest": "no_write", "action": "store_true"},
+                "kwargs": {
+                    "dest": "no_write",
+                    "action": "store_true",
+                    "help": "Whether to not write output. " "Default is to do so.",
+                },
             },
             {
                 "args": [
@@ -231,6 +237,7 @@ cli_config = {
                     "dest": "output_prefix",
                     "default": "mcd_files",
                     "type": Path,
+                    "help": "Prefix to use for output files. " "Default is 'mcd_files'.",
                 },
             },
         ],
@@ -240,8 +247,9 @@ cli_config = {
                     "dest": "input_files",
                     "nargs": "+",
                     "type": Path,
-                    "help": "Files to process. Either MCD of TIFF.",
-                }
+                    "help": "Files to process. Either MCD of TIFF. "
+                    "Several files can be given space-separated.",
+                },
             },
             {
                 "args": ["-p", "--panel-csv"],
@@ -258,15 +266,48 @@ cli_config = {
                     "dest": "root_output_dir",
                     "default": "processed",
                     "type": Path,
+                    "help": "Path of directory to store output files. "
+                    "Default is the directory 'processed' in the current directory.",
+                },
+            },
+            {
+                "args": ["--output-format"],
+                "kwargs": {
+                    "dest": "output_format",
+                    "choices": ["tiff", "ome-tiff"],
+                    "default": "ome-tiff",
+                    "help": "The data format of the output TIFF files. "
+                    "One of 'tiff' and 'ome-tiff'.",
+                },
+            },
+            {
+                "args": ["--compression-level"],
+                "kwargs": {
+                    "dest": "compression_level",
+                    "type": int,
+                    "default": 3,
+                    "help": "The level of compression of output TIFF files (0-9). "
+                    "Higher compression creates smaller files, but takes longer to read and write.",
                 },
             },
             {
                 "args": ["-n", "--sample-name"],
-                "kwargs": {"dest": "sample_names", "nargs": "+", "type": str},
+                "kwargs": {
+                    "dest": "sample_names",
+                    "nargs": "+",
+                    "type": str,
+                    "help": "Name of samples. One value per input file provided (space separated). "
+                    "Not required, but can be used to overwrite name derived from file name.",
+                },
             },
             {
                 "args": ["--partition-panels"],
-                "kwargs": {"dest": "partition_panels", "action": "store_true"},
+                "kwargs": {
+                    "dest": "partition_panels",
+                    "action": "store_true",
+                    "help": "Whether to separate ROIs with different panels. "
+                    "Default is not to.",
+                },
             },
             {
                 "args": ["--filter-full"],
@@ -274,15 +315,29 @@ cli_config = {
             },
             {
                 "args": ["--overwrite"],
-                "kwargs": {"dest": "overwrite", "action": "store_true"},
+                "kwargs": {
+                    "dest": "overwrite",
+                    "action": "store_true",
+                    "help": "Whether to overwrite existing files. " "Default is not to.",
+                },
             },
             {
                 "args": ["--no-empty-rois"],
-                "kwargs": {"dest": "allow_empty_rois", "action": "store_false"},
+                "kwargs": {
+                    "dest": "allow_empty_rois",
+                    "action": "store_false",
+                    "help": "Whether to remove empty ROIs (with no ablation data). "
+                    "Default is to skip them.",
+                },
             },
             {
                 "args": ["--ilastik"],
-                "kwargs": {"dest": "ilastik_output", "action": "store_true"},
+                "kwargs": {
+                    "dest": "ilastik_output",
+                    "action": "store_true",
+                    "help": "Whether to prepare input files for ilastik. "
+                    "Defalt is not to.",
+                },
             },
             {
                 "args": ["--ilastik-compartment"],
@@ -295,33 +350,62 @@ cli_config = {
             },
             {
                 "args": ["--only-crops"],
-                "kwargs": {"dest": "only_crops", "action": "store_true"},
+                "kwargs": {
+                    "dest": "only_crops",
+                    "action": "store_true",
+                    "help": "Whether to only export crop tiles for ilastik training. "
+                    "Default it to do export crop tiles and TIFF stacks.",
+                },
             },
             {
                 "args": ["--no-stacks"],
-                "kwargs": {"dest": "export_stacks", "action": "store_false"},
+                "kwargs": {
+                    "dest": "export_stacks",
+                    "action": "store_false",
+                    "help": "Whether to not export full image stacks as TIFFs. "
+                    "Default it to do so.",
+                },
             },
             {
                 "args": ["--no-panoramas"],
-                "kwargs": {"dest": "export_panoramas", "action": "store_false"},
+                "kwargs": {
+                    "dest": "export_panoramas",
+                    "action": "store_false",
+                    "help": "Whether to not export panorama images for the whole slide. "
+                    "Default it to do so.",
+                },
             },
             {
                 "args": ["--n-crops"],
-                "kwargs": {"dest": "n_crops", "type": int},
+                "kwargs": {
+                    "dest": "n_crops",
+                    "type": int,
+                    "help": "Number of crop tiles made for ilastik training.",
+                },
             },
             {
                 "args": ["--crop-width"],
-                "kwargs": {"dest": "crop_width", "type": int},
+                "kwargs": {
+                    "dest": "crop_width",
+                    "type": int,
+                    "help": "Width of crop tiles used for ilastik training.",
+                },
             },
             {
                 "args": ["--crop-height"],
-                "kwargs": {"dest": "crop_height", "type": int},
+                "kwargs": {
+                    "dest": "crop_height",
+                    "type": int,
+                    "help": "Height of crop tiles used for ilastik training.",
+                },
             },
             {
                 "args": ["-k", "--keep-original-names"],
                 "kwargs": {
                     "dest": "keep_original_roi_names",
                     "action": "store_true",
+                    "help": "Whether to keep original names for ROIs from MCD file. "
+                    "Default is to number them according to acquisition order.",
                 },
             },
         ],
@@ -359,6 +443,8 @@ cli_config = {
                     "dest": "ilastik_version",
                     "choices": ["1.3.3post2"],
                     "default": "1.3.3post2",
+                    "help": "Version of ilastik software to use. "
+                    "Currently only '1.3.3post2' is valid.",
                 },
             },
             {
@@ -367,6 +453,8 @@ cli_config = {
                     "dest": "ilastik_model_version",
                     "choices": ["20210302"],
                     "default": "20210302",
+                    "help": "Version of ilastik model to use in compartment prediction."
+                    "Currently only '20210302' is available.",
                 },
             },
             {
@@ -374,6 +462,8 @@ cli_config = {
                 "kwargs": {
                     "dest": "quiet",
                     "action": "store_false",
+                    "help": "Whether to output additional information to stderr. "
+                    "Default is not to.",
                 },
             },
             {
@@ -387,6 +477,8 @@ cli_config = {
             {
                 "args": ["--overwrite"],
                 "kwargs": {"dest": "overwrite", "action": "store_true"},
+                "help": "Whether to overwrite existing output files. "
+                "Default is not to.",
             },
             {
                 "args": ["--no-cleanup"],
