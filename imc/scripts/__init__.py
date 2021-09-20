@@ -71,11 +71,11 @@ def build_params(
 
 
 def find_mcds() -> tp.List[Path]:
-    return list(Path().glob("**/*.mcd"))
+    return sorted(list(Path().glob("**/*.mcd")))
 
 
 def find_tiffs() -> tp.List[Path]:
-    return list(Path().glob("**/*_full.tiff"))
+    return sorted(list(Path().glob("**/*_full.tiff")))
 
 
 def find_h5ad() -> tp.Optional[Path]:
@@ -160,7 +160,8 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "files",
-                    "nargs": "+",
+                    "nargs": "?",
+                    "default": None,
                     "type": Path,
                     "help": "Input files to process. Can be MCD, TIFF, or TXT.",
                 }

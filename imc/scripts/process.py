@@ -8,9 +8,10 @@ import sys
 import typing as tp
 import json
 from collections import defaultdict
+import time
 
 from imc.types import Path
-from imc.scripts import build_cli
+from imc.scripts import build_cli, find_mcds, find_tiffs
 from imc.scripts.inspect_mcds import main as inspect
 from imc.scripts.prepare import main as prepare
 from imc.scripts.predict import main as predict
@@ -37,6 +38,22 @@ def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("process")
     args = parser.parse_args(cli)
 
+    if args.files is None:
+        print(
+            "No input files were given, "
+            "searching for MCD files under current directory."
+        )
+        args.files = find_mcds()
+        if not args.files:
+            print("No MCD files found. Searching for TIFF files.")
+            args.files = find_tiffs()
+            if not args.files:
+                print(
+                    "No input files could be found. Specify them manually: "
+                    "`imc process $FILE`."
+                )
+                return 1
+
     args.files = [x.absolute().resolve() for x in args.files]
     if args.steps is None:
         args.steps = process_step_order
@@ -56,6 +73,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     print(f"Starting processing of {len(args.files)} files:{fs}!")
     steps_s = "\n\t- ".join(args.steps)
     print(f"Will do following steps:\n\t- {steps_s}\n")
+    time.sleep(1)
 
     mcds = [file for file in args.files if file.endswith(MCD_FILE_ENDINGS)]
     mcds_s = list(map(str, mcds))

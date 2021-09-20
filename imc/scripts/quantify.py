@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import tifffile
 import matplotlib.pyplot as plt
+import anndata
 
 from imc import ROI
 from imc.types import Path, Series, Array
@@ -24,7 +25,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("quantify")
     args = parser.parse_args(cli)
     if not args.tiffs:
-        args.tiffs = find_tiffs()
+        args.tiffs = sorted(find_tiffs())
         if not args.tiffs:
             print("Input files were not provided and cannot be found!")
             return 1
@@ -57,19 +58,22 @@ def main(cli: tp.Sequence[str] = None) -> int:
         print(f"Wrote CSV file to '{args.output.absolute()}'.")
 
     if args.output_h5ad:
-        from anndata import AnnData
-        import scanpy as sc
-
         v = len(str(quant["obj_id"].max()))
         idx = quant["roi"] + "-" + quant["obj_id"].astype(str).str.zfill(v)
         quant.index = idx
 
         cols = ["sample", "roi", "obj_id", "X_centroid", "Y_centroid", "layer"]
         cols = [c for c in cols if c in quant.columns]
-        ann = AnnData(quant.drop(cols, axis=1, errors="ignore"), obs=quant[cols])
+        ann = anndata.AnnData(
+            quant.drop(cols, axis=1, errors="ignore").astype(float), obs=quant[cols]
+        )
+        if "X_centroid" in ann.obs.columns:
+            ann.obsm["spatial"] = ann.obs[["Y_centroid", "X_centroid"]].values
         f = Path("processed").mkdir() / "quantification.h5ad"
-        sc.write(f, ann)
+        ann.write(f)
         print(f"Wrote h5ad file to '{f.absolute()}'.")
+        ann2 = anndata.read(f)
+        assert np.allclose(ann.X, ann2.X)
 
     print("Finished quantification step.")
     return 0
