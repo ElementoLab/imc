@@ -271,12 +271,8 @@ def read_image_from_file(file: Path, equalize: bool = False) -> Array:
     """
     if not file.exists():
         raise FileNotFoundError(f"Could not find file: '{file}")
-    # if str(file).endswith("_mask.tiff"):
-    # arr = tifffile.imread(file) > 0
-    if file.endswith(".ome.tiff"):
-        arr = tifffile.imread(str(file), is_ome=True)
-    elif file.endswith(".tiff"):
-        arr = tifffile.imread(str(file))
+    if file.as_posix().endswith((".ome.tiff", ".tiff", ".ome.tif", ".tif")):
+        arr = tifffile.imread(file)
     elif file.endswith(".h5"):
         with h5py.File(file, "r") as __f:
             arr = np.asarray(__f[list(__f.keys())[0]])
@@ -741,8 +737,8 @@ def write_ometiff(
                     DimensionOrder="XYZCT"
                     ID="Pixels:0"
                     Interleaved="false"
-                    SizeX="{arr.shape[1]}"
-                    SizeY="{arr.shape[2]}"
+                    SizeX="{arr.shape[2]}"
+                    SizeY="{arr.shape[1]}"
                     SizeZ="1"
                     SizeC="{arr.shape[0]}"
                     SizeT="1"
