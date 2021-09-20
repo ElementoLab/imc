@@ -160,8 +160,7 @@ cli_config = {
             {
                 "kwargs": {
                     "dest": "files",
-                    "nargs": "?",
-                    "default": None,
+                    "nargs": "*",
                     "type": Path,
                     "help": "Input files to process. Can be MCD, TIFF, or TXT.",
                 }

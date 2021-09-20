@@ -38,7 +38,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("process")
     args = parser.parse_args(cli)
 
-    if args.files is None:
+    if not args.files:
         print(
             "No input files were given, "
             "searching for MCD files under current directory."
