@@ -5,18 +5,13 @@ Quantify images in stacks.
 """
 
 import sys
-import argparse
 import typing as tp
-from dataclasses import dataclass
 
 import numpy as np
-import pandas as pd
-import tifffile
-import matplotlib.pyplot as plt
 import anndata
 
 from imc import ROI
-from imc.types import Path, Series, Array
+from imc.types import Path
 from imc.ops.quant import quantify_cells_rois
 from imc.scripts import build_cli, find_tiffs
 

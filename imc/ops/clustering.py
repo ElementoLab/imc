@@ -27,7 +27,10 @@ FIG_KWS = dict(bbox_inches="tight", dpi=300)
 sc.settings.n_jobs = -1
 
 
-DEFAULT_SINGLE_CELL_RESOLUTION = 1.0
+DEFAULT_CELL_TYPE_REFERENCE = (
+    "https://gist.github.com/afrendeiro/4aa133c2fcb5eb0152957b11ec753b74/raw",
+    Path(".imc.cell_type_reference.yaml"),
+)
 
 
 def anndata_to_cluster_means(
@@ -331,666 +334,160 @@ def plot_phenotyping(
         # plt.close("all")
 
 
-def single_cell_analysis(
-    output_prefix: Path,
-    quantification: DataFrame = None,
-    rois: tp.List[_roi.ROI] = None,
-    label_clusters: bool = True,
-    plot: bool = True,
-    intensity: bool = True,
-    morphology: bool = True,
-    filter_channels: bool = False,
-    cell_type_channels: tp.List[str] = None,
-    channel_filtering_threshold: float = 0.1,  # 0.05
-    channel_include: tp.List[str] = None,
-    channel_exclude: tp.Sequence[str] = [
-        "<EMPTY>",
-        "_EMPTY_",
-        "EMPTY",
-        "Ar80",
-        "Ru9",
-        "Ru10",
-    ],  # r"Ru\d+", "DNA"
-    cluster_min_percentage: float = 1.0,
-    leiden_clustering_resolution: float = DEFAULT_SINGLE_CELL_RESOLUTION,
-    plot_only_channels: tp.Sequence[str] = None,
-) -> MultiIndexSeries:
-    """
-
-    cell_type_channels: These channels will be used for clustering cell types.
-                        By default all are included. Subject to `channel_include`.
-                        `channel_exclude` and outcome of `filter_channels` above
-                        `channel_filtering_threshold`.
-    channel_include: These channels will always be included for quantification
-                     unless `filter_channels` is True and they do not pass
-                     `channel_filtering_threshold`.
-    channel_exclude: These channels will not be used either for quantification.
-    """
-    from imc.ops.quant import quantify_cells_rois
-    from imc.ops.signal import measure_channel_background
-
-    output_prefix.parent.mkdir()
-
-    if not output_prefix.endswith("."):
-        output_prefix = output_prefix + "."
-
-    if quantification is None and rois is None:
-        raise ValueError("One of `quantification` or `rois` must be given.")
-    rois = cast(rois)
-
-    # TODO: check all ROIs have same channels
-    channel_labels = rois[0].channel_labels
-    if filter_channels:
-        print("Filtering channels.")
-        metric = measure_channel_background(rois, plot=plot, output_prefix=output_prefix)
-        channel_threshold = metric > channel_filtering_threshold
-        filtered_channels = metric[channel_threshold].index.tolist()
-    else:
-        channel_threshold = pd.Series([True] * len(channel_labels), index=channel_labels)
-        filtered_channels = channel_labels.tolist()
-
-    if quantification is None:
-        print("Quantifying single cells.")
-        quantification = quantify_cells_rois(
-            rois=rois, intensity=intensity, morphology=morphology
-        )
-
-    # Remove excluded channels
-    for _ch in channel_exclude:
-        quantification = quantification.loc[:, ~quantification.columns.str.contains(_ch)]
-    # Filter out low QC channels
-    if filter_channels:
-        # TODO: fileter channels by QC metrics
-        pass
-
-    # Keep only include channels
-    if channel_include is not None:
-        _includes = [_ch for _ch in quantification.columns if _ch in channel_include]
-        quantification = quantification.loc[:, _includes]
-
-    # Get categoricals
-    cats = [x for x in ["sample", "roi"] if x in quantification.columns]
-
-    # Start usual single cell analysis
-    ann = AnnData(
-        quantification.drop(cats, axis=1).sort_index(axis=1).reset_index(drop=True)
-    )
-    for cat in cats:
-        ann.obs[cat] = pd.Categorical(quantification[cat].values)
-    ann.obs["obj_id"] = quantification.index
-    ann.obs["label"] = ann.obs[cats].astype(str).apply(", ".join, axis=1)
-    ann.raw = ann
-
-    ann.obs["n_counts"] = ann.X.sum(axis=1).astype(int)
-    ann.obs["log_counts"] = np.log10(ann.obs["n_counts"])
-
-    # normalize
-    sc.pp.normalize_per_cell(ann, counts_per_cell_after=1e4)
-    sc.pp.log1p(ann)
-
-    # Create temporary Anndata for cell type discovery
-    ann_ct = ann.copy()
-    # select only requested channels
-    if cell_type_channels is not None:
-        _includes = ann.var.index.isin(cell_type_channels)
-        ann_ct = ann_ct[:, _includes]
-    # remove "batch" effect
-    if "sample" in cats and len(ann_ct.obs["sample"].unique()) > 1:
-        sc.pp.combat(ann_ct, "sample")
-
-    # dim res
-    sc.pp.scale(ann_ct, max_value=10)
-    sc.pp.pca(ann_ct)
-    sc.pp.neighbors(ann_ct, n_neighbors=8, use_rep="X")
-    sc.tl.umap(ann_ct)
-    sc.tl.leiden(ann_ct, key_added="cluster", resolution=leiden_clustering_resolution)
-
-    ann_ct.obs["cluster"] = pd.Categorical(ann_ct.obs["cluster"].astype(int) + 1)
-    ann.obs["cluster"] = ann_ct.obs["cluster"]
-    ann.obsm = ann_ct.obsm
-    # sc.tl.diffmap(ann)
-
-    # Generate marker-based labels for clusters
-    if label_clusters:
-        new_labels = derive_reference_cell_type_labels(
-            mean_expr=anndata_to_cluster_means(ann, "cluster"),
-            cluster_assignments=ann.obs["cluster"],
-            cell_type_channels=ann_ct.var.index,
-            output_prefix=output_prefix,
-            plot=plot,
-        )
-        new_labels = new_labels.index.astype(str) + " - " + new_labels
-        ann.obs["cluster"] = ann.obs["cluster"].replace(new_labels)
-
-    # Test
-    sc.tl.rank_genes_groups(ann, groupby="cluster", method="logreg", n_genes=ann.shape[1])
-
-    # Save object
-    sc.write(output_prefix + "single_cell.processed.h5ad", ann)
-
-    # Save dataframe with cluster assignemnt
-    clusters = ann.obs[cats + ["obj_id", "cluster"]]
-    clusters.to_csv(output_prefix + "single_cell.cluster_assignments.csv")
-
-    if not plot:
-        return clusters.set_index(cats + ["obj_id"])["cluster"]
-
-    # Plot
-
-    # display raw mean values, but in log scale
-    # raw = a.raw.copy()
-    ann.raw._X = np.log1p(ann.raw.X)
-
-    # # heatmap of all cells
-    sc.pl.heatmap(
-        ann,
-        ann.var.index,
-        log=True,
-        standard_scale="obs",
-        use_raw=False,
-        show=False,
-        groupby="roi",
-    )
-    plt.gca().figure.savefig(
-        output_prefix + "single_cell.norm_scaled.heatmap.svg", **FIG_KWS
-    )
-
-    # randomize cell order in order to prevent "clustering" effects between
-    # rois when plotting
-    ann = ann[ann.obs.index.to_series().sample(frac=1).values, :]
-
-    variables = cats + ["label", "log_counts", "cluster"]
-    sc_kwargs = dict(color=variables, show=False, return_fig=True, use_raw=True)
-    fig = sc.pl.pca(ann, **sc_kwargs)
-    rasterize_scanpy(fig)
-    fig.savefig(output_prefix + "cell.pca.svg", **FIG_KWS)
-    fig = sc.pl.umap(ann, **sc_kwargs)
-    rasterize_scanpy(fig)
-    fig.savefig(output_prefix + "cell.umap.svg", **FIG_KWS)
-
-    # fig = sc.pl.diffmap(ann, **kwargs)
-    # rasterize_scanpy(fig)
-    # fig.savefig(output_prefix + 'cell.diffmap.svg', **FIG_KWS)
-
-    # Plot differential
-    sc.pl.rank_genes_groups(ann, show=False)
-    plt.gca().figure.savefig(
-        output_prefix + "cell.differential_expression_per_cluster.svg",
-        **FIG_KWS,
-    )
-    # sc.pl.rank_genes_groups_dotplot(ann, n_genes=4)
-    # axs = sc.pl.rank_genes_groups_matrixplot(ann, n_genes=1, standard_scale='var', cmap='Blues')
-
-    # Cells per cluster
-    counts = ann.obs["cluster"].value_counts()
-
-    fig, axes = plt.subplots(1, 2, figsize=(2 * 4, 4), sharey=True)
-    for axs in axes.flatten():
-        sns.barplot(counts, counts.index, ax=axs, orient="horiz", palette="magma")
-        axs.set_xlabel("Cells")
-        axs.set_ylabel("Cluster")
-    axes[-1].set_xscale("log")
-    fig.savefig(output_prefix + "cell_count_per_cluster.barplot.svg", **FIG_KWS)
-
-    # Plot abundance per cluster
-    cluster_counts_per_roi = (
-        ann.obs.groupby(["cluster"] + cats)
-        .count()
-        .iloc[:, 0]
-        .rename("ROI")
-        .reset_index()
-        .pivot_table(index="cluster", columns=cats, fill_value=0)
-    )
-
-    fig, axes = plt.subplots(1, 3, figsize=(4 * 3, 4), sharey=True)
-    kwargs = dict(robust=True, square=True, xticklabels=True, yticklabels=True)
-    for ax, log in zip(axes, [False, True]):
-        sns.heatmap(
-            cluster_counts_per_roi if not log else np.log10(1 + cluster_counts_per_roi),
-            cbar_kws=dict(label="Cells per cluster" + ("" if not log else " (log10)")),
-            ax=ax,
-            **kwargs,
-        )
-    sns.heatmap(
-        (cluster_counts_per_roi / cluster_counts_per_roi.sum()) * 100,
-        cbar_kws=dict(label="Cells per cluster (%)"),
-        ax=axes[2],
-        **kwargs,
-    )
-    fig.savefig(output_prefix + "cell.counts_per_cluster_per_roi.svg", **FIG_KWS)
-
-    # # Plot heatmaps with mean expression per cluster
-    mean_expr = anndata_to_cluster_means(ann, "cluster")
-    mean_expr.to_csv(output_prefix + "cell.mean_expression_per_cluster.csv")
-    row_means = mean_expr.mean(1).sort_index().rename("channel_mean")
-    col_counts = ann.obs["cluster"].value_counts().rename("cells_per_cluster")
-
-    kwargs = dict(
-        row_colors=row_means,
-        col_colors=col_counts,
-        metric="correlation",
-        robust=True,
-        xticklabels=True,
-        yticklabels=True,
-        figsize=None if not label_clusters else (10, 15),
-    )
-
-    for label1, df in [
-        ("all_clusters", mean_expr),
-        ("cell_type_channels", mean_expr.loc[ann_ct.var.index, :]),
-        (
-            "filtered_clusters",
-            mean_expr.loc[:, (counts / counts.sum()) >= cluster_min_percentage / 100],
-        ),
-    ]:
-        for label2, label3, kwargs2 in [
-            ("", "", {}),
-            (
-                "row_zscore.",
-                "\n(Row Z-score)",
-                dict(z_score=0, cmap="RdBu_r", center=0),
-            ),
-            (
-                "col_zscore.",
-                "\n(Column Z-score)",
-                dict(z_score=1, cmap="RdBu_r", center=0),
-            ),
-            (
-                "double_zscore.",
-                "\n(Double Z-score)",
-                dict(cmap="RdBu_r", center=0),
-            ),
-        ]:
-            grid = sns.clustermap(
-                df if label2 != "double_zscore." else double_z_score(df),
-                cbar_kws=dict(label="Mean expression" + label3),
-                **kwargs,
-                **kwargs2,
-            )
-            grid.savefig(
-                output_prefix + f"cell.mean_expression_per_cluster.{label1}.{label2}svg",
-            )
-            # **FIG_KWS)
-
-    # # these take really long to be saved
-    # markers = ann_ct.var.index.tolist() if plot_only_channels is None else plot_only_channels
-    # sc_kwargs = dict(color=variables + markers, show=False, return_fig=True, use_raw=True)
-    # fig = sc.pl.pca(ann, **sc_kwargs)
-    # rasterize_scanpy(fig)
-    # fig.savefig(output_prefix + "cell.pca.all_channels.pdf", **FIG_KWS)
-    # fig = sc.pl.umap(ann, **sc_kwargs)
-    # rasterize_scanpy(fig)
-    # fig.savefig(output_prefix + "cell.umap.all_channels.pdf", **FIG_KWS)
-
-    return clusters.set_index(cats + ["obj_id"])["cluster"]
-
-
-def derive_reference_cell_type_labels(
-    h5ad_file: Path = None,
-    mean_expr: DataFrame = None,
-    cluster_assignments: Series = None,
-    cell_type_channels: tp.List[str] = None,
-    output_prefix: Path = None,
-    plot: bool = True,
-    std_threshold: float = None,
-    cluster_min_percentage: float = 0.0,
-) -> Series:
-    from seaborn_extensions import clustermap
-    from imc.ops.mixture import get_threshold_from_gaussian_mixture
-
-    if plot and output_prefix is None:
-        raise ValueError("If `plot` if True, `output_prefix` must be given.")
-
-    if plot:
-        if output_prefix is None:
-            raise ValueError("If `plot` then `output_prefix` must be given.")
-        output_prefix.parent.mkdir(exist_ok=True)
-        if not output_prefix.endswith("."):
-            output_prefix += "."
-
-        if h5ad_file is None and cluster_assignments is None:
-            raise ValueError(
-                "If `h5ad_file` is not given and `plot` is True, "
-                " `cluster_assignments` must be given too."
-            )
-
-    # get cell type clusters
-    if h5ad_file is not None and mean_expr is None:
-        ann = sc.read(h5ad_file)
-        cats = [x for x in ["roi", "sample"] if x in ann.obs.columns]
-        cluster = ann.obs[cats + ["cluster"]]
-        cluster.index = cluster.index.astype(int)
-        cluster = cluster.sort_index()
-        fractions = cluster["cluster"].value_counts()
-
-        # # get cluster means
-        mean_expr = anndata_to_cluster_means(ann, "cluster")
-    elif mean_expr is not None:
-        mean_expr = cast(mean_expr)
-        fractions = cluster_assignments.value_counts()
-
-    mean_expr = mean_expr.rename_axis(index="Channel", columns="Cluster")
-
-    if cell_type_channels is None:
-        cell_type_channels = mean_expr.index.tolist()
-
-    # Remove clusters below a certain percentage if requested
-    fractions = (
-        fractions[(fractions / fractions.sum()) > (cluster_min_percentage / 100)]
-        .rename("Cells per cluster")
-        .rename_axis("Cluster")
-    )
-
-    # make sure indexes match
-    _mean_expr = mean_expr.reindex(fractions.index, axis=1)
-
-    # doubly Z-scored matrix
-    mean_expr_z = double_z_score(_mean_expr)
-
-    # use a simple STD threshold for "positiveness"
-    v = mean_expr_z.values.flatten()
-    if std_threshold is None:
-        v1 = get_threshold_from_gaussian_mixture(pd.Series(v)).squeeze()
-    else:
-        v1 = v.std() * std_threshold
-
-    # label each cluster on positiveness for each marker
-    labels = {x: "" for x in mean_expr_z.columns}
-    for clust in mean_expr_z.columns:
-        __s = mean_expr_z[clust].squeeze().sort_values(ascending=False)
-        # _sz = (__s - __s.mean()) / __s.std()
-        _sz = __s.loc[cell_type_channels]
-        for i in _sz[_sz >= v1].index:
-            labels[clust] += i + ", "
-
-    # convert from marker positive to named cell types
-    # in the absense of cell names, one could just label cell types as positive
-    act_labels = {k: re.sub(r"\(.*", "+", k) for k in _mean_expr.index}
-    assign = {
-        ch: OrderedSet(
-            propert for marker, propert in act_labels.items() if marker in label
-        )
-        for ch, label in labels.items()
-    }
-    new_labels = (
-        pd.Series({k: ", ".join(v) for k, v in assign.items()})
-        .sort_index()
-        .rename("cell_type")
-        .rename_axis("cluster")
-    )
-    to_replace = {k: str(k) + " - " + v for k, v in new_labels.items()}
-
-    mean_expr_z_l = mean_expr_z.rename(columns=to_replace)
-    fractions_l = fractions.copy()
-    fractions_l.index = fractions_l.index.to_series().replace(to_replace)
-    if output_prefix is not None:
-        mean_expr_z_l.to_csv(
-            output_prefix + "cell_type_assignement.reference_cluster_labels.csv"
-        )
-
-    if not plot:
-        return new_labels
-    output_prefix = cast(output_prefix)
-
-    fig, axs = plt.subplots(1, 1, figsize=(3, 3))
-    axs.set_title("Distribution of mean expressions")
-    sns.histplot(v, ax=axs)
-    axs.axvline(v.mean(), linestyle="--", color="grey")
-    axs.axvline(v1, linestyle="--", color="red")
-    fig.savefig(
-        output_prefix + "mean_expression_per_cluster.both_z.threshold_position.svg"
-    )
-
-    cmeans = mean_expr.mean(1).rename("Channel mean").rename_axis("Channel")
-
-    t = mean_expr_z >= v1
-    kwargs = dict(
-        metric="correlation",
-        robust=True,
-        xticklabels=True,
-        yticklabels=True,
-        row_colors=cmeans.to_frame(),
-        col_colors=fractions.to_frame(),
-    )
-    opts = [
-        (mean_expr, "original", dict()),
-        (
-            mean_expr_z,
-            "both_z",
-            dict(
-                center=0,
-                cmap="RdBu_r",
-                cbar_kws=dict(label="Mean expression (Z-score)"),
-            ),
-        ),
-        (
-            t.loc[t.any(1), t.any(0)],
-            "both_z.thresholded",
-            dict(
-                cmap="binary",
-                linewidths=1,
-                cbar_kws=dict(label="Mean expression (Z-score)"),
-            ),
-        ),
-    ]
-    for df, label, kwargs2 in opts:
-        df = df.loc[df.var(1) > 0, df.var() > 0]
-        grid = clustermap(df, **kwargs, **kwargs2)
-        grid.savefig(output_prefix + f"mean_expression_per_cluster.{label}.svg")
-
-    # replot now with labels
-    figsize = grid.fig.get_size_inches()
-    figsize[1] *= 1.2
-    t = mean_expr_z_l >= v1
-    kwargs = dict(
-        metric="correlation",
-        robust=True,
-        xticklabels=True,
-        yticklabels=True,
-        center=0,
-        cmap="RdBu_r",
-        cbar_kws=dict(label="Mean expression (Z-score)"),
-        row_colors=cmeans,
-        col_colors=fractions_l,
-    )
-    opts = [
-        (mean_expr_z_l, "labeled.both_z", dict()),
-        (t.loc[t.any(1), t.any(0)], "labeled.both_z.thresholded", dict()),
-    ]
-    for df, label, kwargs2 in opts:
-        df = df.loc[df.var(1) > 0, df.var() > 0]
-        grid = clustermap(df, **kwargs, **kwargs2)
-        grid.savefig(output_prefix + f"mean_expression_per_cluster.{label}.svg")
-
-    # pairwise cluster correlation
-    grid = clustermap(
-        mean_expr_z_l.corr(),
-        center=0,
-        cmap="RdBu_r",
-        cbar_kws=dict(label="Pearson correlation"),
-        metric="correlation",
-        robust=True,
-        xticklabels=True,
-        yticklabels=True,
-        row_colors=fractions_l,
-        col_colors=fractions_l,
-    )
-    grid.savefig(
-        output_prefix + "mean_expression_per_cluster.labeled.both_z.correlation.svg",
-        **FIG_KWS,
-    )
-
-    return new_labels
-
-
-# def add_extra_colorbar_to_clustermap(
-#     data: Series, grid, cmap="inferno", location="columns", **kwargs
-# ):
-#     # get position to add new axis in existing figure
-#     # # get_position() returns ((x0, y0), (x1, y1))
-#     heat = grid.ax_heatmap.get_position()
-
-#     if location == "columns":
-#         width = 0.025
-#         orientation = "vertical"
-#         dend = grid.ax_col_dendrogram.get_position()
-#         bbox = [[heat.x1, dend.y0], [heat.x1 + width, dend.y1]]
-#     else:
-#         height = 0.025
-#         orientation = "horizontal"
-#         dend = grid.ax_row_dendrogram.get_position()
-#         bbox = [[dend.x0, dend.y0 - height], [dend.x1, dend.y0]]
-
-#     ax = grid.fig.add_axes(matplotlib.transforms.Bbox(bbox))
-#     norm = matplotlib.colors.Normalize(vmin=data.min(), vmax=data.max())
-#     cb1 = matplotlib.colorbar.ColorbarBase(
-#         ax, cmap=plt.get_cmap(cmap), norm=norm, orientation=orientation, label=data.name
-#     )
-
-
 def predict_cell_types_from_reference(
-    sample: _sample.IMCSample,
-    reference_csv: str = None,
-    h5ad_file: Path = None,
-    output_prefix: Path = None,
+    quant: tp.Union[AnnData, DataFrame, Path],
+    output_prefix: Path,
+    covariates: DataFrame,
+    method: str = "astir",
+    astir_reference: Path = None,
+    astir_parameters: tp.Dict[str, tp.Any] = {},
+):
+    import anndata
+    import yaml
+    from imc.utils import download_file
+
+    # Get dataframe with expression
+    if isinstance(quant, Path):
+        if quant.endswith("csv") or quant.endswith("csv.gz"):
+            quant = pd.read_csv(quant, index_col=0)
+        elif quant.endswith(".h5ad"):
+            quant = anndata.read(quant)
+    elif isinstance(quant, anndata.AnnData):
+        quant = quant.to_df()
+
+    # Remove metal label from column names
+    quant.columns = quant.columns.str.extract(r"(.*)\(.*")[0].fillna(
+        quant.columns.to_series().reset_index(drop=True)
+    )
+
+    if method != "astir":
+        raise NotImplementedError("Only the `astir` method is currently supported.")
+
+    # Prepare reference dictionary
+    if astir_reference is not None:
+        reference = yaml.safe_load(astir_reference.open())
+    else:
+        # if not DEFAULT_CELL_TYPE_REFERENCE[1].exists():
+        download_file(DEFAULT_CELL_TYPE_REFERENCE[0], DEFAULT_CELL_TYPE_REFERENCE[1])
+        ref = yaml.safe_load(DEFAULT_CELL_TYPE_REFERENCE[1].open())
+        reference = dict()
+        reference["cell_types"] = unroll_reference_dict(ref["cell_types"], False)
+        reference["cell_states"] = unroll_reference_dict(ref["cell_states"], False)
+        reference = filter_reference_based_on_available_markers(reference, quant.columns)
+
+    res = astir(
+        quant,
+        reference,
+        design=covariates,
+        output_prefix=output_prefix,
+        **astir_parameters,
+    )
+    return res
+
+
+def astir(
+    input_expr: DataFrame,
+    marker_dict: tp.Dict[str, tp.List[str]],
+    design: DataFrame,
+    output_prefix: Path,
+    batch_size: int = None,
+    max_epochs: int = 1000,
+    learning_rate: float = 2e-3,
+    initial_epochs: int = 3,
     plot: bool = True,
 ):
-    from imc.utils import get_mean_expression_per_cluster
+    from astir import Astir
 
-    output_prefix = output_prefix or (sample.root_dir / "single_cell" / sample.name + ".")
-    os.makedirs(os.path.dirname(output_prefix), exist_ok=True)
-    default_ref = (
-        sample.prj.processed_dir
-        / "single_cell"
-        / "cell_type_reference.cell_type_assignement.reference_cluster_labels.csv"
+    if output_prefix.is_dir():
+        output_prefix = output_prefix / "astir."
+        output_prefix.parent.mkdir()
+
+    ast = Astir(input_expr, marker_dict)
+    if batch_size is None:
+        batch_size = ast.get_type_dataset().get_exprs_df().shape[0] // 100
+
+    params = dict(
+        max_epochs=max_epochs,
+        batch_size=batch_size,
+        learning_rate=learning_rate,
+        n_init_epochs=initial_epochs,
     )
-    ref = pd.read_csv(reference_csv or default_ref, index_col=0)
-
-    default_h5ad = (
-        sample.root_dir
-        / "single_cell"
-        / (sample.name + ".cell.mean.all_vars.processed.h5ad")
-    )
-    query_a = sc.read(h5ad_file or default_h5ad)
-    query_means = get_mean_expression_per_cluster(query_a)
-    query_means = (query_means - query_means.mean(0)) / query_means.std(0)
-    query_means = ((query_means.T - query_means.mean(1)) / query_means.std(1)).T
-    corrwithref = pd.DataFrame(
-        query_means.corrwith(ref[ct]).rename(ct) for ct in ref.columns
-    ).rename_axis(columns="Query clusters", index="Reference cell types")
-
-    query_col_fractions = (
-        query_a.obs["cluster"].value_counts().rename("Cells per cluster")
-    )
-    side = corrwithref.shape[0] * 0.33
-    grid = sns.clustermap(
-        corrwithref,
-        center=0,
-        cmap="RdBu_r",
-        cbar_kws=dict(label="Mean expression"),
-        metric="correlation",
-        robust=True,
-        xticklabels=True,
-        yticklabels=True,
-        figsize=(max(map(len, corrwithref.index)) * 0.15 + side, side),
-        col_colors=query_col_fractions,
-    )
-    grid.savefig(
-        output_prefix + "cell_type_assignment_against_reference.correlation.svg",
-        **FIG_KWS,
-    )
-
-    # simply assign to argmax for now
-    # TODO: add further customization to cell type assignment
-    pred_cell_type_labels = {
-        x: x + " - " + corrwithref[x].idxmax() for x in corrwithref.columns
-    }
-
-    side = query_means.shape[0] * 0.33
-    grid = sns.clustermap(
-        query_means.rename(columns=pred_cell_type_labels).rename_axis(
-            "Predicted cell types"
-        ),
-        center=0,
-        cmap="RdBu_r",
-        cbar_kws=dict(label="Mean expression"),
-        metric="correlation",
-        robust=True,
-        xticklabels=True,
-        yticklabels=True,
-        figsize=(max(map(len, query_means.index)) * 0.15 + side, side),
-        col_colors=query_col_fractions,
-    )
-    grid.savefig(output_prefix + "cluster_means.predicted_labels.svg", **FIG_KWS)
-
-    # export cell type labels for each cell object
-    cell_type_assignments = (
-        query_a.obs[["roi", "cluster"]]
-        .replace(pred_cell_type_labels)
-        .reset_index()
-        .sort_values(["roi", "index"])
-        .set_index("index")
-    )
-    cell_type_assignments.to_csv(
-        output_prefix + "cell_type_assignment_against_reference.csv"
-    )
-    # cell_type_assignments = pd.read_csv(output_prefix + 'cell_type_assignment_against_reference.csv', index_col=0)
-    return cell_type_assignments
+    res = pd.DataFrame(index=input_expr.index)
+    if "cell_types" in marker_dict:
+        ast.fit_type(**params)
+        _t = ast.get_celltypes()
+        res = res.join(_t)
+        _tp = ast.get_celltype_probabilities()
+        _tp.columns = _tp.columns + "_probability"
+        res = res.join(_tp)
+        if plot:
+            fig, ax = plt.subplots(1, 1, figsize=(4, 2))
+            ax.plot(ast.get_type_losses(), label="loss")
+            ax.legend()
+            ax.set(xlabel="Epochs", ylabel="Loss")
+            fig.savefig(output_prefix + "cell_type.loss.svg", **FIG_KWS)
+            plt.close(fig)
+    if "cell_states" in marker_dict:
+        ast.fit_state(**params)
+        _s = ast.get_cellstates()
+        res = res.join(_s)
+        if plot:
+            fig, ax = plt.subplots(1, 1, figsize=(4, 2))
+            ax.plot(ast.get_state_losses(), label="loss")
+            ax.legend()
+            ax.set(xlabel="Epochs", ylabel="Loss")
+            fig.savefig(output_prefix + "cell_state.loss.svg", **FIG_KWS)
+            plt.close(fig)
+    ast.save_models(output_prefix + "fitted_model.hdf5")
+    return res
 
 
-# def merge_clusterings(samples: tp.Sequence["IMCSample"]):
+def unroll_reference_dict(
+    x: tp.Dict,
+    name_with_predecessors: bool = True,
+    max_depth: int = -1,
+    _cur_depth: int = 0,
+    _predecessors: tp.List[str] = [],
+) -> tp.Dict:
+    from copy import deepcopy
 
-#     means = dict()
-#     for sample in samples:
-#         ann = sc.read(
-#             sample.root_dir / "single_cell" / (sample.name + ".single_cell.processed.h5ad")
-#         )
-#         mean = anndata_to_cluster_means(ann, raw=False, cluster_label="cluster")
-#         mean.columns = sample.name + " - " + mean.columns.str.extract(r"^(\d+) - .*")[0]
-#         means[sample.name] = mean
-
-#     _vars = set([y for x in means.values() for y in x.index.tolist()])
-#     variables = [v for v in _vars if all([v in var.index for var in means.values()])]
-#     means = {k: v.loc[variables].apply(minmax_scale, axis=1) for k, v in means.items()}
-
-#     index = [y for x in means.values() for y in x.columns]
-#     res = pd.DataFrame(index=index, columns=index, dtype=float)
-#     for s1, m1 in means.items():
-#         for s2, m2 in means.items():
-#             for c2 in m2:
-#                 res.loc[m1.columns, c2] = m1.corrwith(m2[c2])
-
-#     res2 = res.copy()
-#     np.fill_diagonal(res2.values, np.nan)
-#     intra = list()
-#     for sample in samples:
-#         intra += (
-#             res2.loc[res2.index.str.contains(sample.name), res2.index.str.contains(sample.name)]
-#             .values.flatten()
-#             .tolist()
-#         )
-#     inter = list()
-#     for s1 in samples:
-#         for s2 in samples:
-#             if s1 == s2:
-#                 continue
-#         inter += (
-#             res2.loc[res2.index.str.contains(s1.name), res2.index.str.contains(s2.name)]
-#             .values.flatten()
-#             .tolist()
-#         )
-
-#     disp = res.loc[
-#         res.index.str.contains("|".join([x.name for x in samples[:-1]])),
-#         res.index.str.contains("|".join([x.name for x in samples[1:]])),
-#     ]
-#     sns.clustermap(disp, center=0, cmap="RdBu_r", xticklabels=True, yticklabels=True)
+    x = deepcopy(x)
+    new = dict()
+    for k, v in x.items():
+        if "markers" in v:
+            name = " - ".join(_predecessors + [k]) if name_with_predecessors else k
+            if v["markers"] != [None]:
+                new[name] = v["markers"]
+                v.pop("markers")
+        if (
+            isinstance(v, dict)
+            and (len(v) > 0)
+            and ((_cur_depth < max_depth) or max_depth == -1)
+        ):
+            new.update(
+                unroll_reference_dict(
+                    v,
+                    name_with_predecessors=name_with_predecessors,
+                    max_depth=max_depth,
+                    _cur_depth=_cur_depth + 1,
+                    _predecessors=_predecessors + [k],
+                )
+            )
+    return new
 
 
-# # # roi vs supercommunity
-# rs = (
-#     assignments
-#     .assign(count=1)
-#     .reset_index()
-#     .pivot_table(columns=['sample', 'roi'], index='supercommunity', values='count', aggfunc=sum, fill_value=0))
-# rs = rs / rs.sum()
+def filter_reference_based_on_available_markers(
+    x: tp.Dict, markers: tp.Sequence[str]
+) -> tp.Dict:
+    def _filter(x2):
+        inter = dict()
+        for k, v in x2.items():
+            n = list(filter(lambda i: i in markers, v))
+            if n:
+                inter[k] = n
+        return inter
+
+    new = dict()
+    new["cell_types"] = _filter(x["cell_types"])
+    new["cell_states"] = _filter(x["cell_states"])
+    return new

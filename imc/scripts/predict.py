@@ -10,6 +10,7 @@ import typing as tp
 from imc import ROI
 from imc.types import Path
 from imc.scripts import build_cli, find_tiffs
+from imc.utils import download_file, run_shell_command
 
 
 def main(cli: tp.Sequence[str] = None) -> int:
@@ -134,85 +135,6 @@ def get_model(models_dir: Path, version: str = "20210302") -> Path:
         print("Downloading ilastik model.")
         download_file(url, f)
     return f
-
-
-def download_file(url: str, output_file: tp.Union[Path, str], chunk_size=1024) -> None:
-    """
-    Download a file and write to disk in chunks (not in memory).
-
-    Parameters
-    ----------
-    url : :obj:`str`
-        URL to download from.
-    output_file : :obj:`str`
-        Path to file as output.
-    chunk_size : :obj:`int`
-        Size in bytes of chunk to write to disk at a time.
-    """
-    import shutil
-    from urllib import request
-    from contextlib import closing
-    import requests
-
-    if url.startswith("ftp://"):
-
-        with closing(request.urlopen(url)) as r:
-            with open(output_file, "wb") as f:
-                shutil.copyfileobj(r, f)
-    else:
-        response = requests.get(url, stream=True)
-        with open(output_file, "wb") as outfile:
-            outfile.writelines(response.iter_content(chunk_size=chunk_size))
-
-
-def run_shell_command(cmd: str, dry_run: bool = False, quiet: bool = False) -> int:
-    """
-    Run a system command.
-
-    Will detect whether a separate shell is required.
-    """
-    import textwrap
-    import subprocess
-    import re
-
-    # in case the command has unix pipes or bash builtins,
-    # the subprocess call must have its own shell
-    # this should only occur if cellprofiler is being run uncontainerized
-    # and needs a command to be called prior such as conda activate, etc
-    symbol = any(x in cmd for x in ["&", "&&", "|"])
-    source = cmd.startswith("source")
-    shell = bool(symbol or source)
-    if not quiet:
-        print(
-            "Running command:\n",
-            " in shell" if shell else "",
-            textwrap.dedent(cmd) + "\n",
-        )
-    if not dry_run:
-        if shell:
-            if not quiet:
-                print("Running command in shell.")
-            code = subprocess.call(cmd, shell=shell)
-        else:
-            # Allow spaces in file names
-            c = re.findall(r"\S+", cmd.replace(r"\ ", "__space__").replace("\\\n", ""))
-            c = [x.replace("__space__", " ") for x in c]
-            code = subprocess.call(c, shell=shell)
-        if code != 0:
-            print(
-                "Process for command below failed with error:\n'%s'\nTerminating pipeline.\n",
-                textwrap.dedent(cmd),
-            )
-            sys.exit(code)
-        if not shell:
-            pass
-            # usage = resource.getrusage(resource.RUSAGE_SELF)
-            # print(
-            #     "Maximum used memory so far: {:.2f}Gb".format(
-            #         usage.ru_maxrss / 1e6
-            #     )
-            # )
-    return code
 
 
 if __name__ == "__main__":

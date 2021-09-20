@@ -22,7 +22,7 @@ from imc.data_models.roi import ROI
 from imc.types import Path, Figure, Patch, DataFrame, Series, MultiIndexSeries
 
 # from imc import LOGGER
-from imc.ops.clustering import derive_reference_cell_type_labels, single_cell_analysis
+# from imc.ops.clustering import derive_reference_cell_type_labels, single_cell_analysis
 from imc.ops.adjacency import get_adjacency_graph, measure_cell_type_adjacency
 from imc.ops.community import cluster_communities
 from imc.graphics import get_grid_dims, add_legend
