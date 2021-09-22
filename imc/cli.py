@@ -10,6 +10,7 @@ import argparse
 from argparse import RawTextHelpFormatter
 import typing as tp
 
+from imc._version import version
 from imc.scripts.process import main as process
 from imc.scripts.inspect_mcds import main as inspect
 from imc.scripts.prepare import main as prepare
@@ -26,6 +27,7 @@ from imc.scripts import cli_config
 
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = get_args()
+    parser.add_argument("-v", "--version", action="version", version=version)
     main_args, cmd_args = parser.parse_known_args(cli)
 
     if main_args.command not in cli_config["subcommands"]:
