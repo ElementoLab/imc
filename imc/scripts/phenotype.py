@@ -42,11 +42,10 @@ def main(cli: tp.Sequence[str] = None) -> int:
         # Cell type identity
         # TODO: connect options to CLI
         print("Matching expression to reference cell types.")
-        preds = predict_cell_types_from_reference(
-            a.raw.to_adata(),
-            args.output_dir,
-            covariates=pd.get_dummies(a.obs[args.batch_variable]),
-        )
+        df = a.raw.to_adata().to_df()[a.var.index[~a.var.index.str.contains("EMPTY")]]
+        df = df.loc[:, df.var() > 0]
+        cov = pd.get_dummies(a.obs[args.batch_variable])
+        preds = predict_cell_types_from_reference(df, args.output_dir, covariates=cov)
         a.obs = a.obs.join(preds)
 
         # grid = clustermap(a.to_df().groupby(a.obs['cell_type']).mean())

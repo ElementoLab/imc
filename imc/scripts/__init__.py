@@ -9,7 +9,6 @@ from argparse import RawTextHelpFormatter
 
 from imc.types import Path
 
-
 # Suppress tensorflow inital output
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # FATAL
 logging.getLogger("tensorflow").setLevel(logging.FATAL)
@@ -206,6 +205,14 @@ cli_config = {
                     "\nFor example:\n$> cat config.json\n"
                     + json.dumps(json_example, indent=4)
                     + "\n$> imc process -c config.json file1.mcd file2.mcd",
+                },
+            },
+            {
+                "args": ["--verbose"],
+                "kwargs": {
+                    "dest": "quiet",
+                    "action": "store_false",
+                    "help": "Whether to output more detail of the process.",
                 },
             },
         ],

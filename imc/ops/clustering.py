@@ -376,8 +376,8 @@ def predict_cell_types_from_reference(
         reference = filter_reference_based_on_available_markers(reference, quant.columns)
 
     res = astir(
-        quant,
-        reference,
+        input_expr=quant,
+        marker_dict=reference,
         design=covariates,
         output_prefix=output_prefix,
         **astir_parameters,
@@ -394,15 +394,18 @@ def astir(
     max_epochs: int = 1000,
     learning_rate: float = 2e-3,
     initial_epochs: int = 3,
+    device: str = "cpu",
     plot: bool = True,
 ):
     from astir import Astir
+    import torch
 
     if output_prefix.is_dir():
         output_prefix = output_prefix / "astir."
         output_prefix.parent.mkdir()
 
-    ast = Astir(input_expr, marker_dict)
+    ast = Astir(input_expr, marker_dict, design)
+    ast._device = torch.device("cpu")
     if batch_size is None:
         batch_size = ast.get_type_dataset().get_exprs_df().shape[0] // 100
 

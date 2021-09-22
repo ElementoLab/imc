@@ -36,9 +36,11 @@ def main(cli: tp.Sequence[str] = None) -> int:
     metas = dict()
     _chs = list()
     for mcd_file in args.mcd_files:
+        print(f"\tAnalyzing '{mcd_file}':")
         meta, ch = inspect_mcd(mcd_file, args)
         metas[mcd_file.as_posix()] = meta
         _chs.append(ch.assign(mcd_file=mcd_file))
+        print(f"\tFinished with '{mcd_file}'!")
 
     # Dump joint metadata
     if not args.no_write:
@@ -79,8 +81,6 @@ def inspect_mcd(mcd_file: Path, args: Args) -> tp.Tuple[DataFrame, DataFrame]:
         "ilastik",
     ]
     exclude_channels = ["EMPTY", "190BCKG", "80Ar", "89Y", "127I", "124Xe"]
-
-    print(f"    Analyzing '{mcd_file}':")
 
     mcd = McdParser(mcd_file)
     session = mcd.session
@@ -169,7 +169,6 @@ def inspect_mcd(mcd_file: Path, args: Args) -> tp.Tuple[DataFrame, DataFrame]:
         )
 
     mcd.close()
-    print(f"Finished with '{mcd_file}'!")
     return meta, annot
 
 
