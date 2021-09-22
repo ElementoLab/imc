@@ -27,32 +27,40 @@ pip install git+https://github.com/ElementoLab/imc.git
 
 ## Quick start
 
+Install the package:
+```bash
+# Install imc package (do this inside virtual environment for example)
+pip install git+https://github.com/ElementoLab/imc.git#egg=imc[extra]
+```
+
 ### Use case 1 (pipeline processing)
 
 #### Example: Lung sample processing from MCD to single-cell h5ad
 
 One-line IMC data processing:
 ```bash
-# Install imc package (do this inside virtual environment for example)
-pip install git+https://github.com/ElementoLab/imc.git#egg=imc[deepcell]
-
-# Download some example data
-SAMPLE=20200612_FLU_1923
-MCD_URL=https://zenodo.org/record/4110560/files/data/${SAMPLE}/${SAMPLE}.mcd
-mkdir -p imctest/data
-wget -q -O imctest/data/${SAMPLE}.mcd $MCD_URL
-cd imctest/
-
-# Run pipeline in one step:
-imc process data/${SAMPLE}.mcd
+# Run pipeline in one step with remote MCD file
+MCD_URL=https://zenodo.org/record/4110560/files/data/20200612_FLU_1923/20200612_FLU_1923.mcd
+imc process $MCD_URL
+```
+`imc` also supports TXT or TIFF files as input, local or remote files:
+```bash
+# Run pipeline in one step with remote TXT file
+TXT_URL=https://zenodo.org/record/5018260/files/COVID19_brain_Patient03_ROI3_COVID19_olfactorybulb.txt?download=1
+imc process $TXT_URL
 ```
 Input can be MCD, TIFF, or TXT files.
-Several files can be given to `imc process`. See more with the `--help` option.
+Several files can be given to `imc process` at once. See more with the `--help` option.
 
 `imc` is nonetheless very modular and allows the user to run any of the step seperately as well.
 
 The above is also equivalent to the following:
 ```bash
+MCD_URL=https://zenodo.org/record/4110560/files/data/20200612_FLU_1923/20200612_FLU_1923.mcd
+SAMPLE=20200612_FLU_1923
+
+wget -O data/${SAMPLE}.mcd $MCD_URL
+
 ## output description of acquired data
 imc inspect data/${SAMPLE}.mcd
 

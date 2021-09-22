@@ -7,14 +7,18 @@ Convert MCD files to TIFF and Sample/ROI structure.
 import sys
 import typing as tp
 
-import pandas as pd
 import numpy as np
-import tifffile
 
 from imc import ROI
-from imc.segmentation import prepare_stack
-from imc.utils import mcd_to_dir, plot_panoramas_rois, stack_to_ilastik_h5, txt_to_tiff
 from imc.scripts import build_cli
+from imc.segmentation import prepare_stack
+from imc.utils import (
+    mcd_to_dir,
+    plot_panoramas_rois,
+    stack_to_ilastik_h5,
+    txt_to_tiff,
+    filter_kwargs_by_callable,
+)
 
 
 MCD_FILE_ENDINGS = (".mcd", ".MCD")
@@ -55,15 +59,12 @@ def main(cli: tp.Sequence[str] = None) -> int:
         mcds, args.pannel_csvs, args.sample_names
     ):
         sargs = args.__dict__.copy()
-        del sargs["input_files"]
-        del sargs["pannel_csvs"]
-        del sargs["root_output_dir"]
-        del sargs["sample_names"]
         sargs["mcd_file"] = mcd_file
         sargs["pannel_csv"] = pannel_csv
         sargs["sample_name"] = sample_name
         sargs["output_dir"] = args.root_output_dir / mcd_file.stem
         sargs = {k: v for k, v in sargs.items() if v is not None}
+        sargs = filter_kwargs_by_callable(sargs, mcd_to_dir)
 
         print(f"Started analyzing '{mcd_file}'.")
         mcd_to_dir(**sargs)
