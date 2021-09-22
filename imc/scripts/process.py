@@ -9,6 +9,7 @@ import typing as tp
 import json
 from collections import defaultdict
 import time
+import warnings
 
 from imc.types import Path
 from imc.scripts import build_cli, find_mcds, find_tiffs
@@ -37,6 +38,11 @@ for k, v in DEFAULT_STEP_ARGS.items():
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("process")
     args = parser.parse_args(cli)
+
+    if args.quiet:
+        warnings.filterwarnings("ignore")
+
+    # TODO: if files are URLs, download
 
     if not args.files:
         print(
@@ -102,7 +108,9 @@ def main(cli: tp.Sequence[str] = None) -> int:
     )
     if "predict" in args.steps:
         if s_args.model == "deepcell":
-            predict(opts["predict"] + tiffs)
+            out = predict(opts["predict"] + tiffs)
+            if out:
+                return out
         else:
             print(reason)
     if "segment" in args.steps:

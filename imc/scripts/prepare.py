@@ -5,17 +5,17 @@ Convert MCD files to TIFF and Sample/ROI structure.
 """
 
 import sys
-import argparse
 import typing as tp
 
 import pandas as pd
 import numpy as np
 import tifffile
 
-from imc.types import Path
+from imc import ROI
 from imc.segmentation import prepare_stack
 from imc.utils import mcd_to_dir, plot_panoramas_rois, stack_to_ilastik_h5, txt_to_tiff
 from imc.scripts import build_cli
+
 
 MCD_FILE_ENDINGS = (".mcd", ".MCD")
 TIFF_FILE_ENDINGS = (".tiff", ".TIFF", ".tif", ".TIF")
@@ -71,6 +71,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
             output_prefix=args.root_output_dir / mcd_file.stem / mcd_file.stem + ".",
             panorama_image_prefix=args.root_output_dir / mcd_file.stem / "Panorama_",
             save_roi_arrays=False,
+            overwrite=args.overwrite,
         )
         print(f"Finished with '{mcd_file}'.")
 
@@ -80,21 +81,11 @@ def main(cli: tp.Sequence[str] = None) -> int:
         tiffs.append(tiff_f)
 
     for tiff in tiffs:
-        stack = tifffile.imread(tiff)
-        # TODO: with OME-TIFF not required
-        try:
-            channels = pd.read_csv(
-                tiff.replace_(".tiff", ".csv"), index_col=0, squeeze=True
-            )
-        except FileNotFoundError:
-            raise ValueError(
-                "Given TIFF file does not have a '.csv' file describing the channels!"
-            )
-        # TODO: connect to CLI options to get different ilastik stacks
-        s = prepare_stack(stack, channels)
-        stack_to_ilastik_h5(
-            s[np.newaxis, ...], tiff.replace_("_full.tiff", "_ilastik_s2.h5")
-        )
+        roi = ROI.from_stack(tiff)
+        stack_file = tiff.replace_("_full.tiff", "_ilastik_s2.h5")
+        if stack_file.exists() and (not args.overwrite):
+            s = prepare_stack(roi.stack, roi.channel_labels)
+            stack_to_ilastik_h5(s[np.newaxis, ...], stack_file)
 
     print("Finished prepare step!")
     return 0

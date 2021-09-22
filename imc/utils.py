@@ -672,22 +672,21 @@ def mcd_to_dir(
                 )
             ].reset_index(drop=True)
 
-        # Filter hot pixels
-        ac._image_data = np.asarray([clip_hot_pixels(x) for x in ac.image_data])
-
-        # Save full image
         p = output_dir / "tiffs" / prefix + "_full."
         if (not only_crops) and export_stacks:
-            (output_dir / "tiffs").mkdir()
-            if output_format == "tiff":
-                if (overwrite) or not (p + file_ending).exists():
+            if (not (p + file_ending).exists()) or overwrite:
+                # Filter hot pixels
+                ac._image_data = np.asarray([clip_hot_pixels(x) for x in ac.image_data])
+
+                # Save full image
+                (output_dir / "tiffs").mkdir()
+                if output_format == "tiff":
                     ac.save_tiff(
                         p + file_ending,
                         names=channel_labels.str.extract(r"\((.*)\)")[0],
                         compression=compression_level,
                     )
-            elif output_format == "ome-tiff":
-                if (overwrite) or not (p + file_ending).exists():
+                elif output_format == "ome-tiff":
                     write_ometiff(
                         arr=ac._image_data,
                         labels=channel_labels.tolist(),
@@ -706,27 +705,29 @@ def mcd_to_dir(
             continue
 
         # Prepare ilastik data
-        if ilastik_compartment is None:
-            # Get index of ilastik channels
-            to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
-            to_exp_ind = [
-                ac.channel_masses.index(y)
-                for y in to_exp.str.extract(r".*\(..(\d+)\)")[0]
-            ]
-            assert to_exp_ind == to_exp.index.tolist()
-            full = ac.image_data[to_exp_ind]
-            nchannels = len(to_exp)
-        else:
-            # Or nuclear/cytoplasmic
-            from imc.segmentation import prepare_stack
+        ilastik_input = output_dir / "tiffs" / prefix + "_ilastik_s2.h5"
+        if (not ilastik_input.exists()) or overwrite:
+            if ilastik_compartment is None:
+                # Get index of ilastik channels
+                to_exp = channel_labels[channel_labels.isin(ilastik_channels)]
+                to_exp_ind = [
+                    ac.channel_masses.index(y)
+                    for y in to_exp.str.extract(r".*\(..(\d+)\)")[0]
+                ]
+                assert to_exp_ind == to_exp.index.tolist()
+                full = ac.image_data[to_exp_ind]
+                nchannels = len(to_exp)
+            else:
+                # Or nuclear/cytoplasmic
+                from imc.segmentation import prepare_stack
 
-            full = prepare_stack(ac.image_data, channel_labels, ilastik_compartment)
-            if len(full.shape) == 2:
-                full = full[np.newaxis, ...]
-            nchannels = 2 if ilastik_compartment == "both" else 1
+                full = prepare_stack(ac.image_data, channel_labels, ilastik_compartment)
+                if len(full.shape) == 2:
+                    full = full[np.newaxis, ...]
+                nchannels = 2 if ilastik_compartment == "both" else 1
 
-        # Make input for ilastik training
-        stack_to_ilastik_h5(full, output_dir / "tiffs" / prefix + "_ilastik_s2.h5")
+            # Make input for ilastik training
+            stack_to_ilastik_h5(full, ilastik_input)
 
         # # random crops
         # # # make sure height/width are smaller or equal to acquisition dimensions
@@ -1000,6 +1001,7 @@ def plot_panoramas_rois(
     output_prefix: Path,
     panorama_image_prefix: tp.Optional[Path] = None,
     save_roi_arrays: bool = False,
+    overwrite: bool = False,
 ) -> None:
     """
     Plot the location of panoramas and ROIs of a IMC sample.
@@ -1045,7 +1047,11 @@ def plot_panoramas_rois(
             panorama_image_prefix is not None
         ), "If `save_arrays`, provide a `panorama_image_prefix`."
 
-    spec = yaml.safe_load(open(yaml_spec, "r"))
+    output_file = output_prefix + "joint_slide_panorama_ROIs.png"
+    if output_file.exists() and (not overwrite):
+        return
+
+    spec = yaml.safe_load(yaml_spec.open())
     w, h = int(spec["Slide"][0]["WidthUm"]), int(spec["Slide"][0]["HeightUm"])
     fkws = dict(bbox_inches="tight")
 
@@ -1159,11 +1165,7 @@ def plot_panoramas_rois(
         np.save(output_prefix + f"ROI_{j + 1}", roi_img, allow_pickle=False)
 
     ax.axis("off")
-    fig.savefig(
-        output_prefix + "joint_slide_panorama_ROIs.png",
-        dpi=300,
-        **fkws,
-    )
+    fig.savefig(output_file, dpi=300, **fkws)
 
 
 def get_mean_expression_per_cluster(a: AnnData) -> DataFrame:
