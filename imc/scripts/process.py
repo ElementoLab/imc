@@ -11,6 +11,8 @@ from collections import defaultdict
 import time
 import warnings
 
+from urlpath import URL
+
 from imc.types import Path
 from imc.scripts import build_cli, find_mcds, find_tiffs
 from imc.scripts.inspect_mcds import main as inspect
@@ -19,8 +21,10 @@ from imc.scripts.predict import main as predict
 from imc.scripts.segment_stacks import main as segment
 from imc.scripts.quantify import main as quantify
 from imc.scripts.phenotype import main as phenotype
+from imc.utils import download_file
 
 
+DATA_DIR = Path("data")
 PROCESSED_DIR = Path("processed")
 MCD_FILE_ENDINGS = (".mcd", ".MCD")
 TIFF_FILE_ENDINGS = (".tiff", ".TIFF", ".tif", ".TIF")
@@ -42,8 +46,6 @@ def main(cli: tp.Sequence[str] = None) -> int:
     if args.quiet:
         warnings.filterwarnings("ignore")
 
-    # TODO: if files are URLs, download
-
     if not args.files:
         print(
             "No input files were given, "
@@ -60,7 +62,25 @@ def main(cli: tp.Sequence[str] = None) -> int:
                 )
                 return 1
 
-    args.files = [x.absolute().resolve() for x in args.files]
+    # If provided URLs, download files
+    urls = list(map(URL, filter(is_url, args.files)))
+    args.files = list(filter(lambda x: not is_url(x), args.files))
+    for url in urls:
+        print("Given URLs as input, will download.")
+        if url.name.endswith(MCD_FILE_ENDINGS):
+            f = DATA_DIR.mkdir() / url.name
+        elif url.name.endswith(TIFF_FILE_ENDINGS):
+            f = PROCESSED_DIR.mkdir() / url.name
+        elif url.name.endswith(TXT_FILE_ENDINGS):
+            f = DATA_DIR.mkdir() / url.name
+        if not f.exists():
+            print(f"Downloading file '{url}' into '{f}'.")
+            download_file(url.as_posix(), f)
+            print("Completed.")
+        args.files.append(f)
+    args.files = [Path(x).absolute().resolve() for x in args.files]
+
+    # Figure out which steps are going to be done
     if args.steps is None:
         args.steps = process_step_order
     else:
@@ -71,6 +91,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     if args.stop_step is not None:
         args.steps = args.steps[: args.steps.index(args.stop_step) + 1]
 
+    # Load config
     if args.config is not None:
         with open(args.config) as h:
             opts.update(json.load(h))
@@ -98,7 +119,10 @@ def main(cli: tp.Sequence[str] = None) -> int:
         new_tiffs += list(
             (PROCESSED_DIR / mcd.stem / "tiffs").glob(f"{mcd.stem}*_full.tiff")
         )
-    new_tiffs += [f.replace_(".txt", "_full.tiff") for f in txts]
+    for txt in txts:
+        name = txt.name.replace(".txt", "")
+        tiff_f = PROCESSED_DIR / name / "tiffs" / name + "_full.tiff"
+        new_tiffs += [tiff_f]
     tiffs = sorted(list(map(str, set(tiffs + new_tiffs))))
 
     s_parser = build_cli("segment")
@@ -125,11 +149,21 @@ def main(cli: tp.Sequence[str] = None) -> int:
     return 0
 
 
+def is_url(x: str) -> bool:
+    from urllib.parse import urlparse
+
+    if isinstance(x, Path):
+        x = x.as_posix()
+
+    try:
+        result = urlparse(x)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
+
+
 if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
         sys.exit(1)
-
-# cd ~/projects/imctest/
-# imc process data/20200629_NL1915A.mcd processed/20200629_NL1915A/tiffs/20200629_NL1915A-01_full.tiff

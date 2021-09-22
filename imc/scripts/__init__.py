@@ -160,7 +160,7 @@ cli_config = {
                 "kwargs": {
                     "dest": "files",
                     "nargs": "*",
-                    "type": Path,
+                    "type": str,
                     "help": "Input files to process. Can be MCD, TIFF, or TXT.",
                 }
             },
@@ -413,6 +413,15 @@ cli_config = {
                     "action": "store_true",
                     "help": "Whether to keep original names for ROIs from MCD file. "
                     "Default is to number them according to acquisition order.",
+                },
+            },
+            {
+                "args": ["--verbose"],
+                "kwargs": {
+                    "dest": "quiet",
+                    "action": "store_false",
+                    "help": "Whether to output additional information to stderr. "
+                    "Default is not to.",
                 },
             },
         ],

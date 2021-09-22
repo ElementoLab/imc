@@ -60,11 +60,14 @@ deepcell = [
 cellpose = [
     "cellpose>=0.6.5,<1.0.0",
 ]
+astir = [
+    "astir>=0.1.4,<1.0.0",
+]
 dev = [
     "wheel",
     "ipython",
     "black[d]",
-    "mypy",  # pin to version supporting pyproject.toml
+    "mypy>=0.900",  # pin to version supporting pyproject.toml
     "pandas-stubs",
     "pylint",
     "git-lint",
@@ -142,7 +145,7 @@ ipython = "^7.16.1"
 pylint = "^2.5.3"
 git-lint = "^0.1.2"
 black = {extras = ["d"], version = "^19.10b0"}
-mypy = "^0.782"
+mypy = "^0.900"
 pytest = "^5.4.3"
 Sphinx = "^3.1.1"
 sphinx-issues = "^1.2.0"
@@ -157,6 +160,9 @@ deepcell = [
 ]
 cellpose = [
     "cellpose",
+]
+astir = [
+    "astir",
 ]
 
 [tool.black]

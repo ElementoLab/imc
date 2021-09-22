@@ -45,6 +45,9 @@ def main(cli: tp.Sequence[str] = None) -> int:
             "Not yet supported, please run prepare step for each file type separately."
         )
 
+    if not args.quiet:
+        ...
+
     fs = "\n\t- " + "\n\t- ".join([f.as_posix() for f in args.input_files])
     print(f"Starting prepare step for {len(args.input_files)} files:{fs}!")
 
@@ -76,16 +79,20 @@ def main(cli: tp.Sequence[str] = None) -> int:
         print(f"Finished with '{mcd_file}'.")
 
     for txt in txts:
-        tiff_f = txt.replace_(".txt", "_full.tiff")
+        print(f"Preparing TXT file: '{txt}'.")
+        name = txt.name.replace(".txt", "")
+        tiff_f = args.root_output_dir / name / "tiffs" / name + "_full.tiff"
+        tiff_f.parent.mkdir()
         txt_to_tiff(txt, tiff_f, write_channel_labels=True)
         tiffs.append(tiff_f)
 
     for tiff in tiffs:
         roi = ROI.from_stack(tiff)
-        stack_file = tiff.replace_("_full.tiff", "_ilastik_s2.h5")
-        if stack_file.exists() and (not args.overwrite):
+        ilastik_input = tiff.replace_("_full.tiff", "_ilastik_s2.h5")
+        if (not ilastik_input.exists()) or args.overwrite:
+            print(f"Preparing TIFF file: '{tiff}'.")
             s = prepare_stack(roi.stack, roi.channel_labels)
-            stack_to_ilastik_h5(s[np.newaxis, ...], stack_file)
+            _ = stack_to_ilastik_h5(s[np.newaxis, ...], ilastik_input)
 
     print("Finished prepare step!")
     return 0
