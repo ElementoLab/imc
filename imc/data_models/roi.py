@@ -167,8 +167,9 @@ class ROI:
         if isinstance(stack_file, str):
             stack_file = Path(stack_file)
         stack_file = stack_file.absolute()
-        reason = "Stack file must end with '_full.tiff' for the time being."
-        assert stack_file.endswith("_full.tiff"), reason
+
+        # reason = "Stack file must end with '_full.tiff' for the time being."
+        # assert stack_file.endswith("_full.tiff")
         roi_numbers = re.findall(r".*-(\d+)_full\.tiff", stack_file.as_posix())
         if len(roi_numbers) != 1:
             print("Could not determine ROI number.")
@@ -183,8 +184,9 @@ class ROI:
             roi_number=roi_number,
             **kwargs,
         )
+        roi._stack_file = stack_file
         if make_sample:
-            roi.sample = _sample.IMCSample.from_rois(roi)
+            roi.sample = _sample.IMCSample.from_rois([roi])
             roi.sample.rois = [roi]
         return roi
 
@@ -476,6 +478,8 @@ class ROI:
             - "cell_mask": TIFF file with mask for cells
             - "cell_type_assignments": CSV file with cell type assignemts for each cell
         """
+        if hasattr(self, "_" + input_type + "_file"):
+            return Path(getattr(self, "_" + input_type + "_file"))
         to_read = {
             "stack": (self.stacks_dir, "_full.tiff"),
             "ilastik_input": (self.stacks_dir, "_ilastik_s2.h5"),
