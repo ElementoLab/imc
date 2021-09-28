@@ -48,7 +48,7 @@ def export_images_for_topological_labeling(
     Export PNGs for labeling with `labelme`.
     """
     for roi in tqdm(rois):
-        f = output_dir / roi.name + ".png"
+        f = output_dir / roi.name + ".jpg"
         if not overwrite and f.exists():
             continue
         array = roi._get_channels(channels, minmax=True, equalize=True)[1].squeeze()
@@ -69,7 +69,7 @@ def collect_domains(
 
     topo_annots = dict()
     for filename in tqdm(filenames):
-        annot_f = filename.replace_(".png", ".json")
+        annot_f = filename.replace_(".jpg", ".json")
         if not annot_f.exists():
             continue
         with open(annot_f, "r") as handle:
