@@ -360,16 +360,40 @@ def get_domain_areas(
     return areas
 
 
+def get_domain_masks(
+    topo_annots: tp.Dict,
+    rois: tp.Sequence[_roi.ROI],
+    exclude_domains: tp.Sequence[str] = None,
+    fill_remaining: str = None,
+    per_domain: bool = False,
+) -> Array:
+    _x = list()
+    for roi in rois:
+        x = get_domain_mask(
+            topo_annots[roi.name],
+            roi,
+            exclude_domains=exclude_domains,
+            fill_remaining=fill_remaining,
+            per_domain=per_domain,
+        )
+        _x.append(x)
+    x = np.asarray(_x)
+    return x
+
+
 def get_domain_mask(
     topo_annot: tp.Dict,
     roi: _roi.ROI,
-    exclude_domains: tp.Sequence[str],
+    exclude_domains: tp.Sequence[str] = None,
     fill_remaining: str = None,
     per_domain: bool = False,
 ) -> Array:
     """ """
     import tifffile
     from imc.utils import polygon_to_mask
+
+    if exclude_domains is None:
+        exclude_domains = []
 
     _, h, w = roi.shape
     masks = list()
