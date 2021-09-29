@@ -1211,7 +1211,7 @@ class ROI:
             quant = (
                 quantify_cell_intensity(
                     stack,
-                    getattr(self, layer + "_mask"),
+                    getattr(self, layer + "_mask_o"),
                     **kwargs,
                 )
                 .rename(columns=self.channel_labels)
@@ -1238,7 +1238,7 @@ class ROI:
         for layer in layers:
             quant = (
                 quantify_cell_morphology(
-                    getattr(self, layer + "_mask"),
+                    getattr(self, layer + "_mask_o"),
                     **kwargs,
                 )
                 .rename(columns=self.channel_labels)
