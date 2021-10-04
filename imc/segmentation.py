@@ -49,13 +49,16 @@ def prepare_stack(
         channel_labels = channel_labels[~channel_exclude.values]
 
     # Get nuclear channels
-    nuclear_chs = channel_labels.str.contains("DNA")
+    nuclear_chs = channel_labels.str.contains("DNA|Iridium")
+    if nuclear_chs.sum() == 0:
+        raise ValueError("Could not determine nuclear channels using 'DNA' or 'Iridium'.")
+
     nucl = normalize(stack[nuclear_chs]).mean(0)
     if compartment == "nuclear":
         return nucl
 
     # Get cytoplasmatic channels
-    cyto_chs = ~channel_labels.str.contains("DNA|Ki67|SMA")
+    cyto_chs = ~channel_labels.str.contains("DNA|Iridium|Ki67|SMA")
     cyto = normalize(stack[~cyto_chs]).mean(0)
     if compartment == "cytoplasm":
         return cyto
