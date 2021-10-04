@@ -822,7 +822,9 @@ def write_ometiff(
                     SizeC="{arr.shape[0]}"
                     SizeT="1"
                     PhysicalSizeX="1.0"
-                    PhysicalSizeY="1.0">
+                    PhysicalSizeXUnit="µm"
+                    PhysicalSizeY="1.0"
+                    PhysicalSizeYUnit="µm">
                     {channels_xml}
                 <TiffData/>
             </Pixels>
@@ -841,8 +843,9 @@ def write_ometiff(
         contiguous=True,
         photometric="minisblack",
         resolution=(25400, 25400, "inch"),
-        metadata=None,
+        metadata={},
         compress=compression_level,
+        ome=True,
         **tiff_kwargs,
     )
 
