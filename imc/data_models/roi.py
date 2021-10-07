@@ -205,13 +205,12 @@ class ROI:
         t = tifffile.TiffFile(self.get_input_filename("stack"))
         if t.is_ome:
             et = ElementTree.fromstring(t.ome_metadata)
-            preview = pd.Series()
             preview = (
                 pd.Series([e.get("Name") for e in et.iter() if e.tag.endswith("Channel")])
                 .rename("channel")
                 .rename_axis("index")
             )
-            if not preview.empty:
+            if not (preview.empty or preview.isnull().all()):
                 self._channel_labels = preview
                 return self._channel_labels
 

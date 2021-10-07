@@ -202,7 +202,7 @@ class IMCSample:
     def channel_labels(self) -> tp.Union[Series, DataFrame]:
         labels = pd.DataFrame(
             [roi.channel_labels.rename(roi.name) for roi in self.rois]
-        ).T.rename_axis(index="chanel", columns="roi")
+        ).T.rename_axis(index="channel", columns="roi")
         if (labels.apply(pd.Series.nunique, axis=1) == 1).all():
             return labels.iloc[:, 0].rename(self.name)
         return labels
@@ -211,7 +211,7 @@ class IMCSample:
     def channel_names(self) -> tp.Union[Series, DataFrame]:
         names = pd.DataFrame(
             [roi.channel_names.rename(roi.name) for roi in self.rois]
-        ).T.rename_axis(index="chanel", columns="roi")
+        ).T.rename_axis(index="channel", columns="roi")
         if (names.apply(pd.Series.nunique, axis=1) == 1).all():
             return names.iloc[:, 0].rename(self.name)
         return names
@@ -220,7 +220,7 @@ class IMCSample:
     def channel_metals(self) -> tp.Union[Series, DataFrame]:
         metals = pd.DataFrame(
             [roi.channel_metals.rename(roi.name) for roi in self.rois]
-        ).T.rename_axis(index="chanel", columns="roi")
+        ).T.rename_axis(index="channel", columns="roi")
         if (metals.apply(pd.Series.nunique, axis=1) == 1).all():
             return metals.iloc[:, 0].rename(self.name)
         return metals

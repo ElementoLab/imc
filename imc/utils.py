@@ -788,6 +788,7 @@ def write_ometiff(
     """
     # TODO: Add to OME XML: ROI number
     output_path = Path(output_path)
+    image_name = output_path.stem.replace("_full", "")
     labels = pd.Series(labels).str.replace("<", "_").str.replace(">", "_").tolist()
 
     # Generate standard OME-XML
@@ -807,7 +808,7 @@ def write_ometiff(
             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
             xsi:schemaLocation="http://www.openmicroscopy.org/Schemas/OME/2016-06 http://www.openmicroscopy.org/Schemas/OME/2016-06/ome.xsd">
         <Image
-                Name="{output_path.stem}"
+                Name="{image_name}"
                 ID="Image:0"
                 Description="{description or ''}">
             <Pixels
@@ -843,7 +844,7 @@ def write_ometiff(
         contiguous=True,
         photometric="minisblack",
         resolution=(25400, 25400, "inch"),
-        metadata={},
+        metadata={"Channel": {"Name": labels}},
         compress=compression_level,
         ome=True,
         **tiff_kwargs,
