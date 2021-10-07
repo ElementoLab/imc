@@ -1020,6 +1020,7 @@ def plot_panoramas_rois(
         Whether to output arrays containing the images captured by the Hyperion instrument
         in the locations of the ROIs.
     """
+    import PIL
     import yaml
     import imageio
     from matplotlib.patches import Rectangle
@@ -1076,7 +1077,12 @@ def plot_panoramas_rois(
 
         # Try to read panorama image
         try:
-            pano_img = imageio.imread(f"{panorama_image_prefix}{i + 1}.png")
+            try:
+                pano_img = imageio.imread(f"{panorama_image_prefix}{i + 1}.png")
+            except PIL.Image.DecompressionBombError:
+                print("Panorama too large to plot, skipping.")
+                continue
+
             pano_imgs[pano["ID"]] = pano_img
             # print(f"Read image file for panorama '{i + 1}'")
             ax.imshow(pano_img, extent=(x, x + width, y, y + height))
