@@ -391,7 +391,7 @@ def astir(
     design: DataFrame,
     output_prefix: Path,
     batch_size: int = None,
-    max_epochs: int = 1000,
+    max_epochs: int = 200,
     learning_rate: float = 2e-3,
     initial_epochs: int = 3,
     device: str = "cpu",
