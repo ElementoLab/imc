@@ -176,7 +176,7 @@ def encode(obj: tp.Any) -> tp.Any:
     """
     For serializing to JSON or YAML with no special Python object references.
 
-    No roundtrip!
+    Not fit for roundtrip!
     """
     if isinstance(obj, bool):
         return str(obj).lower()

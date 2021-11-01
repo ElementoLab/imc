@@ -1028,14 +1028,8 @@ def plot_panoramas_rois(
 
     def get_pano_coords(pan):
         x1, y1 = float(pan["SlideX1PosUm"]), float(pan["SlideY1PosUm"])
-        x2, y2 = float(pan["SlideX2PosUm"]), float(pan["SlideY2PosUm"])
         x3, y3 = float(pan["SlideX3PosUm"]), float(pan["SlideY3PosUm"])
-        x4, y4 = float(pan["SlideX4PosUm"]), float(pan["SlideY4PosUm"])
-        x = min(x1, x2, x3, x4)
-        y = min(y1, y2, y3, y4)
-        width = max(x1, x2, x3, x4) - x
-        height = max(y1, y2, y3, y4) - y
-        return tuple(map(int, [x, y, width, height]))
+        return tuple(map(int, [x1, y1, x3 - x1, y3 - y1]))
 
     def get_roi_coords(roi):
         # start positions are in a different unit for some reason
@@ -1056,6 +1050,8 @@ def plot_panoramas_rois(
     if output_file.exists() and (not overwrite):
         return
 
+    PIL.Image.MAX_IMAGE_PIXELS = None  # to be able to read PNG file of any size
+
     spec = yaml.safe_load(yaml_spec.open())
     w, h = int(spec["Slide"][0]["WidthUm"]), int(spec["Slide"][0]["HeightUm"])
     fkws = dict(bbox_inches="tight")
@@ -1068,27 +1064,29 @@ def plot_panoramas_rois(
     pano_pos = dict()
     pano_imgs = dict()
     for i, pano in enumerate(spec["Panorama"]):
+        # # Last panorama is not a real one (ROIs)
         if pano["Description"] == "ROIs":
             continue
 
         x, y, width, height = get_pano_coords(pano)
-        # print(pano["ID"], x, y, width, height)
         pano_pos[pano["ID"]] = (x, y, width, height)
 
         # Try to read panorama image
         try:
-            try:
-                pano_img = imageio.imread(f"{panorama_image_prefix}{i + 1}.png")
-            except PIL.Image.DecompressionBombError:
-                print("Panorama too large to plot, skipping.")
-                continue
-
+            # In case acquisition was made
+            if pano["Description"].endswith(".jpg"):
+                f = panorama_image_prefix + f"{i + 1}.png"
+            else:
+                i2 = int(pano["Description"].split("_")[1])
+                f = panorama_image_prefix + f"{i2}.png"
+            pano_img = imageio.imread(f)[..., :3]
             pano_imgs[pano["ID"]] = pano_img
             # print(f"Read image file for panorama '{i + 1}'")
             ax.imshow(pano_img, extent=(x, x + width, y, y + height))
-        except FileNotFoundError:
-            # # First panorama is the slide (won't be available)
-            # # Last panorama is not a real one
+        except (FileNotFoundError, IndexError, ValueError, TypeError):
+            # IndexError in case description can't be split in two
+            # ValueError in case i2 can't be made an int
+            # TypeError in case 'panorama_image_prefix' is None
             print(f"Could not find image file for panorama '{i + 1}'")
 
         # Plot rectangles
@@ -1096,9 +1094,10 @@ def plot_panoramas_rois(
         ax.add_patch(rect)
         ax.text(
             (x + width / 2),
-            (y + height + 500),
+            (y + height),
             s=f"Panorama '{pano['ID']}'",
             ha="center",
+            va="bottom",
             color=colors[i],
         )
         ax.scatter((x + width / 2), (y + height), marker="^", color=colors[i])
