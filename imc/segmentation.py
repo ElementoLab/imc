@@ -49,16 +49,22 @@ def prepare_stack(
         channel_labels = channel_labels[~channel_exclude.values]
 
     # Get nuclear channels
-    nuclear_chs = channel_labels.str.contains("DNA|Iridium")
+    nuclear_chs = (
+        channel_labels.str.contains(r"DNA|Iridium", regex=True)
+        | channel_labels.str.contains("191Ir(Ir191)", regex=False)
+        | channel_labels.str.contains("193Ir(Ir193)", regex=False)
+    )
     if nuclear_chs.sum() == 0:
-        raise ValueError("Could not determine nuclear channels using 'DNA' or 'Iridium'.")
+        raise ValueError(
+            "Could not determine nuclear channels using 'DNA', 'Iridium', or Ir91/Ir193."
+        )
 
     nucl = normalize(stack[nuclear_chs]).mean(0)
     if compartment == "nuclear":
         return nucl
 
     # Get cytoplasmatic channels
-    cyto_chs = ~channel_labels.str.contains("DNA|Iridium|Ki67|SMA")
+    cyto_chs = ~(nuclear_chs | channel_labels.str.contains(r"Ki67|SMA", regex=True))
     cyto = normalize(stack[~cyto_chs]).mean(0)
     if compartment == "cytoplasm":
         return cyto

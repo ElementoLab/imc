@@ -294,7 +294,7 @@ def write_image_to_file(
     if len(arr.shape) != 3:
         skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, arr)
     else:
-        __s = np.multiply(eq(arr.mean(axis=0)), 256).astype(np.uint8)
+        __s = np.multiply(eq(arr.mean(axis=0)), 255).astype(np.uint8)
         skimage.io.imsave(output_prefix + "." + "channel_mean" + "." + file_format, __s)
         for channel, label in tqdm(enumerate(channel_labels), total=arr.shape[0]):
             skimage.io.imsave(
