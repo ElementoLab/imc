@@ -416,7 +416,7 @@ class Project:
         palette: tp.Optional[str] = None,
         samples: tp.List[IMCSample] = None,
         rois: tp.List[ROI] = None,
-    ):
+    ) -> Figure:
         # TODO: fix compatibility of `cell_type_combinations`.
         samples = samples or self.samples
         rois = rois or self.rois

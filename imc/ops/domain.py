@@ -74,7 +74,8 @@ def collect_domains(
             continue
         with open(annot_f, "r") as handle:
             annot = json.load(handle)
-        topo_annots[filename.stem] = annot["shapes"]
+        if annot["shapes"]:
+            topo_annots[filename.stem] = annot["shapes"]
     if output_file is not None:
         with open(output_file, "w") as handle:
             json.dump(topo_annots, handle, indent=4)
@@ -182,7 +183,8 @@ def get_domains_per_cell(
     topo_annots: tp.Dict[str, tp.Dict],
     rois: tp.Sequence[_roi.ROI],
     exclude_domains: tp.Sequence[str] = None,
-    remaining_domain: str = "background",
+    remaining_domain: tp.Union[str, tp.Dict[str, str]] = "background",
+    resolution: str = "largest",
 ) -> DataFrame:
     """
     Generate annotation of topological domain each cell is contained in
@@ -196,8 +198,19 @@ def get_domains_per_cell(
         List of ROI objects.
     exclude_domains: list[str]
         Domains to ignore
-    exclude_domains: list[str]
-        Domains to ignore
+    remaining_domain: str | dict[str, str]
+        Name of domain to fill in for cells that do not fall under any domain annotation.
+        If given a string, it will simply use that.
+        If given a dict, the filled domain will be the value of the key which exists in the image.
+        E.g. Annotating tumor/stroma domains. If an image has only domains of type 'Tumor',
+        given `remaining_domain` == {'Tumor': 'Stroma', 'Stroma': 'Tumor'}, the remaining cells
+        will be annotated with 'Stroma'. In an image annotated only with 'Stroma' domains,
+        remaining cells will be annotated with 'Tumor' domains.
+    resolution: str
+        If `remaining_domain` is a dict, there may be more than one domain present in the image.
+        A resolution method is thus needed to select which domain will be filled for the remaining cells.
+        The method 'largest' will choose as key of `remaining_domain` the largest annotated domain class.
+        The method 'unique' will be strict and only fill in if there is a unique domain.
     """
     from imc.utils import polygon_to_mask
 
@@ -232,18 +245,48 @@ def get_domains_per_cell(
             )
             _assigns.append(assign)
 
-        ## if remaining_domain explicetely annotated, skip
-        if remaining_domain in td_count:
-            print(f"ROI '{roi.name}' has been manually annotated with remaining domains.")
-            _full_assigns += _assigns
-            continue
+        ## if remaining_domain explicitely annotated, skip
+        if isinstance(remaining_domain, str):
+            if remaining_domain in td_count:
+                print(
+                    f"ROI '{roi.name}' has been manually annotated"
+                    " with remaining domains."
+                )
+                _full_assigns += _assigns
+                continue
 
-        ## add alveolar region as remaining not overlapping with existing regions
-        print(f"ROI '{roi.name}' will be annotated with '{remaining_domain}' by default.")
-        # remain = ~polygon_to_mask(np.concatenate(polys), roi.shape[1:][::-1]) # <- wrong
+        ## add a domain for cells not annotated
         remain = ~np.asarray(regions).sum(0).astype(bool)
         existing = np.sort(pd.concat(_assigns)["obj_id"].unique())
         remain = remain & (~np.isin(mask, existing))
+        if remain.sum() == 0:
+            _full_assigns += _assigns
+            continue
+
+        if isinstance(remaining_domain, str):
+            ### if given a string just make that the domain for unnanotated cells
+            domain = remaining_domain
+            print(f"ROI '{roi.name}' will be annotated with '{domain}' by default.")
+
+        elif isinstance(remaining_domain, dict):
+            ### if given a dict, dependent on the existing domains choose what to label the remaining
+            ### useful for when labeling e.g. tumor/stroma and different images may be labeled with only one of them
+            existing_domains = pd.concat(_assigns)["domain_id"].value_counts()
+            existing_domains.index = existing_domains.index.str.replace(
+                r"\d+", "", regex=True
+            )
+            repl = set(v for k, v in remaining_domain.items() if k in existing_domains)
+            if resolution == "largest":
+                domain = remaining_domain[existing_domains.idxmax()]
+            elif resolution == "unique":
+                if len(repl) == 1:
+                    domain = repl.pop()
+                else:
+                    raise ValueError(
+                        "More than one domain was detected and it is"
+                        " unclear how to annotate the remaining cells "
+                        f"with the mapping: {remaining_domain}"
+                    )
 
         assign = (
             pd.Series(np.unique(mask[remain]), name="obj_id")
@@ -252,23 +295,11 @@ def get_domains_per_cell(
             .assign(
                 roi=roi.name,
                 sample=roi.sample.name,
-                domain_id=remaining_domain + "1",
+                domain_id=domain + "1",
             )
         )
         _assigns.append(assign)
         _full_assigns += _assigns
-
-        # # To visualize:
-        # c = (
-        #     pd.concat(_assigns)
-        #     .set_index(["roi", "obj_id"])["domain_id"]
-        #     .rename("cluster")
-        # )
-        # c = c.str.replace(r"\d", "", regex=True)
-        # domains = set(assigns['topological_domain'])
-        # fig = roi.plot_cell_types(
-        #     c.replace({k + 1: f"{v} - {k}" for k, v in zip(range(len(domains)), domains)})
-        # )
 
     assigns = pd.concat(_full_assigns)
     assigns["topological_domain"] = assigns["domain_id"].str.replace(
