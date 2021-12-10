@@ -71,6 +71,10 @@ class Path(pathlib.Path):
             yield from [Path(x) for x in pathlib.Path(str(self)).iterdir()]
         yield from []
 
+    def unlink(self, missing_ok: bool = True) -> Path:
+        super().unlink(missing_ok=missing_ok)
+        return self
+
     def mkdir(self, mode=0o777, parents: bool = True, exist_ok: bool = True) -> Path:
         super().mkdir(mode=mode, parents=parents, exist_ok=exist_ok)
         return self

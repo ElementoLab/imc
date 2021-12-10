@@ -469,18 +469,21 @@ class ROI:
         """Get path to file with data for ROI.
 
         Available `input_type` values are:
-            - "stack":
-            - "features": Features extracted by ilastik (usually not available by default)
+            - "stack": Multiplexed image stack
+            - "channel_labels": Labels of channels (may not exist for OME-TIFF stacks)
+            - "ilastik_input": Features extracted by ilastik (usually not available by default)
             - "probabilities": 3 color probability intensities predicted by ilastik
-            - "uncertainty": TIFF file with uncertainty of pixel classification
-            - "nuclei_mask": TIFF file with mask for nuclei
             - "cell_mask": TIFF file with mask for cells
+            - "nuclei_mask": TIFF file with mask for nuclei
+            - "nuclear_mask": TIFF file with mask for nuclei
             - "cell_type_assignments": CSV file with cell type assignemts for each cell
+            - "adjacency_graph": Cell neighborhood graph.
         """
         if hasattr(self, "_" + input_type + "_file"):
             return Path(getattr(self, "_" + input_type + "_file"))
         to_read = {
             "stack": (self.stacks_dir, "_full.tiff"),
+            "channel_labels": (self.stacks_dir, "_full.csv"),
             "ilastik_input": (self.stacks_dir, "_ilastik_s2.h5"),
             # "features": (self.stacks_dir, "_ilastik_s2_Features.h5"),
             "probabilities": (self.stacks_dir, "_Probabilities.tiff"),
