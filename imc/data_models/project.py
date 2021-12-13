@@ -281,7 +281,9 @@ class Project:
         return pd.concat([sample.channel_metals for sample in self.samples], axis=1)
 
     def _get_rois(
-        self, samples: tp.Optional[tp.List[IMCSample]], rois: tp.Optional[tp.List[ROI]]
+        self,
+        samples: tp.Optional[tp.Sequence[IMCSample]],
+        rois: tp.Optional[tp.Sequence[ROI]],
     ) -> tp.List[ROI]:
         return [
             r
@@ -329,13 +331,13 @@ class Project:
 
     def plot_channels(
         self,
-        channels: tp.List[str] = ["mean"],
+        channels: tp.Sequence[str] = ["mean"],
         per_sample: bool = False,
         merged: bool = False,
         save: bool = False,
         output_dir: tp.Optional[Path] = None,
-        samples: tp.Optional[tp.List[IMCSample]] = None,
-        rois: tp.Optional[tp.List[ROI]] = None,
+        samples: tp.Optional[tp.Sequence[IMCSample]] = None,
+        rois: tp.Optional[tp.Sequence[ROI]] = None,
         **kwargs,
     ) -> Figure:
         """
@@ -441,13 +443,20 @@ class Project:
     def channel_summary(
         self,
         red_func: str = "mean",
-        channel_exclude: tp.List[str] = None,
+        channel_exclude: tp.Sequence[str] = None,
         plot: bool = True,
-        output_prefix: str = None,
-        samples: tp.List[IMCSample] = None,
-        rois: tp.List[ROI] = None,
+        output_prefix: Path = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
         **kwargs,
     ) -> tp.Union[DataFrame, tp.Tuple[DataFrame, Figure]]:
+        """
+        Summary statistics on the signal of each channel across ROIs.
+        """
+        if output_prefix is None:
+            output_prefix = self.results_dir / "qc" / self.name
+        output_prefix.parent.mkdir()
+
         # for sample, _func in zip(samples or self.samples, red_func):
         samples = samples or self.samples
         rois = self._get_rois(samples, rois)
@@ -474,7 +483,7 @@ class Project:
         res = res / res.mean()
 
         if plot:
-            res: DataFrame = np.log1p(res)
+            res = np.log1p(res)  # type: ignore[assignment]
             # calculate mean intensity
             channel_mean = res.mean(axis=1).rename("channel_mean")
 
@@ -484,14 +493,18 @@ class Project:
                 index=[roi.name for roi in rois],
                 name="cell_density",
             )
-            if all(cell_density < 0.1):
+            if (cell_density < 0.1).all():
                 cell_density *= 1000
+
+            sample_names = pd.Series(
+                [roi.sample.name if roi.sample is not None else None for roi in rois],
+                index=cell_density.index,
+                name="sample",
+            )
 
             def_kwargs = dict(z_score=0, center=0, robust=True, cmap="RdBu_r")
             def_kwargs.update(kwargs)
             # TODO: add {row,col}_colors colorbar to heatmap
-            if output_prefix is None:
-                output_prefix = (self.results_dir / "qc").mkdir() / self.name
             for kws, label, cbar_label in [
                 (dict(), "", ""),
                 (def_kwargs, ".z_score", " (Z-score)"),
@@ -501,7 +514,7 @@ class Project:
                     res,
                     cbar_kws=dict(label=red_func.capitalize() + cbar_label),
                     row_colors=channel_mean,
-                    col_colors=cell_density,
+                    col_colors=cell_density.to_frame().join(sample_names),
                     metric="correlation",
                     xticklabels=True,
                     yticklabels=True,
@@ -556,6 +569,8 @@ class Project:
         """
         from imc.ops.quant import _correlate_channels__roi
 
+        (self.results_dir / "qc").mkdir()
+
         rois = self._get_rois(samples, rois)
         _res = parmap.map(_correlate_channels__roi, rois, pm_pbar=True)
 
@@ -571,6 +586,9 @@ class Project:
                 "|".join(channel_exclude)
             )
             xcorr = xcorr.loc[labels[~exc], labels[~exc]]
+        xcorr.to_csv(
+            self.results_dir / "qc" / self.name + ".channel_pairwise_correlation.csv"
+        )
 
         grid = sns.clustermap(
             xcorr,
@@ -748,8 +766,12 @@ class Project:
             )[
                 "cluster"
             ]  # .astype(str)
-        assert isinstance(clusters.index, pd.MultiIndex), "Series index must be "
-        assert clusters.index.names == id_cols
+        assert isinstance(
+            clusters.index, pd.MultiIndex
+        ), "Series index must be MultiIndexSeries with levels 'sample', 'roi', 'obj_id'"
+        assert (
+            clusters.index.names == id_cols
+        ), "Series level names must be 'sample', 'roi', 'obj_id'"
         self._clusters = clusters
         for sample in samples or self.samples:
             sample.set_clusters(clusters=clusters.loc[sample.name])
@@ -783,19 +805,26 @@ class Project:
 
     def sample_comparisons(
         self,
-        sample_attributes: tp.Sequence[str] = None,
+        sample_attributes: tp.Union[
+            tp.Sequence[str], tp.Dict[str, tp.Sequence[str]]
+        ] = None,
         output_prefix: Path = None,
-        cell_type_percentage_threshold: float = 1.0,
         channel_exclude: tp.Sequence[str] = None,
         samples: tp.Sequence[IMCSample] = None,
         rois: tp.Sequence[ROI] = None,
     ):
-        # TODO: revamp/separate into smaller functions
-        import itertools
-        from scipy.stats import mannwhitneyu
-        from statsmodels.stats.multitest import multipletests
+        """
+        Compare channel intensity and cellular abundance between sample attributes.
+        """
+        from seaborn_extensions import swarmboxenplot, volcano_plot
 
-        sample_attributes = sample_attributes or ["name"]
+        attributes = (
+            list(sample_attributes.keys())
+            if isinstance(sample_attributes, dict)
+            else ["name"]
+            if sample_attributes is None
+            else sample_attributes
+        )
         samples = samples or self.samples
         rois = self._get_rois(samples, rois)
         output_prefix = (
@@ -808,12 +837,17 @@ class Project:
             pd.DataFrame(
                 {k: v for k, v in sample.__dict__.items() if isinstance(v, str)}
                 for sample in samples
-            )[["name"] + sample_attributes]
+            )[["name"] + attributes]
             .set_index("name")
             .rename_axis("sample")
             .reset_index()
         )
-        sample_groups = sample_df.groupby(sample_attributes)["sample"].apply(set)
+        if isinstance(sample_attributes, dict):
+            for attr, order in sample_attributes.items():
+                sample_df[attr] = pd.Categorical(
+                    sample_df[attr], ordered=True, categories=order
+                )
+
         sample_roi_df = pd.DataFrame(
             [(roi.name, roi.sample.name) for roi in rois],
             columns=["roi", "sample"],
@@ -830,355 +864,64 @@ class Project:
             .reset_index(drop=True)
         )
         channel_df = (
-            channel_means.merge(sample_roi_df)
-            .merge(sample_df)
-            .sort_values(sample_attributes)
+            channel_means.merge(sample_roi_df).merge(sample_df).sort_values(attributes)
         )
+        channel_df.to_csv(output_prefix + "channel_mean.csv", index=False)
 
-        # cell type abundancy per sample or group of samples
+        # cell type abundance per sample or group of samples
         cluster_counts = (
             self.clusters.groupby(level=["sample", "roi"])
             .value_counts()
+            .rename_axis(["sample", "roi", "cluster"])
             .rename("cell_count")
         )
-        cluster_perc = (
-            cluster_counts.groupby("cluster").sum() / cluster_counts.sum()
-        ) * 100
-        filtered_clusters = cluster_perc[
-            cluster_perc > cell_type_percentage_threshold
-        ].index
-
         # # absolute
+        cluster_df = cluster_counts.reset_index().merge(sample_df).sort_values(attributes)
+        # # per area
+        area = pd.Series({r.name: r.area for r in rois}, name="area").rename_axis("roi")
+        cluster_df = cluster_df.merge(area.reset_index())  # type: ignore[union-attr]
+        cluster_df["cell_mm2"] = (cluster_df["cell_count"] / cluster_df["area"]) * 1e6
         # # fraction of total
-        cluster_df = (
-            cluster_counts.reset_index().merge(sample_df).sort_values(sample_attributes)
-        )
         cluster_df["cell_perc"] = cluster_df.groupby("roi")["cell_count"].apply(
             lambda x: (x / x.sum()) * 100
         )
+        cluster_df = cluster_df.drop("area", axis=1)
+        cluster_df.to_csv(output_prefix + "cell_type_abundance.csv", index=False)
 
         # Test difference between channels/clusters
-        # # channels
-        _res = list()
-        for attribute in sample_attributes:
-            for channel in channel_df["channel"].unique():
-                for group1, group2 in itertools.permutations(
-                    channel_df[attribute].unique(), 2
-                ):
-                    a = channel_df.query(
-                        f"channel == '{channel}' & {attribute} == '{group1}'"
-                    )["value"]
-                    b = channel_df.query(
-                        f"channel == '{channel}' & {attribute} == '{group2}'"
-                    )["value"]
-                    am = a.mean()
-                    bm = b.mean()
-                    means = [am, bm, np.log2(a.mean() / b.mean())]
-                    try:
-                        mu = mannwhitneyu(a, b)
-                    except ValueError:
-                        mu = (np.nan, np.nan)
-                    _res.append([attribute, channel, group1, group2, *means, *mu])
-        cols = [
-            "attribute",
-            "channel",
-            "group1",
-            "group2",
-            "mean1",
-            "mean2",
-            "log2_fold",
-            "stat",
-            "p_value",
-        ]
-        channel_stats = pd.DataFrame(_res, columns=cols)
-        channel_stats["p_adj"] = multipletests(channel_stats["p_value"], method="fdr_bh")[
-            1
-        ]
-
-        # # # remove duplication due to lazy itertools.permutations
-        channel_stats["abs_log2_fold"] = channel_stats["log2_fold"].abs()
-        channel_stats = (
-            channel_stats.drop_duplicates(
-                subset=["attribute", "channel", "abs_log2_fold", "p_value"]
-            )
-            .drop("abs_log2_fold", axis=1)
-            .reset_index(drop=True)
-        )
-        # # #  reorder so taht "Healthy" is in second column always
-        for i, row in channel_stats.iterrows():
-            if "Healthy" in row["group1"]:
-                row["group1"] = row["group2"]
-                row["group2"] = "Healthy"
-                row["log2_fold"] = -row["log2_fold"]
-                channel_stats.loc[i] = row
-        # # # save
-        channel_stats.to_csv(
-            output_prefix + f"channel_mean.testing_between_attributes.csv",
-            index=False,
-        )
-
-        # # clusters
-        _res = list()
-        for attribute in sample_attributes:
-            for cluster in cluster_df["cluster"].unique():
-                for group1, group2 in itertools.permutations(
-                    cluster_df[attribute].unique(), 2
-                ):
-                    a = cluster_df.query(
-                        f"cluster == '{cluster}' & {attribute} == '{group1}'"
-                    )["cell_count"]
-                    b = cluster_df.query(
-                        f"cluster == '{cluster}' & {attribute} == '{group2}'"
-                    )["cell_count"]
-                    am = a.mean()
-                    bm = b.mean()
-                    means = [am, bm, np.log2(a.mean() / b.mean())]
-                    try:
-                        mu = mannwhitneyu(a, b)
-                    except ValueError:
-                        mu = (np.nan, np.nan)
-                    _res.append([attribute, cluster, group1, group2, *means, *mu])
-        cols = [
-            "attribute",
-            "cluster",
-            "group1",
-            "group2",
-            "mean1",
-            "mean2",
-            "log2_fold",
-            "stat",
-            "p_value",
-        ]
-        cluster_stats = pd.DataFrame(_res, columns=cols)
-        cluster_stats["p_adj"] = multipletests(cluster_stats["p_value"], method="fdr_bh")[
-            1
-        ]
-
-        # # # remove duplication due to lazy itertools.permutations
-        cluster_stats["abs_log2_fold"] = cluster_stats["log2_fold"].abs()
-        cluster_stats = (
-            cluster_stats.drop_duplicates(
-                subset=["attribute", "cluster", "abs_log2_fold", "p_value"]
-            )
-            .drop("abs_log2_fold", axis=1)
-            .reset_index(drop=True)
-        )
-        # # # reorder so taht "Healthy" is in second column always
-        for i, row in cluster_stats.iterrows():
-            if "Healthy" in row["group1"]:
-                row["group1"] = row["group2"]
-                row["group2"] = "Healthy"
-                row["log2_fold"] = -row["log2_fold"]
-                cluster_stats.loc[i] = row
-        # # # save
-        cluster_stats.to_csv(
-            output_prefix + f"cell_type_abundance.testing_between_attributes.csv",
-            index=False,
-        )
-
-        # Filter out rare cell types if required
-        filtered_cluster_df = cluster_df.loc[
-            cluster_df["cluster"].isin(filtered_clusters)
-        ]
-
-        # Plot
-        # # barplots
-        # # # channel means
-        n = len(sample_attributes)
-        kwargs = dict(
-            x="value", y="channel", orient="horiz", ci="sd", data=channel_df
-        )  # , estimator=np.std)
-        fig, axes = plt.subplots(
-            n, 2, figsize=(5 * 2, 10 * n), squeeze=False, sharey="row"
-        )
-        for i, attribute in enumerate(sample_attributes):
-            for axs in axes[i, (0, 1)]:
-                sns.barplot(**kwargs, hue=attribute, ax=axs)
-            axes[i, 1].set_xscale("log")
-            for axs, lab in zip(axes[i, :], ["Channel mean", "Channel mean (log)"]):
-                axs.set_xlabel(lab)
-        fig.savefig(
-            output_prefix + f"channel_mean.by_{attribute}.barplot.svg",
-            **FIG_KWS,
-        )
-
-        # # # clusters
-        # # # # plot once for all cell types, another time excluding rare cell types
-        n = len(sample_attributes)
-        kwargs = dict(y="cluster", orient="horiz", ci="sd")  # , estimator=np.std)
-        for label, pl_df in [
-            ("all_clusters", cluster_df),
-            ("filtered_clusters", filtered_cluster_df),
+        # # plot boxplots, volcano, and heatmaps
+        for df, var, data_type, quant in [
+            (channel_df, "channel", "channel_mean", "value"),
+            (cluster_df, "cluster", "cell_type_abundance_area", "cell_mm2"),
+            (cluster_df, "cluster", "cell_type_abundance_percentage", "cell_perc"),
         ]:
-            fig, axes = plt.subplots(
-                n, 3, figsize=(5 * 3, 10 * n), squeeze=False, sharey="row"
-            )
-            for i, attribute in enumerate(sample_attributes):
-                for axs in axes[i, (0, 1)]:
-                    sns.barplot(
-                        **kwargs,
-                        x="cell_count",
-                        hue=attribute,
-                        data=pl_df,
-                        ax=axs,
-                    )
-                axes[i, 1].set_xscale("log")
-                sns.barplot(
-                    **kwargs,
-                    x="cell_perc",
-                    hue=attribute,
-                    data=pl_df,
-                    ax=axes[i, 2],
+            for attr in attributes:
+                pref = output_prefix + f"{data_type}.{quant}.testing_between_attributes"
+                p = df.pivot_table(
+                    index=["roi", attr], columns=var, values=quant, fill_value=0
+                ).reset_index()
+
+                fig, stats = swarmboxenplot(
+                    data=p, x=attr, y=p.columns.drop([attr, "roi"])
                 )
-                for axs, lab in zip(
-                    axes[i, :],
-                    ["Cell count", "Cell count (log)", "Cell percentage"],
-                ):
-                    axs.set_xlabel(lab)
-            fig.savefig(
-                output_prefix + f"cell_type_abundance.by_{attribute}.barplot.svg",
-                **FIG_KWS,
-            )
+                stats.to_csv(pref + ".csv", index=False)
+                fig.savefig(pref + ".swarmboxenplot.svg", **FIG_KWS)
+                plt.close(fig)
 
-        # # volcano
-        # # # channels
-        n = len(sample_attributes)
-        m = (
-            channel_stats[["attribute", "group1", "group2"]]
-            .drop_duplicates()
-            .groupby("attribute")
-            .count()
-            .max()
-            .max()
-        )
-        fig, axes = plt.subplots(
-            n,
-            m,
-            figsize=(m * 5, n * 5),
-            squeeze=False,  # sharex="row", sharey="row"
-        )
-        fig.suptitle("Changes in mean channel intensity")
-        for i, attribute in enumerate(sample_attributes):
-            p = channel_stats.query(f"attribute == '{attribute}'")
-            for j, (_, (group1, group2)) in enumerate(
-                p[["group1", "group2"]].drop_duplicates().iterrows()
-            ):
-                q = p.query(f"group1 == '{group1}' & group2 == '{group2}'")
-                y = -np.log10(q["p_value"])
-                v = q["log2_fold"].abs().max()
-                v *= 1.2
-                axes[i, j].scatter(q["log2_fold"], y, c=y, cmap="autumn_r")
-                for k, row in q.query("p_value < 0.05").iterrows():
-                    axes[i, j].text(
-                        row["log2_fold"],
-                        -np.log10(row["p_value"]),
-                        s=row["channel"],
-                        fontsize=5,
-                        ha="left" if np.random.rand() > 0.5 else "right",
-                    )
-                axes[i, j].axvline(0, linestyle="--", color="grey")
-                title = attribute + f"\n{group1} vs {group2}"
-                axes[i, j].set(
-                    xlabel="log2(fold-change)",
-                    ylabel="-log10(p-value)",
-                    title=title,
-                )  # , xlim=(-v, v))
-            for axs in axes[i, j + 1 :]:
-                axs.axis("off")
-        fig.savefig(
-            output_prefix + f"channel_mean.by_{attribute}.volcano.svg",
-            **FIG_KWS,
-        )
+                fig = volcano_plot(stats)
+                fig.savefig(pref + ".volcano_plot.svg", **FIG_KWS)
+                plt.close(fig)
 
-        # # # clusters
-        n = len(sample_attributes)
-        m = (
-            cluster_stats[["attribute", "group1", "group2"]]
-            .drop_duplicates()
-            .groupby("attribute")
-            .count()
-            .max()
-            .max()
-        )
-        fig, axes = plt.subplots(
-            n,
-            m,
-            figsize=(m * 5, n * 5),
-            squeeze=False,  # sharex="row", sharey="row"
-        )
-        fig.suptitle("Changes in cell type composition\nfor each cell type")
-        for i, attribute in enumerate(sample_attributes):
-            p = cluster_stats.query(f"attribute == '{attribute}'")
-            for j, (_, (group1, group2)) in enumerate(
-                p[["group1", "group2"]].drop_duplicates().iterrows()
-            ):
-                q = p.query(f"group1 == '{group1}' & group2 == '{group2}'")
-                y = -np.log10(q["p_value"])
-                v = q["log2_fold"].abs().max()
-                v *= 1.2
-                axes[i, j].scatter(q["log2_fold"], y, c=y, cmap="autumn_r")
-                for k, row in q.query("p_value < 0.05").iterrows():
-                    axes[i, j].text(
-                        row["log2_fold"],
-                        -np.log10(row["p_value"]),
-                        s=row["cluster"],
-                        fontsize=5,
-                        ha="left" if np.random.rand() > 0.5 else "right",
-                    )
-                axes[i, j].axvline(0, linestyle="--", color="grey")
-                title = attribute + f"\n{group1} vs {group2}"
-                axes[i, j].set(
-                    xlabel="log2(fold-change)",
-                    ylabel="-log10(p-value)",
-                    title=title,
-                )  # , xlim=(-v, v))
-            for axs in axes[i, j + 1 :]:
-                axs.axis("off")
-        fig.savefig(
-            output_prefix + f"cell_type_abundance.by_{attribute}.volcano.svg",
-            **FIG_KWS,
-        )
+                pp = p.drop(attr, axis=1).set_index("roi")
+                pp = pp.loc[pp.var(1) > 0, pp.var(0) > 0]
+                c = p.set_index("roi")[attr]
+                grid = clustermap(pp, config="abs", row_colors=c)
+                grid.fig.savefig(pref + ".clustermap.abs.svg", **FIG_KWS)
+                plt.close(grid.fig)
 
-        # # heatmap of cell type counts
-        cluster_counts = (
-            self.clusters.reset_index()
-            .assign(count=1)
-            .pivot_table(
-                index="cluster",
-                columns="roi",
-                aggfunc=sum,
-                values="count",
-                fill_value=0,
-            )
-        )
-        roi_areas = pd.Series(
-            [np.multiply(*roi.shape[1:]) for roi in rois],
-            index=[roi.name for roi in rois],
-        )
-
-        cluster_densities = (cluster_counts / roi_areas) * 1e4
-        grid = sns.clustermap(
-            cluster_densities,
-            metric="correlation",
-            cbar_kws=dict(label="Cells per area unit (x1e4)"),
-            robust=True,
-            xticklabels=True,
-            yticklabels=True,
-        )
-        grid.savefig(output_prefix + "cell_type_abundance.by_area.svg", **FIG_KWS)
-
-        grid = sns.clustermap(
-            cluster_densities,
-            metric="correlation",
-            z_score=0,
-            cmap="RdBu_r",
-            center=0,
-            cbar_kws=dict(label="Cells per area unit (Z-score)"),
-            robust=True,
-            xticklabels=True,
-            yticklabels=True,
-        )
-        grid.savefig(output_prefix + "cell_type_abundance.by_area.zscore.svg", **FIG_KWS)
+                grid = clustermap(pp, config="z", row_colors=c)
+                grid.fig.savefig(pref + ".clustermap.z.svg", **FIG_KWS)
+                plt.close(grid.fig)
 
     def measure_adjacency(
         self,
