@@ -65,6 +65,14 @@ def main(cli: tp.Sequence[str] = None) -> int:
     # If provided URLs, download files
     urls = list(map(URL, filter(is_url, args.files)))
     args.files = list(filter(lambda x: not is_url(x), args.files))
+    args.files = [Path(x).absolute().resolve() for x in args.files]
+
+    missing = [f for f in args.files if not f.exists()]
+    if missing:
+        fs = "\n\t- ".join(map(str, missing))
+        print(f"Could not find the following input files:\n\t- {fs}")
+        return 1
+
     for url in urls:
         print("Given URLs as input, will download.")
         if url.name.endswith(MCD_FILE_ENDINGS):
@@ -78,7 +86,6 @@ def main(cli: tp.Sequence[str] = None) -> int:
             download_file(url.as_posix(), f)
             print("Completed.")
         args.files.append(f)
-    args.files = [Path(x).absolute().resolve() for x in args.files]
 
     # Figure out which steps are going to be done
     if args.steps is None:
