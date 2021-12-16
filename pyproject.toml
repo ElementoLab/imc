@@ -1,11 +1,18 @@
 # PIP, using PEP621
 [project]
 name = "imc"
+# version = "0.0.19.dev24+g43d6c06"
+description = "A framework for IMC data analysis."
 authors = [
     {name = "Andre Rendeiro", email = "afrendeiro@gmail.com"},
 ]
-description = "A framework for IMC data analysis."
+license = "MIT"
+python = "^3.8"
 readme = "README.md"
+homepage = "https://github.com/ElementoLab/imc"
+repository = "https://github.com/ElementoLab/imc"
+documentation = "https://github.com/ElementoLab/imc"
+changelog = "https://github.com/ElementoLab/imc/blob/master/docs/source/changelog.md"
 keywords = [
     "computational biology",
     "bioinformatics",
@@ -37,7 +44,7 @@ dependencies = [
     "python-louvain",
     "networkx",
     "pandas>=1.0.1",
-    "matplotlib",
+    "matplotlib>=3.5.0",
     "seaborn",
     "fastcluster",
     "parmap",
@@ -95,8 +102,8 @@ doc = [
 
 [project.urls]
 homepage = "https://github.com/ElementoLab/imc"
-# documentation = "readthedocs.org"
 repository = "https://github.com/ElementoLab/imc"
+documentation = "https://github.com/ElementoLab/imc"
 changelog = "https://github.com/ElementoLab/imc/blob/master/docs/source/changelog.md"
 
 [project.entry-points."imc"]
@@ -109,9 +116,9 @@ imc = "imc.cli:main"
 requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools_scm]  # 
+[tool.setuptools_scm]
 write_to = "imc/_version.py"
-# write_to_template = '__version__ = "{version}"'
+write_to_template = '__version__ = "{version}"'
 
 # Poetry
 [tool.poetry-dynamic-versioning]
