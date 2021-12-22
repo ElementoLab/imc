@@ -637,17 +637,17 @@ class Project:
 
     def quantify_cells(
         self,
-        layers: tp.List[str] = ["cell"],
+        layers: tp.Sequence[str] = ["cell"],
         intensity: bool = True,
         intensity_kwargs: tp.Dict[str, tp.Any] = {},
         morphology: bool = True,
         morphology_kwargs: tp.Dict[str, tp.Any] = {},
         set_attribute: bool = True,
-        samples: tp.List[IMCSample] = None,
-        rois: tp.List[ROI] = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
     ) -> tp.Optional[DataFrame]:
         """
-        Measure the intensity of each channel in each single cell.
+        Measure the channel and morphological features of each single cell.
         """
         from imc.ops.quant import quantify_cells_rois
 
@@ -666,12 +666,42 @@ class Project:
 
     def quantify_cell_intensity(
         self,
-        samples: tp.List[IMCSample] = None,
-        rois: tp.List[ROI] = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
         **kwargs,
     ) -> DataFrame:
         """
         Measure the intensity of each channel in each single cell.
+
+        Parameters
+        ----------
+        samples: Sequence[Sample]
+            Subset of samples to use.
+            Default is all.
+        rois:  Sequence[ROI]
+            Subset of samples to use.
+            Default is all.
+        kwargs:
+            Additional keyword-arguments will be passed to `imc.ops.quant.quantify_cell_intensity`:
+            red_func: str
+                Function to reduce values per cell.
+                Default is "mean".
+            border_objs: bool
+                Whether to quantify objects touching image border.
+                Default is `False`.
+            equalize: bool
+                Whether to scale the signal. This is actually a cap on the 98th percentile.
+                Default is `True`.
+                TODO: change keyword name to 'percentile_scale'.
+            scale: bool
+                Whether to scale signal to unit space.
+                Default is `False`.
+            channel_include: Array
+                Sequence of channels to include. This is a boolean array matching the ROI channels.
+                Default is `None`: all channels.
+            channel_exclude: Array
+                Sequence of channels to exclude. This is a boolean array matching the ROI channels.
+                Default is `None`: no channels.
         """
         from imc.ops.quant import quantify_cell_intensity_rois
 
@@ -679,12 +709,29 @@ class Project:
 
     def quantify_cell_morphology(
         self,
-        samples: tp.List[IMCSample] = None,
-        rois: tp.List[ROI] = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
         **kwargs,
     ) -> DataFrame:
         """
         Measure the shape parameters of each single cell.
+
+        Parameters
+        ----------
+        samples: Sequence[Sample]
+            Subset of samples to use.
+            Default is all.
+        rois:  Sequence[ROI]
+            Subset of samples to use.
+            Default is all.
+        kwargs:
+            Additional keyword-arguments will be passed to `imc.ops.quant.quantify_cell_morphology`:
+
+            attributes: Sequence[str]
+                Attributes to quantify. For extensive list refer to https://scikit-image.org/docs/dev/api/skimage.measure.html#skimage.measure.regionprops
+            border_objs: bool
+                Whether to quantify objects touching image border.
+                Default is `False`.
         """
         from imc.ops.quant import quantify_cell_morphology_rois
 
@@ -695,8 +742,8 @@ class Project:
         output_prefix: Path = None,
         plot: bool = True,
         set_attribute: bool = True,
-        samples: tp.List[IMCSample] = None,
-        rois: tp.List[ROI] = None,
+        samples: tp.Sequence[IMCSample] = None,
+        rois: tp.Sequence[ROI] = None,
         **kwargs,
     ) -> tp.Optional[Series]:
         """
