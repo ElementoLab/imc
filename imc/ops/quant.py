@@ -79,7 +79,7 @@ def quantify_cell_intensity(
     res = np.zeros((n_cells, n_channels), dtype=int if red_func == "sum" else float)
     for channel in np.arange(stack.shape[0])[channel_include & ~channel_exclude]:
         res[:, channel] = [
-            getattr(x.intensity_image, red_func)()
+            getattr(x.intensity_image[x.image], red_func)()
             for x in skimage.measure.regionprops(mask, stack[channel])
         ]
     return pd.DataFrame(res, index=cells[1:]).rename_axis(index="obj_id")
