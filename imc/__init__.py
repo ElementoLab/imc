@@ -30,7 +30,7 @@ except ImportError:
 # warn_if_outdated("imc", __version__)
 
 plt.rcParams["svg.fonttype"] = "none"
-plt.rcParams["font.family"] = "sans-serif"
+plt.rcParams["font.family"] = "Arial"
 plt.rcParams["font.sans-serif"] = ["Arial"]
 plt.rcParams["text.usetex"] = False
 

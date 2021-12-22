@@ -94,7 +94,7 @@ def quantify_cell_morphology(
         # 'minor_axis_length',  in some images I get ValueError
         # just like https://github.com/scikit-image/scikit-image/issues/2625
         # 'orientation',
-        # orientation should be random, so I'm not including it
+        # orientation should be random for non-optical imaging, so I'm not including it
         "eccentricity",
         "solidity",
         "centroid",

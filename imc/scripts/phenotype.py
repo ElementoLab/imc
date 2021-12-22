@@ -47,6 +47,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
         cov = pd.get_dummies(a.obs[args.batch_variable])
         preds = predict_cell_types_from_reference(df, args.output_dir, covariates=cov)
         a.obs = a.obs.join(preds)
+        a.write(args.output_dir / "processed.h5ad")
 
         # grid = clustermap(a.to_df().groupby(a.obs['cell_type']).mean())
         # grid = clustermap(a.obs.corr(), cmap='RdBu_r', center=0)
