@@ -35,6 +35,17 @@ def main(cli: tp.Sequence[str] = None) -> int:
         roi.set_channel_exclude(args.channel_exclude.split(","))
         rois.append(roi)
 
+    missing = [r.name for r in rois if not r.get_input_filename("stack").exists()]
+    if missing:
+        m = "\n\t- ".join(missing)
+        error = f"Not all stacks exist! Missing:\n\t- {m}"
+        raise ValueError(error)
+    missing = [r.name for r in rois if not r.get_input_filename("cell_mask").exists()]
+    if missing:
+        m = "\n\t- ".join(missing)
+        error = f"Not all cell masks exist! Missing:\n\t- {m}"
+        raise ValueError(error)
+
     quant = quantify_cells_rois(
         rois, args.layers.split(","), morphology=args.morphology
     ).reset_index()
@@ -45,12 +56,11 @@ def main(cli: tp.Sequence[str] = None) -> int:
     quant = quant[ext + rem]
 
     if args.output is None:
-        f = Path("processed").mkdir() / "quantification.csv"
-        quant.to_csv(f, index=False)
-        print(f"Wrote CSV file to '{f.absolute()}'.")
+        f = Path("processed").mkdir() / "quantification.csv.gz"
     else:
-        quant.to_csv(args.output, index=False)
-        print(f"Wrote CSV file to '{args.output.absolute()}'.")
+        f = args.output
+    quant.to_csv(f, index=False)
+    print(f"Wrote CSV file to '{f.absolute()}'.")
 
     if args.output_h5ad:
         v = len(str(quant["obj_id"].max()))
@@ -64,7 +74,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
         )
         if "X_centroid" in ann.obs.columns:
             ann.obsm["spatial"] = ann.obs[["Y_centroid", "X_centroid"]].values
-        f = Path("processed").mkdir() / "quantification.h5ad"
+        f = f.replace_(".csv.gz", ".h5ad")
         ann.write(f)
         print(f"Wrote h5ad file to '{f.absolute()}'.")
         ann2 = anndata.read(f)
