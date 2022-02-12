@@ -141,11 +141,10 @@ class IMCSample:
             )
             return pd.DataFrame()
 
-        d = self.root_dir / "tiffs"
         content = (
-            self.root_dir.parent.glob(self.name + "*_full.tiff")
+            self.root_dir.glob(self.name + "*_full.tiff")
             if not self.subfolder_per_sample
-            else d.glob("*_full.tiff")
+            else (self.root_dir / "tiffs").glob("*_full.tiff")
         )
         df = pd.Series(content).to_frame()
         if df.empty:
@@ -179,7 +178,9 @@ class IMCSample:
             roi = ROI(
                 name=row[self.roi_name_atribute],
                 roi_number=row[self.roi_number_atribute] if has_numbers else i,
-                root_dir=self.root_dir / "tiffs",
+                root_dir=self.root_dir / "tiffs"
+                if self.subfolder_per_sample
+                else self.root_dir,
                 sample=self,
                 prj=self.prj,
                 **row.drop(

@@ -192,7 +192,7 @@ class Project:
             print("Project does not have `processed_dir`. Cannot find Samples.")
             return pd.DataFrame()
 
-        content = (
+        content = sorted(
             [x for x in self.processed_dir.iterdir() if x.is_dir()]
             if self.subfolder_per_sample
             else self.processed_dir.glob("*_full.tiff")
@@ -201,8 +201,10 @@ class Project:
         if df.empty:
             print(f"Could not find any Samples in '{self.processed_dir}'.")
             return df
-        df[DEFAULT_SAMPLE_NAME_ATTRIBUTE] = df[0].apply(
-            lambda x: x.name.replace("_full.tiff", "")
+        df[DEFAULT_SAMPLE_NAME_ATTRIBUTE] = (
+            df[0].str.replace("_full.tiff", "")
+            if self.subfolder_per_sample
+            else df[0].str.extract(r"(.*)-\d+_full\.tiff")[0]
         )
         return df.drop([0], axis=1)  # .sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
 
@@ -217,7 +219,7 @@ class Project:
 
         if self.toggle and ("toggle" in metadata.columns):
             # TODO: logger.info("Removing samples without toggle active")
-            metadata = metadata[metadata[DEFAULT_TOGGLE_ATTRIBUTE]]
+            metadata = metadata.loc[metadata[DEFAULT_TOGGLE_ATTRIBUTE], :]
 
         sample_grouping_attributes = (
             self.sample_grouping_attributes or metadata.columns.list()
@@ -227,7 +229,7 @@ class Project:
             sample_grouping_attributes, sort=False
         ).groups.items():
             rows = metadata.loc[idx]
-            const_cols = cols_with_unique_values(rows)
+            const_cols = list(cols_with_unique_values(rows))
             row = rows[const_cols].drop_duplicates().squeeze(axis=0)
 
             sample = IMCSample(
