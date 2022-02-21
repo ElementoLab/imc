@@ -6,6 +6,7 @@ tqdm
 joblib
 numpy
 numpy_groupies
+scipy>=1.7
 pandas>=1.0.1
 matplotlib>=3.5
 imctools>=2.1.0

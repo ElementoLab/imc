@@ -1,0 +1,7 @@
+# data-science-types
+Sphinx
+sphinx-issues
+sphinx-rtd-theme
+sphinx-argparse
+myst_parser
+sphinx-autodoc-typehints
