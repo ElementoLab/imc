@@ -25,7 +25,27 @@ def get_adjacency_graph(
     roi: _roi.ROI,
     output_prefix: Path = None,
     max_dist: int = MAX_BETWEEN_CELL_DIST,
-):
+) -> graph:
+    """
+    Derive a spatial representation of cells in image using a graph.
+
+    Parameters
+    ----------
+    roi: imc.ROI
+        ROI object to derive graph for.
+
+    output_prefix: typing.Path
+        Prefix to output file with graph.
+        Defaults to sample root dir / 'single_cell'.
+
+    max_dist: int
+        Maximum distance to consider physical interaction between cells (graph edges)
+
+    Returns
+    -------
+    networkx.Graph
+        Adjacency graph for cells in ROI.
+    """
     clusters = roi.clusters
     if clusters is None:
         print("ROI does not have assigned clusters.")
@@ -101,6 +121,48 @@ def measure_cell_type_adjacency(
     plot: bool = True,
     save: bool = True,
 ) -> DataFrame:
+    """
+    Derive an aggregated measure of adjacency betwen cell types for one ROI.
+
+    Parameters
+    ----------
+    roi: imc.ROI
+        ROI object to derive graph for.
+
+    method: str
+        Method to normalize interactions by.
+        - 'random': generate empirical background of expected interactions based on cell type abundance by randomization (permutation of cell type identities).
+        - 'pharmacoscopy': method with analytical solution from Vladimer et al (10.1038/nchembio.2360). Not recommended for small images.
+        Default is 'random'.
+
+    adjacency_graph: networkx.Graph
+        Adjacency graph per cell for ROI.
+        By default, and if not given will be the `ROI.adjacency_graph` attribute.
+
+    n_iterations: int
+        Number of permutations to run when `method` == 'random'.
+        Defaults to 100.
+
+    inf_replace_method: str
+        If `method` == 'pharmacoscopy', how to handle cases where interactions are not observed.
+
+    output_prefix: typing.Path
+        Prefix to output file with graph.
+        Defaults to sample root dir / 'single_cell'.
+
+    plot: bool
+        Whether to plot visualizations.
+        Default is `True`.
+
+    save: bool
+        Whether to save output to disk.
+        Default is `True`.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame of cell type interactions normalized by `method`.
+    """
     output_prefix = output_prefix or (
         roi.sample.root_dir / "single_cell" / roi.name + "."
     )
