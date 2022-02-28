@@ -65,10 +65,7 @@ def quantify_cell_intensity(
     if scale:
         stack = np.asarray([minmax_scale(x) for x in stack])
 
-    cells = np.unique(mask)
-    # the minus one here is to skip the background "0" label which is also
-    # ignored by `skimage.measure.regionprops`.
-    n_cells = len(cells) - 1
+    cells = [c for c in np.unique(mask) if c != 0]
     n_channels = stack.shape[0]
 
     if channel_include is None:
@@ -76,13 +73,13 @@ def quantify_cell_intensity(
     if channel_exclude is None:
         channel_exclude = np.asarray([False] * n_channels)
 
-    res = np.zeros((n_cells, n_channels), dtype=int if red_func == "sum" else float)
+    res = np.zeros((len(cells), n_channels), dtype=int if red_func == "sum" else float)
     for channel in np.arange(stack.shape[0])[channel_include & ~channel_exclude]:
         res[:, channel] = [
             getattr(x.intensity_image[x.image], red_func)()
             for x in skimage.measure.regionprops(mask, stack[channel])
         ]
-    return pd.DataFrame(res, index=cells[1:]).rename_axis(index="obj_id")
+    return pd.DataFrame(res, index=cells).rename_axis(index="obj_id")
 
 
 def quantify_cell_morphology(
@@ -90,11 +87,11 @@ def quantify_cell_morphology(
     attributes: tp.Sequence[str] = [
         "area",
         "perimeter",
+        "minor_axis_length",
         "major_axis_length",
-        # 'minor_axis_length',  in some images I get ValueError
+        # In some images I get ValueError for 'minor_axis_length'
         # just like https://github.com/scikit-image/scikit-image/issues/2625
-        # 'orientation',
-        # orientation should be random for non-optical imaging, so I'm not including it
+        # 'orientation', # should be random for non-optical imaging, so I'm not including it
         "eccentricity",
         "solidity",
         "centroid",
@@ -109,7 +106,7 @@ def quantify_cell_morphology(
     return (
         pd.DataFrame(
             skimage.measure.regionprops_table(mask, properties=attributes),
-            index=np.unique(mask)[1:],
+            index=[c for c in np.unique(mask) if c != 0],
         )
         .rename_axis(index="obj_id")
         .rename(columns={"centroid-0": "X_centroid", "centroid-1": "Y_centroid"})
