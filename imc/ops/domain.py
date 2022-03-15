@@ -1,5 +1,6 @@
 """
 Functions for image annotations.
+
 """
 
 import os, json, typing as tp
@@ -101,15 +102,25 @@ def illustrate_domains(
     if domain_exclude is None:
         domain_exclude = []
 
+    output_dir.mkdir()
+
     labels = list(set(geom["label"] for n, j in topo_annots.items() for geom in j))
     label_color = dict(zip(labels, sns.color_palette(cmap_str)))
     label_order = dict(zip(labels, range(1, len(labels) + 1)))
     cmap = plt.get_cmap(cmap_str)(range(len(labels) + 1))
-    cmap[0] = [0, 0, 0, 1]
+    cmap = np.vstack([[0, 0, 0, 1], cmap])
 
     for roi_name in tqdm(topo_annots):
-        shapes = topo_annots[roi_name]
         roi = [r for r in rois if r.name == roi_name][0]
+        shapes = topo_annots[roi_name]
+
+        # re-order shapes so that largest are first
+        areas = [
+            polygon_to_mask(shape["points"], roi.shape[1:][::-1]).sum()
+            for shape in shapes
+        ]
+        shapes = np.asarray(shapes)[np.argsort(areas)[::-1]].tolist()
+
         annot_mask = np.zeros(roi.shape[1:])
         for shape in shapes:
             if shape["label"] in domain_exclude:
@@ -122,7 +133,13 @@ def illustrate_domains(
         fig, axes = plt.subplots(
             1, 2, figsize=(2 * 4, 4 * ar), gridspec_kw=dict(wspace=0, hspace=0)
         )
-        axes[0].set(title=roi.name)
+        extra_txt = (
+            ""
+            if getattr(roi, "attributes", None) is None
+            else "; ".join([str(getattr(roi, attr)) for attr in roi.attributes])
+        )
+
+        axes[0].set(title=roi.name + "\n" + extra_txt)
         roi.plot_channels(channels, axes=[axes[0]], merged=True)
 
         shape_types: Counter[str] = Counter()
@@ -145,18 +162,16 @@ def illustrate_domains(
                 color=cmap[label_order[label]],
             )
 
-        m = annot_mask == 0
-        annot_mask += 1
-        annot_mask[m] = 0
         axes[1].imshow(
             annot_mask,
-            cmap=cmap_str,
-            vmin=1,
+            cmap=matplotlib.colors.ListedColormap(cmap),
             vmax=len(label_color) + 1,
             interpolation="none",
         )
         axes[1].set(title="Manual annotations")
-        legend_without_duplicate_labels(axes[0], title="Domain:")
+        legend_without_duplicate_labels(
+            axes[0], title="Domain:", bbox_to_anchor=(-0.1, 1), loc="upper right"
+        )
         for ax in axes:
             ax.axis("off")
         fig.savefig(
@@ -185,6 +200,7 @@ def get_domains_per_cell(
     exclude_domains: tp.Sequence[str] = None,
     remaining_domain: tp.Union[str, tp.Dict[str, str]] = "background",
     resolution: str = "largest",
+    nest_domains: bool = True,
 ) -> DataFrame:
     """
     Generate annotation of topological domain each cell is contained in
@@ -209,8 +225,8 @@ def get_domains_per_cell(
     resolution: str
         If `remaining_domain` is a dict, there may be more than one domain present in the image.
         A resolution method is thus needed to select which domain will be filled for the remaining cells.
-        The method 'largest' will choose as key of `remaining_domain` the largest annotated domain class.
-        The method 'unique' will be strict and only fill in if there is a unique domain.
+         - 'largest' will choose as key of `remaining_domain` the largest annotated domain class.
+         - 'unique' will be strict and only fill in if there is a unique domain.
     """
     from imc.utils import polygon_to_mask
 
@@ -266,7 +282,7 @@ def get_domains_per_cell(
         if isinstance(remaining_domain, str):
             ### if given a string just make that the domain for unnanotated cells
             domain = remaining_domain
-            print(f"ROI '{roi.name}' will be annotated with '{domain}' by default.")
+            # print(f"ROI '{roi.name}' will be annotated with '{domain}' by default.")
 
         elif isinstance(remaining_domain, dict):
             ### if given a dict, dependent on the existing domains choose what to label the remaining
@@ -320,10 +336,18 @@ def get_domains_per_cell(
         .reset_index(level=-1, drop=True)
     ).set_index(id_cols)
 
-    # make sure there are no cells with more than one domain that is background
-    tpc = assigns.groupby(id_cols)["domain_id"].nunique()
-    cells = tpc.index
-    assert not assigns.loc[cells[tpc > 1]].isin([remaining_domain]).any().any()
+    # If more than one domain per cell:
+    if nest_domains:
+        # Keep them all
+        assigns = assigns.groupby(id_cols)["domain_id"].apply("-".join).to_frame()
+        assigns["topological_domain"] = assigns["domain_id"].str.replace(
+            r"\d", "", regex=True
+        )
+    else:
+        # make sure there are no cells with more than one domain that is background
+        tpc = assigns.groupby(id_cols)["domain_id"].nunique()
+        cells = tpc.index
+        assert not assigns.loc[cells[tpc > 1]].isin([remaining_domain]).any().any()
 
     assigns = (
         assigns.reset_index()
@@ -383,11 +407,13 @@ def get_domain_areas(
 
     areas = (
         pd.DataFrame(_areas)
-        .rename(columns={0: "filename", 1: "domain_domain_obj", 2: "area"})
-        .set_index("filename")
+        .rename(columns={0: "roi", 1: "domain_obj", 2: "area"})
+        .set_index("roi")
     )
+    areas["topological_domain"] = areas["domain_obj"].str.replace(r"\d", "", regex=True)
     if not per_domain:
-        areas = areas.groupby("filename")["area"].sum().to_dict()
+        areas = areas.groupby("roi")["area"].sum().to_dict()
+
     return areas
 
 
