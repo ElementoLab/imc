@@ -98,11 +98,9 @@ class ROI:
         roi_number: tp.Optional[int] = None,
         channel_labels: tp.Optional[tp.Union[Path, Series]] = None,
         root_dir: tp.Optional[Path] = None,
-        stacks_dir: tp.Optional[
-            Path
-        ] = ROI_STACKS_DIR,  # TODO: make these relative to the root_dir
-        masks_dir: tp.Optional[Path] = ROI_MASKS_DIR,
-        single_cell_dir: tp.Optional[Path] = ROI_SINGLE_CELL_DIR,
+        stacks_dir: tp.Optional[Path] = None,  # TODO: make these relative to the root_dir
+        masks_dir: tp.Optional[Path] = None,
+        single_cell_dir: tp.Optional[Path] = None,
         sample: tp.Optional[_sample.IMCSample] = None,
         default_mask_layer: str = DEFAULT_MASK_LAYER,
         **kwargs,
@@ -112,9 +110,21 @@ class ROI:
         self.roi_name = name
         self.roi_number = roi_number
         self.root_dir = Path(root_dir) if root_dir is not None else None
-        self.stacks_dir = stacks_dir
-        self.masks_dir = masks_dir
-        self.single_cell_dir = single_cell_dir
+        self.stacks_dir = (
+            Path(stacks_dir)
+            if stacks_dir is not None
+            else self.root_dir.parent / ROI_STACKS_DIR
+        )
+        self.masks_dir = (
+            Path(masks_dir)
+            if masks_dir is not None
+            else self.root_dir.parent / ROI_MASKS_DIR
+        )
+        self.single_cell_dir = (
+            Path(single_cell_dir)
+            if single_cell_dir is not None
+            else self.root_dir.parent / ROI_SINGLE_CELL_DIR
+        )
         self.channel_labels_file: tp.Optional[Path] = (
             Path(channel_labels) if isinstance(channel_labels, (str, Path)) else None
         )
@@ -247,7 +257,9 @@ class ROI:
         if self._channel_exclude is not None:
             return self._channel_exclude
         if self.channel_labels is not None:
-            self._channel_exclude = pd.Series(index=self.channel_labels).fillna(False)
+            self._channel_exclude = pd.Series(
+                index=self.channel_labels, dtype="object"
+            ).fillna(False)
             return self._channel_exclude
 
     def set_channel_exclude(self, values: tp.Union[tp.Sequence[str], Series]):
@@ -502,7 +514,7 @@ class ROI:
             ),
         }
         dir_, suffix = to_read[input_type]
-        return self.root_dir / (self.name + suffix)
+        return dir_ / (self.name + suffix)
 
     def get(self, attr):
         try:
@@ -687,7 +699,8 @@ class ROI:
             elif sum(self.channel_labels.values == channel) == 1:
                 label = channel
                 if channel in excluded:
-                    print(excluded_message.format(channel, label))
+                    if not dont_warn:
+                        print(excluded_message.format(channel, label))
                 arr = stack[self.channel_labels == channel]
             else:
                 match = self.channel_labels.str.contains(re.escape((channel)))
@@ -695,20 +708,23 @@ class ROI:
                     label = ", ".join(self.channel_labels[match])
                     if match.sum() == 1:
                         if self.channel_labels[match].squeeze() in excluded:
-                            print(excluded_message.format(channel, label))
+                            if not dont_warn:
+                                print(excluded_message.format(channel, label))
                         arr = stack[match]
                     else:
                         ex = (~match) | self.channel_exclude.values
                         label = ", ".join(self.channel_labels[~ex])
                         if ex.sum() == 1:
-                            print(excluded_message.format(channel, label))
+                            if not dont_warn:
+                                print(excluded_message.format(channel, label))
                             arr = stack[match]
                         else:
                             if not dont_warn:
                                 msg = f"Could not find out channel '{channel}' in `roi.channel_labels` but could find '{label}'."
                                 print(msg)
                             if ex.all():
-                                print(excluded_message.format(channel, label))
+                                if not dont_warn:
+                                    print(excluded_message.format(channel, label))
                                 ex = ~match
                             arr = reduce_channels(stack, "mean", ex)
                             f = g = _idenv

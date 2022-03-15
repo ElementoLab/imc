@@ -202,9 +202,9 @@ class Project:
             print(f"Could not find any Samples in '{self.processed_dir}'.")
             return df
         df[DEFAULT_SAMPLE_NAME_ATTRIBUTE] = (
-            df[0].str.replace("_full.tiff", "")
+            df[0].apply(lambda x: x.name.replace("_full.tiff", ""))
             if self.subfolder_per_sample
-            else df[0].str.extract(r"(.*)-\d+_full\.tiff")[0]
+            else df[0].map(lambda x: x.name).str.extract(r"(.*)-\d+_full\.tiff")[0]
         )
         return df.drop([0], axis=1)  # .sort_values(DEFAULT_SAMPLE_NAME_ATTRIBUTE)
 
