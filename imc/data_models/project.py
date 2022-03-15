@@ -861,6 +861,7 @@ class Project:
         channel_exclude: tp.Sequence[str] = None,
         samples: tp.Sequence[IMCSample] = None,
         rois: tp.Sequence[ROI] = None,
+        steps: tp.Sequence[str] = ["channel_mean", "cell_type_abundance"],
     ):
         """
         Compare channel intensity and cellular abundance between sample attributes.
@@ -902,48 +903,62 @@ class Project:
             columns=["roi", "sample"],
         )
 
+        to_plot = list()
+
         # Whole channel means
-        channel_means: DataFrame = self.channel_summary(
-            plot=False, channel_exclude=channel_exclude
-        )
-        channel_means.index.name = "channel"
-        channel_means = (
-            channel_means.reset_index()
-            .melt(id_vars="channel", var_name="roi")
-            .reset_index(drop=True)
-        )
-        channel_df = (
-            channel_means.merge(sample_roi_df).merge(sample_df).sort_values(attributes)
-        )
-        channel_df.to_csv(output_prefix + "channel_mean.csv", index=False)
+        if "channel_mean" in steps:
+            to_plot.append((channel_df, "channel", "channel_mean", "value"))
+            channel_means: DataFrame = self.channel_summary(
+                plot=False, channel_exclude=channel_exclude
+            )
+            channel_means.index.name = "channel"
+            channel_means = (
+                channel_means.reset_index()
+                .melt(id_vars="channel", var_name="roi")
+                .reset_index(drop=True)
+            )
+            channel_df = (
+                channel_means.merge(sample_roi_df)
+                .merge(sample_df)
+                .sort_values(attributes)
+            )
+            channel_df.to_csv(output_prefix + "channel_mean.csv", index=False)
 
         # cell type abundance per sample or group of samples
-        cluster_counts = (
-            self.clusters.groupby(level=["sample", "roi"])
-            .value_counts()
-            .rename_axis(["sample", "roi", "cluster"])
-            .rename("cell_count")
-        )
-        # # absolute
-        cluster_df = cluster_counts.reset_index().merge(sample_df).sort_values(attributes)
-        # # per area
-        area = pd.Series({r.name: r.area for r in rois}, name="area").rename_axis("roi")
-        cluster_df = cluster_df.merge(area.reset_index())  # type: ignore[union-attr]
-        cluster_df["cell_mm2"] = (cluster_df["cell_count"] / cluster_df["area"]) * 1e6
-        # # fraction of total
-        cluster_df["cell_perc"] = cluster_df.groupby("roi")["cell_count"].apply(
-            lambda x: (x / x.sum()) * 100
-        )
-        cluster_df = cluster_df.drop("area", axis=1)
-        cluster_df.to_csv(output_prefix + "cell_type_abundance.csv", index=False)
+        if "cell_type_abundance" in steps:
+            to_plot.append(
+                (cluster_df, "cluster", "cell_type_abundance_area", "cell_mm2")
+            )
+            to_plot.append(
+                (cluster_df, "cluster", "cell_type_abundance_percentage", "cell_perc")
+            )
+
+            cluster_counts = (
+                self.clusters.groupby(level=["sample", "roi"])
+                .value_counts()
+                .rename_axis(["sample", "roi", "cluster"])
+                .rename("cell_count")
+            )
+            # # absolute
+            cluster_df = (
+                cluster_counts.reset_index().merge(sample_df).sort_values(attributes)
+            )
+            # # per area
+            area = pd.Series({r.name: r.area for r in rois}, name="area").rename_axis(
+                "roi"
+            )
+            cluster_df = cluster_df.merge(area.reset_index())  # type: ignore[union-attr]
+            cluster_df["cell_mm2"] = (cluster_df["cell_count"] / cluster_df["area"]) * 1e6
+            # # fraction of total
+            cluster_df["cell_perc"] = cluster_df.groupby("roi")["cell_count"].apply(
+                lambda x: (x / x.sum()) * 100
+            )
+            cluster_df = cluster_df.drop("area", axis=1)
+            cluster_df.to_csv(output_prefix + "cell_type_abundance.csv", index=False)
 
         # Test difference between channels/clusters
         # # plot boxplots, volcano, and heatmaps
-        for df, var, data_type, quant in [
-            (channel_df, "channel", "channel_mean", "value"),
-            (cluster_df, "cluster", "cell_type_abundance_area", "cell_mm2"),
-            (cluster_df, "cluster", "cell_type_abundance_percentage", "cell_perc"),
-        ]:
+        for df, var, data_type, quant in to_plot:
             for attr in attributes:
                 pref = output_prefix + f"{data_type}.{quant}.testing_between_attributes"
                 p = df.pivot_table(
