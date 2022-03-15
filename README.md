@@ -1,6 +1,5 @@
-<!--![imc logo](https://raw.githubusercontent.com/elementolab/imcpipeline/master/logo.png)-->
 <p align="center">
-  <img width="460" height="300" src="logo.png">
+  <img width="460" src="https://github.com/ElementoLab/imc/blob/main/imc/logo.png?raw=True">
 </p>
 
 # Imaging mass cytometry
@@ -20,17 +19,16 @@ Development is still underway, so use at your own risk.
 
 Requires `Python >= 3.8`.
 
-Install with `pip`:
+Install with `pip` from [PyPI](https://pypi.org/project/imc/):
 ```bash
-pip install git+https://github.com/ElementoLab/imc.git
+pip install imc
 ```
 
 ## Quick start
 
-Install the package:
+Install the package from [PyPI](https://pypi.org/project/imc/) with extra packages required for all steps:
 ```bash
-# Install imc package (do this inside virtual environment for example)
-pip install git+https://github.com/ElementoLab/imc.git#egg=imc[extra]
+pip install imc[extra]
 ```
 
 ### Use case 1 (pipeline processing)
