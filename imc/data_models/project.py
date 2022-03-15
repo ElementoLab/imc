@@ -997,7 +997,7 @@ class Project:
         # TODO: package the stuff below into a function
 
         # First measure adjacency as odds against background
-        freqs = parmap.map(measure_cell_type_adjacency, rois)
+        freqs = parmap.map(measure_cell_type_adjacency, rois, pm_pbar=True)
         # freqs = [measure_cell_type_adjacency(roi) for roi in rois]
         # freqs = [
         #     pd.read_csv(
@@ -1016,34 +1016,37 @@ class Project:
                 for roi, f in zip(rois, freqs)
             ]
         )
+        melted.to_csv(output_prefix + "adjacency_frequencies.csv")
 
-        # mean_f = melted.pivot_table(
-        #     index="index", columns="variable", values="value", aggfunc=np.mean
-        # )
-        # sns.clustermap(mean_f, cmap="RdBu_r", center=0, robust=True)
+        mean_f = melted.pivot_table(
+            index="index", columns="variable", values="value", aggfunc=np.mean
+        )
+        sns.clustermap(mean_f, cmap="RdBu_r", center=0, robust=True)
 
-        v = np.percentile(melted["value"].abs(), 95)
-        n, m = get_grid_dims(len(freqs))
-        fig, axes = plt.subplots(n, m, figsize=(m * 5, n * 5), sharex=True, sharey=True)
-        axes = axes.flatten()
-        i = -1
-        for i, (dfs, roi) in enumerate(zip(freqs, rois)):
-            axes[i].set_title(roi.name)
-            sns.heatmap(
-                dfs,
-                ax=axes[i],
-                cmap="RdBu_r",
-                center=0,
-                rasterized=True,
-                square=True,
-                xticklabels=True,
-                yticklabels=True,
-                vmin=-v,
-                vmax=v,
-            )
-        for axs in axes[i + 1 :]:
-            axs.axis("off")
-        fig.savefig(output_prefix + "adjacency.all_rois.pdf", **FIG_KWS)
+        # v = np.percentile(melted["value"].abs(), 95)
+        # n, m = get_grid_dims(len(freqs))
+        # fig, axes = plt.subplots(n, m, figsize=(m * 5, n * 5), sharex=True, sharey=True)
+        # axes = axes.flatten()
+        # i = -1
+        # for i, (dfs, roi) in enumerate(zip(freqs, rois)):
+        #     axes[i].set_title(roi.name)
+        #     sns.heatmap(
+        #         dfs,
+        #         ax=axes[i],
+        #         cmap="RdBu_r",
+        #         center=0,
+        #         rasterized=True,
+        #         square=True,
+        #         xticklabels=True,
+        #         yticklabels=True,
+        #         vmin=-v,
+        #         vmax=v,
+        #     )
+        # for axs in axes[i + 1 :]:
+        #     axs.axis("off")
+        # fig.savefig(output_prefix + "adjacency.all_rois.pdf", **FIG_KWS)
+
+        return melted
 
     def find_communities(
         self,

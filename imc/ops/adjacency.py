@@ -77,20 +77,28 @@ def get_adjacency_graph(
     mask = mask[i, j]
 
     # Simply use mean of channels as distance
-    image_mean = exposure.equalize_hist(roi.stack.mean(axis=0))
+    stack = roi.stack
+    if hasattr(roi, "channel_exclude"):
+        stack = stack[~roi.channel_exclude]
+    image_mean = np.asarray([exposure.equalize_hist(x) for x in stack]).mean(0)
+    image_mean = (image_mean - image_mean.min()) / (
+        np.percentile(image_mean, 98) - image_mean.min()
+    )
 
     # Construct adjacency graph based on cell distances
-
-    g = graph.rag_mean_color(image_mean, mask, mode="distance")
+    g = graph.rag_mean_color(image_mean, mask, connectivity=2, mode="distance")
+    # g = skimage.future.graph.RAG(mask, connectivity=2)
     # remove background node (unfortunately it can't be masked beforehand)
     if 0 in g.nodes:
         g.remove_node(0)
 
     fig, ax = plt.subplots(1, 1)
+    i = (image_mean * 255).astype("uint8")
+    i = np.moveaxis(np.asarray([i, i, i]), 0, -1)
     lc = graph.show_rag(
-        mask,
+        mask.astype("uint32"),
         g,
-        (image_mean * 255).astype(int),
+        i,
         ax=ax,
         img_cmap="viridis",
         edge_cmap="Reds",
@@ -101,6 +109,7 @@ def get_adjacency_graph(
     ax.get_children()[0].set_rasterized(True)
     ax.get_children()[-2].set_rasterized(True)
     fig.savefig(output_prefix + "neighbor_graph.svg", **FIG_KWS)
+    plt.close(fig)
 
     # add cluster label atrtribute
     if clusters is not None:
@@ -178,7 +187,7 @@ def measure_cell_type_adjacency(
     order = pd.Series(order).astype(
         roi.clusters.dtype
     )  #  passing dtype at instantiation gives warning
-    freqs = pd.DataFrame(adj, order, order).sort_index(0).sort_index(1)
+    freqs = pd.DataFrame(adj, order, order).sort_index(axis=0).sort_index(axis=1)
     if save:
         freqs.to_csv(output_prefix + "cluster_adjacency_graph.frequencies.csv")
 
@@ -205,6 +214,7 @@ def measure_cell_type_adjacency(
         output_prefix + "cluster_adjacency_graph.norm_over_random.heatmap.svg",
         **FIG_KWS,
     )
+    plt.close(fig)
     del kws["square"]
     try:
         grid = sns.clustermap(norm_freqs, **kws, **kws2)
@@ -212,6 +222,7 @@ def measure_cell_type_adjacency(
             output_prefix + "cluster_adjacency_graph.norm_over_random.clustermap.svg",
             **FIG_KWS,
         )
+        plt.close(grid.fig)
     except FloatingPointError:
         pass
     return norm_freqs
@@ -237,7 +248,7 @@ def correct_interaction_background_random(
         rf, rl = nx.linalg.attrmatrix.attr_matrix(g2, node_attr=attribute)
         rl = pd.Series(rl, dtype=roi.clusters.dtype)
         shuffled_freqs.append(
-            pd.DataFrame(rf, index=rl, columns=rl).sort_index(0).sort_index(1)
+            pd.DataFrame(rf, index=rl, columns=rl).sort_index(axis=0).sort_index(axis=1)
         )
     shuffled_freq = pd.concat(shuffled_freqs)
     if save:
@@ -245,7 +256,7 @@ def correct_interaction_background_random(
             output_prefix
             + f"cluster_adjacency_graph.random_frequencies.all_iterations_{n_iterations}.csv"
         )
-    shuffled_freq = shuffled_freq.groupby(level=0).sum().sort_index(1)
+    shuffled_freq = shuffled_freq.groupby(level=0).sum().sort_index(axis=1)
     if save:
         shuffled_freq.to_csv(
             output_prefix + "cluster_adjacency_graph.random_frequencies.csv"
