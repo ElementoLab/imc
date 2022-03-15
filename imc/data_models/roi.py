@@ -114,16 +114,22 @@ class ROI:
             Path(stacks_dir)
             if stacks_dir is not None
             else self.root_dir.parent / ROI_STACKS_DIR
+            if self.root_dir is not None
+            else None
         )
         self.masks_dir = (
             Path(masks_dir)
             if masks_dir is not None
             else self.root_dir.parent / ROI_MASKS_DIR
+            if self.root_dir is not None
+            else None
         )
         self.single_cell_dir = (
             Path(single_cell_dir)
             if single_cell_dir is not None
             else self.root_dir.parent / ROI_SINGLE_CELL_DIR
+            if self.root_dir is not None
+            else None
         )
         self.channel_labels_file: tp.Optional[Path] = (
             Path(channel_labels) if isinstance(channel_labels, (str, Path)) else None

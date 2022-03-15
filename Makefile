@@ -62,5 +62,19 @@ _sync:
 
 sync: _sync backup_time ## [dev] Sync data/code to SCU server
 
+build: test
+		python setup.py sdist bdist_wheel
+
+pypitest: build
+		twine \
+				upload \
+				-r pypitest dist/*
+
+pypi: build
+		twine \
+				upload \
+				dist/*
+
 .PHONY : clean_build clean_dist clean_eggs clean_mypy clean_docs clean_tests \
-clean _install install clean_docs docs test backup_time _sync sync
+clean _install install clean_docs docs test backup_time _sync sync \
+build pypitest pypi
