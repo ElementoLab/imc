@@ -170,14 +170,27 @@ class Project:
     def from_stacks(cls, tiffs: tp.Union[Path, tp.Sequence[Path]], **kwargs) -> Project:
         if isinstance(tiffs, Path):
             tiffs = [tiffs]
-        return Project.from_rois([ROI.from_stack(s) for s in tiffs], **kwargs)
+        return cls.from_rois([ROI.from_stack(s) for s in tiffs], **kwargs)
 
     @classmethod
     def from_rois(cls, rois: tp.Union[ROI, tp.Sequence[ROI]], **kwargs) -> Project:
         if isinstance(rois, ROI):
             rois = [rois]
         samples = [r.sample for r in rois if r.sample is not None]
-        return Project(samples=samples, __no_init__=True, **kwargs)
+
+        # group ROIs under same sample #TODO: avoid
+        m = pd.Series(samples, index=rois).rename('sample')
+        new_samples = list()
+        for sn in np.unique([s.name for s in m]):
+            sel = m[[s.name == sn for s in m]]
+            _rois = sorted(sel.index, key=lambda x: x.name)
+            _sample = sel.iloc[0]
+            _sample.rois = _rois
+            for roi in _rois:
+                roi.sample = _sample
+            new_samples.append(_sample)
+
+        return cls(samples=sorted(new_samples, key=lambda x: x.name), __no_init__=True, **kwargs)
 
     @classmethod
     def from_samples(
@@ -185,7 +198,7 @@ class Project:
     ) -> Project:
         if isinstance(samples, IMCSample):
             samples = [samples]
-        return Project(samples=samples, __no_init__=True, **kwargs)
+        return cls(samples=samples, __no_init__=True, **kwargs)
 
     def _detect_samples(self) -> DataFrame:
         if self.processed_dir is None:

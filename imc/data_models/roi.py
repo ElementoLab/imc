@@ -98,7 +98,7 @@ class ROI:
         roi_number: tp.Optional[int] = None,
         channel_labels: tp.Optional[tp.Union[Path, Series]] = None,
         root_dir: tp.Optional[Path] = None,
-        stacks_dir: tp.Optional[Path] = None,  # TODO: make these relative to the root_dir
+        stacks_dir: tp.Optional[Path] = None,
         masks_dir: tp.Optional[Path] = None,
         single_cell_dir: tp.Optional[Path] = None,
         sample: tp.Optional[_sample.IMCSample] = None,
