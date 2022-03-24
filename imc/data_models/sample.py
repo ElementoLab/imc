@@ -178,9 +178,9 @@ class IMCSample:
             roi = ROI(
                 name=row[self.roi_name_atribute],
                 roi_number=row[self.roi_number_atribute] if has_numbers else i,
-                root_dir=self.root_dir / "tiffs"
-                if self.subfolder_per_sample
-                else self.root_dir,
+                root_dir=self.root_dir / "tiffs" if self.subfolder_per_sample else self.root_dir,
+                stacks_dir=self.root_dir if not self.subfolder_per_sample else None,
+                masks_dir=self.root_dir if not self.subfolder_per_sample else None,
                 sample=self,
                 prj=self.prj,
                 **row.drop(

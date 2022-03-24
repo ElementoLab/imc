@@ -247,9 +247,7 @@ class Project:
 
             sample = IMCSample(
                 sample_name=row[self.sample_name_attribute],
-                root_dir=(self.processed_dir / str(row[self.sample_name_attribute]))
-                if self.subfolder_per_sample
-                else self.processed_dir,
+                root_dir=(self.processed_dir / str(row[self.sample_name_attribute])) if self.subfolder_per_sample else self.processed_dir,
                 subfolder_per_sample=self.subfolder_per_sample,
                 metadata=rows if rows.shape[0] > 1 else None,
                 panel_metadata=self.panel_metadata,
