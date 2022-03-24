@@ -6,13 +6,8 @@ description = "A framework for IMC data analysis."
 authors = [
     {name = "Andre Rendeiro", email = "afrendeiro@gmail.com"},
 ]
-license = "MIT"
-python = "^3.8"
+# python = "^3.8"
 readme = "README.md"
-homepage = "https://github.com/ElementoLab/imc"
-repository = "https://github.com/ElementoLab/imc"
-documentation = "https://github.com/ElementoLab/imc"
-changelog = "https://github.com/ElementoLab/imc/blob/master/docs/source/changelog.md"
 keywords = [
     "computational biology",
     "bioinformatics",
@@ -30,9 +25,7 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-licence = "gpt3"
 requires-python = ">=3.8"
-# not yet supported by pip!
 dependencies = [
     "setuptools_scm",
     "ordered-set",
@@ -106,9 +99,8 @@ repository = "https://github.com/ElementoLab/imc"
 documentation = "https://github.com/ElementoLab/imc"
 changelog = "https://github.com/ElementoLab/imc/blob/master/docs/source/changelog.md"
 
-[project.entry-points."imc"]
+[project.scripts]
 imc = "imc.cli:main"
-
 
 [build-system]
 # requires = ["poetry>=0.12", "setuptools>=45", "wheel", "poetry-dynamic-versioning"]
@@ -131,7 +123,9 @@ name = "imc"
 version = "0.0.0"  # waiting on next release of poetry to use dynamic-versioning extension
 description = "A package for the analysis of imaging mass cytometry (IMC) data"
 authors = ["Andre Rendeiro <afrendeiro@gmail.com>"]
-license = "GPL-3.0-or-later"
+homepage = "https://github.com/ElementoLab/imc"
+repository = "https://github.com/ElementoLab/imc"
+documentation = "https://github.com/ElementoLab/imc"
 
 [tool.poetry.dependencies]
 python = "^3.8"

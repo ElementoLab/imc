@@ -17,11 +17,13 @@ Development is still underway, so use at your own risk.
 
 ## Requirements and installation
 
-Requires `Python >= 3.8`.
+Requires `Python >= 3.8`. `imc` uses a `pyproject.toml` configuration only, so you'll need a up-to-date version of `pip` before installing.
 
-Install with `pip` from [PyPI](https://pypi.org/project/imc/):
+Install from [PyPI](https://pypi.org/project/imc/) with [`pip`](https://pip.pypa.io/) or with [poetry](https://python-poetry.org/):
 ```bash
 pip install imc
+# or
+poetry install imc
 ```
 
 ## Quick start
@@ -29,6 +31,8 @@ pip install imc
 Install the package from [PyPI](https://pypi.org/project/imc/) with extra packages required for all steps:
 ```bash
 pip install imc[extra]
+# or
+poetry install imc[extra]
 ```
 
 ### Use case 1 (pipeline processing)
