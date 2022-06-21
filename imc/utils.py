@@ -211,21 +211,17 @@ def is_datetime(x: Series) -> bool:
 def is_numeric(x: tp.Union[Series, tp.Any]) -> bool:
     if not isinstance(x, pd.Series):
         x = pd.Series(x)
-    if (
-        x.dtype.name
-        in [
-            "float",
-            "float32",
-            "float64",
-            "int",
-            "int8",
-            "int16",
-            "int32",
-            "int64",
-            "Int64",
-        ]
-        or is_datetime(x)
-    ):
+    if x.dtype.name in [
+        "float",
+        "float32",
+        "float64",
+        "int",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "Int64",
+    ] or is_datetime(x):
         return True
     if x.dtype.name in ["object", "string", "boolean", "bool"]:
         return False
@@ -391,7 +387,7 @@ def downcast_int(arr: Array, kind: str = "u") -> Array:
         assert arr.min() >= 0
     m = arr.max()
     for i in [8, 16, 32, 64]:
-        if m <= (2 ** i - 1):
+        if m <= (2**i - 1):
             return arr.astype(f"{kind}int{i}")
     return arr
 
@@ -967,7 +963,7 @@ def stack_to_probabilities(
 def save_probabilities(probs: Array, output_tiff: Path):
     import tifffile
 
-    tifffile.imsave(output_tiff, np.moveaxis((probs * 2 ** 16).astype("uint16"), 0, -1))
+    tifffile.imsave(output_tiff, np.moveaxis((probs * 2**16).astype("uint16"), 0, -1))
 
 
 def txt_to_tiff(
@@ -1506,3 +1502,48 @@ def mask_to_labelme(
     }
     with open(output_file.as_posix(), "w") as fp:
         json.dump(payload, fp, indent=2)
+
+
+def get_channel_names_from_ome_tiff(ome_tiff_file: str | Path) -> list[str]:
+    """
+    Parse channel names from OME metadata in OME-TIFF file.
+    Assumes hierarchy of OME metadata is OME->Image->[Description->]Pixels->Channel.
+    The "Name" attribute of Channel is returned.
+
+    Parameters
+    ----------
+    ome_tiff_file: str | Path
+        Either a pathlib.Path to a file or a string with OME XML information.
+
+    Returns
+    -------
+    list[str]
+        A list of channel names
+    """
+    from xml.etree import ElementTree
+
+    if isinstance(ome_tiff_file, Path):
+        f = tifffile.TiffFile(ome_tiff_file)
+        root = ElementTree.fromstring(f.ome_metadata)
+    else:
+        root = ElementTree.fromstring(ome_tiff_file)
+
+    # "OME" is the tag of the root
+    path_to_channels = ["Image", "Description", "Pixels"]
+
+    i = 0
+    t = 0
+    obj = root
+    while i < len(path_to_channels):
+        for c in obj:
+            tag = c.tag.split("}")[-1]
+            if tag == path_to_channels[i]:
+                obj = c
+                i += 1
+        t += 1
+
+        # If loop not working, most likely XML does not have the "Description" tag, so try skipping it
+        if (t > 200) and (i == 1):
+            path_to_channels = ["Image", "Pixels"]
+    channels = [c.attrib["Name"] for c in obj if c.tag.split("}")[-1] == "Channel"]
+    return channels
