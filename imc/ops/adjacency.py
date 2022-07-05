@@ -50,9 +50,7 @@ def get_adjacency_graph(
     if clusters is None:
         print("ROI does not have assigned clusters.")
 
-    output_prefix = Path(
-        output_prefix or roi.sample.root_dir / "single_cell" / (roi.name + ".")
-    )
+    output_prefix = Path(output_prefix or (roi.single_cell_dir / roi.name + "."))
     if not output_prefix.endswith("."):
         output_prefix += "."
     output_prefix.parent.mkdir()

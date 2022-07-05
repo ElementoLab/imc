@@ -1044,10 +1044,10 @@ class Project:
         )
         melted.to_csv(output_prefix + "adjacency_frequencies.csv")
 
-        mean_f = melted.pivot_table(
-            index="index", columns="variable", values="value", aggfunc=np.mean
-        )
-        sns.clustermap(mean_f, cmap="RdBu_r", center=0, robust=True)
+        # mean_f = melted.pivot_table(
+        #     index="index", columns="variable", values="value", aggfunc=np.mean
+        # )
+        # sns.clustermap(mean_f, cmap="RdBu_r", center=0, robust=True)
 
         # v = np.percentile(melted["value"].abs(), 95)
         # n, m = get_grid_dims(len(freqs))
