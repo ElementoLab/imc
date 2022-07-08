@@ -1504,7 +1504,7 @@ def mask_to_labelme(
         json.dump(payload, fp, indent=2)
 
 
-def get_channel_names_from_ome_tiff(ome_tiff_file: str | Path) -> list[str]:
+def get_channel_names_from_ome_tiff(ome_tiff_file: tp.Union[str, Path]) -> tp.List[str]:
     """
     Parse channel names from OME metadata in OME-TIFF file.
     Assumes hierarchy of OME metadata is OME->Image->[Description->]Pixels->Channel.
