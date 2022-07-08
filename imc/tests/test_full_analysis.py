@@ -21,8 +21,12 @@ class TestHighOrderFunctions:
         ]
 
         with project_with_clusters as prj:
-            prj.measure_adjacency()
-            assert (prj.results_dir / "single_cell" / "project.adjacency.all_rois.pdf").exists()
+            adj = prj.measure_adjacency()
+            assert (
+                prj.results_dir / "single_cell" / "project.adjacency_frequencies.csv"
+            ).exists()
+            assert adj.shape == (36, 5)
+            assert ~adj.isnull().any().any()
 
         for roi in prj.rois:
             prefix = roi.sample.root_dir / "single_cell" / roi.name + "."

@@ -1007,7 +1007,7 @@ class Project:
         output_prefix: Path = None,
         samples: tp.List[IMCSample] = None,
         rois: tp.List[ROI] = None,
-    ) -> None:
+    ) -> DataFrame:
         """
         Derive cell adjacency graphs for each ROI.
         """
