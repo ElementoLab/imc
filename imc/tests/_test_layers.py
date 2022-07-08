@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import tifffile
 import anndata
+import scanpy as sc
 import scipy.ndimage as ndi
 
 from imc import Project
@@ -28,9 +29,7 @@ prj.rois = prj.rois[25:27]
 quant = prj.quantify_cells(layers=layer_names, set_attribute=False)
 
 
-quant = quant.reset_index().melt(
-    id_vars=["roi", "obj_id", "layer"], var_name="channel"
-)
+quant = quant.reset_index().melt(id_vars=["roi", "obj_id", "layer"], var_name="channel")
 quant = quant.pivot_table(
     index=["roi", "obj_id"], columns=["layer", "channel"], values="value"
 )

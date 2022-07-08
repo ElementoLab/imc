@@ -137,7 +137,7 @@ class ROI:
         self.mask_layer = default_mask_layer
         # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
         self._channel_labels: tp.Optional[Series] = (
-            pd.read_csv(channel_labels, index_col=0, squeeze=True)
+            pd.read_csv(channel_labels, index_col=0).squeeze()
             if isinstance(channel_labels, (str, Path))
             else channel_labels
         )
@@ -239,7 +239,7 @@ class ROI:
             )
             raise FileNotFoundError(msg)
 
-        preview = pd.read_csv(channel_labels_file, header=None, squeeze=True)
+        preview = pd.read_csv(channel_labels_file, header=None).squeeze()
         if isinstance(preview, pd.Series):
             order = preview.to_frame(name="ChannelName").set_index("ChannelName")
             # read reference

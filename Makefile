@@ -49,8 +49,12 @@ docs:  ## Build the documentation
 	${MAKE} -C $(DOCS_DIR) html
 	xdg-open $(DOCS_DIR)/build/html/index.html
 
-test:  ## Run the tests
-	python -m pytest $(NAME)/ -m "not slow"
+
+lint:
+	-flake8 --count --ignore E501,F401,F841,W503,E402,E203,E266,E722 --exclude tests/ imc/
+
+test: lint ## Run the tests
+	python -m pytest -m "not slow" $(NAME)/ 
 
 backup_time:
 	echo "Last backup: " `date` >> _backup_time

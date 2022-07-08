@@ -132,6 +132,7 @@ def fix_signal_axis_dependency(
 
 def channel_stats(roi: _roi.ROI, channels: tp.Sequence[str] = None):
     from skimage.restoration import estimate_sigma
+    from imc.utils import estimate_sigma
 
     if channels is None:
         channels = roi.channel_labels.tolist()

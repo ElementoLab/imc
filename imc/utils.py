@@ -509,7 +509,9 @@ def mcd_to_dir(
     output_dir: Path = None,
     output_format: str = "tiff",
     overwrite: bool = False,
-    compression_level: int = 3,
+    compression: tp.Union[
+        str, tifffile.TIFF.COMPRESSION
+    ] = tifffile.TIFF.COMPRESSION.ZSTD,
     sample_name: str = None,
     partition_panels: bool = False,
     filter_full: bool = True,
@@ -680,14 +682,14 @@ def mcd_to_dir(
                     ac.save_tiff(
                         p + file_ending,
                         names=channel_labels.str.extract(r"\((.*)\)")[0],
-                        compression=compression_level,
+                        compression=compression,
                     )
                 elif output_format == "ome-tiff":
                     write_ometiff(
                         arr=ac._image_data,
                         labels=channel_labels.tolist(),
                         output_path=p + file_ending,
-                        compression_level=compression_level,
+                        compression=compression,
                         description="; ".join(
                             [f"{k}={v}" for k, v in ac.acquisition.metadata.items()]
                         ),
@@ -766,7 +768,9 @@ def write_ometiff(
     arr: Array,
     labels: tp.Sequence[str],
     output_path: tp.Union[Path, str],
-    compression_level: int = 3,
+    compression: tp.Union[
+        str, tifffile.TIFF.COMPRESSION
+    ] = tifffile.TIFF.COMPRESSION.ZSTD,
     description: str = None,
     **tiff_kwargs,
 ) -> None:
@@ -841,7 +845,7 @@ def write_ometiff(
         photometric="minisblack",
         resolution=(25400, 25400, "inch"),
         metadata={"Channel": {"Name": labels}},
-        compress=compression_level,
+        compression=compression,
         ome=True,
         **tiff_kwargs,
     )

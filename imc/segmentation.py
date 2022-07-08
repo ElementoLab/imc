@@ -464,7 +464,7 @@ def cellpose_postprocessing(image: Array, mask: Array, flow: Array):
     perf["weight"] = perf[["sum_norm", "ratio_norm"]].mean(1)
 
     seg = np.asarray(list(segs.values()))
-    seg_t = np.average(seg, axis=0, weights=perf["weight"])  #  > 0.5
+    seg_t = np.average(seg, axis=0, weights=perf["weight"])  # > 0.5
     axes[-1][-2].imshow(seg_t)
     axes[-1][-2].set(title="Mean of thresholding algorightms")
     axes[-1][-1].imshow(seg_t > 0.5)
@@ -487,11 +487,11 @@ def inflection_point(curve: tp.Sequence[float]) -> int:
     n_points = len(curve)
     all_coord = np.vstack((range(n_points), curve)).T
     line_vec = all_coord[-1] - all_coord[0]
-    line_vec_norm = line_vec / np.sqrt(np.sum(line_vec ** 2))
+    line_vec_norm = line_vec / np.sqrt(np.sum(line_vec**2))
     vec_from_first = all_coord - all_coord[0]
     scalar_product = np.sum(vec_from_first * repmat(line_vec_norm, n_points, 1), axis=1)
     vec_to_line = vec_from_first - np.outer(scalar_product, line_vec_norm)
-    return np.argmax(np.sqrt(np.sum(vec_to_line ** 2, axis=1)))
+    return np.argmax(np.sqrt(np.sum(vec_to_line**2, axis=1)))
 
 
 def plot_image_and_mask(image: Array, mask_dict: tp.Dict[str, Array]) -> Figure:
@@ -514,7 +514,7 @@ def plot_image_and_mask(image: Array, mask_dict: tp.Dict[str, Array]) -> Figure:
 
     fig, axes = plt.subplots(1, cols, figsize=(4 * cols, 4), sharex=True, sharey=True)
     axes[0].imshow(image, rasterized=True)
-    axes[0].set(title=f"Original signal")
+    axes[0].set(title="Original signal")
     cmap = random_label_cmap()
     for ax in axes:
         ax.axis("off")

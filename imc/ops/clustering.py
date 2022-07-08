@@ -2,7 +2,10 @@
 Functions for single-cell clustering.
 """
 
-import os, re, json, typing as tp
+import os
+import re
+import json
+import typing as tp
 
 from ordered_set import OrderedSet
 import numpy as np
@@ -62,6 +65,11 @@ def phenotyping(
 ) -> AnnData:
     import anndata
 
+    if "pymde" in dim_res_algos:
+        import pymde
+    if clustering_method == "parc":
+        from parc import PARC
+
     # Checks
     reason = f"Can only Z-score values per 'roi' or 'sample'. '{z_score_per}' is not supported."
     assert z_score_per in ["sample", "roi"], reason
@@ -69,10 +77,6 @@ def phenotyping(
     assert clustering_method in ["leiden", "parc"]
     reason = "Can only use 'pca', 'umap', 'diffmap', or 'pymde' in `dim_res_algos`."
     assert all(x in ["pca", "umap", "diffmap", "pymde"] for x in dim_res_algos), reason
-    if "pymde" in dim_res_algos:
-        import pymde
-    if clustering_method == "parc":
-        from parc import PARC
 
     if isinstance(a, Path):
         print(f"Reading h5ad file: '{a}'.")
@@ -163,8 +167,6 @@ def phenotyping(
                 a.obs[f"cluster_{res}"].astype(int) + 1
             )
     elif clustering_method == "parc":
-        from parc import PARC
-
         for res in clustering_resolutions:
             p = PARC(
                 a.X,

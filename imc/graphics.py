@@ -364,7 +364,7 @@ def get_n_colors(n: int, max_value: float = 1.0) -> Array:
         http://en.wikipedia.org/wiki/1/2_%2B_1/4_%2B_1/8_%2B_1/16_%2B_%C2%B7_%C2%B7_%C2%B7
         """
         for k in itertools.count():
-            yield Fraction(1, 2 ** k)
+            yield Fraction(1, 2**k)
 
     def fracs():
         """
@@ -432,7 +432,7 @@ def get_transparent_cmaps(
     ]
 
 
-def get_random_label_cmap(n=2 ** 16, h=(0, 1), l=(0.4, 1), s=(0.2, 0.8)):
+def get_random_label_cmap(n=2**16, h=(0, 1), l=(0.4, 1), s=(0.2, 0.8)):
     h, l, s = (
         np.random.uniform(*h, n),
         np.random.uniform(*l, n),
@@ -446,6 +446,7 @@ def get_random_label_cmap(n=2 ** 16, h=(0, 1), l=(0.4, 1), s=(0.2, 0.8)):
 
 
 random_label_cmap = get_random_label_cmap
+
 
 # TODO: see if function can be sped up e.g. with Numba
 def cell_labels_to_mask(mask: Array, labels: tp.Union[Series, tp.Dict]) -> Array:

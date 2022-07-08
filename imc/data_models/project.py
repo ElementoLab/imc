@@ -22,7 +22,7 @@ from imc.data_models.roi import ROI
 from imc.types import Path, Figure, Patch, DataFrame, Series, MultiIndexSeries
 
 # from imc import LOGGER
-# from imc.ops.clustering import derive_reference_cell_type_labels, single_cell_analysis
+# from imc.ops.clustering import single_cell_analysis, derive_reference_cell_type_labels
 from imc.ops.adjacency import get_adjacency_graph, measure_cell_type_adjacency
 from imc.ops.community import cluster_communities
 from imc.graphics import get_grid_dims, add_legend
@@ -179,7 +179,7 @@ class Project:
         samples = [r.sample for r in rois if r.sample is not None]
 
         # group ROIs under same sample #TODO: avoid
-        m = pd.Series(samples, index=rois).rename('sample')
+        m = pd.Series(samples, index=rois).rename("sample")
         new_samples = list()
         for sn in np.unique([s.name for s in m]):
             sel = m[[s.name == sn for s in m]]
@@ -190,7 +190,9 @@ class Project:
                 roi.sample = _sample
             new_samples.append(_sample)
 
-        return cls(samples=sorted(new_samples, key=lambda x: x.name), __no_init__=True, **kwargs)
+        return cls(
+            samples=sorted(new_samples, key=lambda x: x.name), __no_init__=True, **kwargs
+        )
 
     @classmethod
     def from_samples(
@@ -247,7 +249,9 @@ class Project:
 
             sample = IMCSample(
                 sample_name=row[self.sample_name_attribute],
-                root_dir=(self.processed_dir / str(row[self.sample_name_attribute])) if self.subfolder_per_sample else self.processed_dir,
+                root_dir=(self.processed_dir / str(row[self.sample_name_attribute]))
+                if self.subfolder_per_sample
+                else self.processed_dir,
                 subfolder_per_sample=self.subfolder_per_sample,
                 metadata=rows if rows.shape[0] > 1 else None,
                 panel_metadata=self.panel_metadata,
@@ -750,49 +754,49 @@ class Project:
 
         return quantify_cell_morphology_rois(self._get_rois(samples, rois), **kwargs)
 
-    def cluster_cells(
-        self,
-        output_prefix: Path = None,
-        plot: bool = True,
-        set_attribute: bool = True,
-        samples: tp.Sequence[IMCSample] = None,
-        rois: tp.Sequence[ROI] = None,
-        **kwargs,
-    ) -> tp.Optional[Series]:
-        """
-        Derive clusters of single cells based on their channel intensity.
-        """
-        output_prefix = Path(
-            output_prefix or self.results_dir / "single_cell" / self.name
-        )
+    # def cluster_cells(
+    #     self,
+    #     output_prefix: Path = None,
+    #     plot: bool = True,
+    #     set_attribute: bool = True,
+    #     samples: tp.Sequence[IMCSample] = None,
+    #     rois: tp.Sequence[ROI] = None,
+    #     **kwargs,
+    # ) -> tp.Optional[Series]:
+    #     """
+    #     Derive clusters of single cells based on their channel intensity.
+    #     """
+    #     output_prefix = Path(
+    #         output_prefix or self.results_dir / "single_cell" / self.name
+    #     )
 
-        if "quantification" not in kwargs and self.quantification is not None:
-            kwargs["quantification"] = self.quantification
-        if "cell_type_channels" not in kwargs and self.panel_metadata is not None:
-            if "cell_type" in self.panel_metadata.columns:
-                kwargs["cell_type_channels"] = self.panel_metadata.query(
-                    "cell_type == 1"
-                ).index.list()
+    #     if "quantification" not in kwargs and self.quantification is not None:
+    #         kwargs["quantification"] = self.quantification
+    #     if "cell_type_channels" not in kwargs and self.panel_metadata is not None:
+    #         if "cell_type" in self.panel_metadata.columns:
+    #             kwargs["cell_type_channels"] = self.panel_metadata.query(
+    #                 "cell_type == 1"
+    #             ).index.list()
 
-        clusters = single_cell_analysis(
-            output_prefix=output_prefix,
-            rois=self._get_rois(samples, rois),
-            plot=plot,
-            **kwargs,
-        )
-        # save clusters as CSV in default file
-        clusters.reset_index().to_csv(
-            self.get_input_filename("cell_cluster_assignments"), index=False
-        )
-        if not set_attribute:
-            return clusters
+    #     clusters = single_cell_analysis(
+    #         output_prefix=output_prefix,
+    #         rois=self._get_rois(samples, rois),
+    #         plot=plot,
+    #         **kwargs,
+    #     )
+    #     # save clusters as CSV in default file
+    #     clusters.reset_index().to_csv(
+    #         self.get_input_filename("cell_cluster_assignments"), index=False
+    #     )
+    #     if not set_attribute:
+    #         return clusters
 
-        # Set clusters for project and propagate for Samples and ROIs.
-        # in principle there was no need to pass clusters here as it will be read
-        # however, the CSV roundtrip might give problems in edge cases, for
-        # example when the sample name is only integers
-        self.set_clusters(clusters.astype(str))
-        return None
+    #     # Set clusters for project and propagate for Samples and ROIs.
+    #     # in principle there was no need to pass clusters here as it will be read
+    #     # however, the CSV roundtrip might give problems in edge cases, for
+    #     # example when the sample name is only integers
+    #     self.set_clusters(clusters.astype(str))
+    #     return None
 
     @property
     def clusters(self):
@@ -838,21 +842,21 @@ class Project:
         if write_to_disk:
             self._clusters.reset_index().to_csv(fn, index=False)
 
-    def label_clusters(
-        self,
-        h5ad_file: Path = None,
-        output_prefix: Path = None,
-        **kwargs,
-    ) -> None:
-        """
-        Derive labels for each identified cluster
-        based on its most abundant markers.
-        """
-        prefix = self.results_dir / "single_cell" / self.name
-        h5ad_file = Path(h5ad_file or prefix + ".single_cell.processed.h5ad")
-        output_prefix = Path(output_prefix or prefix + ".cell_type_reference")
-        new_labels = derive_reference_cell_type_labels(h5ad_file, output_prefix, **kwargs)
-        self._rename_clusters(new_labels.to_dict())
+    # def label_clusters(
+    #     self,
+    #     h5ad_file: Path = None,
+    #     output_prefix: Path = None,
+    #     **kwargs,
+    # ) -> None:
+    #     """
+    #     Derive labels for each identified cluster
+    #     based on its most abundant markers.
+    #     """
+    #     prefix = self.results_dir / "single_cell" / self.name
+    #     h5ad_file = Path(h5ad_file or prefix + ".single_cell.processed.h5ad")
+    #     output_prefix = Path(output_prefix or prefix + ".cell_type_reference")
+    #     new_labels = derive_reference_cell_type_labels(h5ad_file, output_prefix, **kwargs)
+    #     self._rename_clusters(new_labels.to_dict())
 
     def _rename_clusters(self, new_labels: dict, save: bool = True):
         clusters = cast(self.clusters).replace(new_labels)

@@ -3,7 +3,9 @@ Functions for image annotations.
 
 """
 
-import os, json, typing as tp
+import os
+import json
+import typing as tp
 from collections import Counter
 
 import numpy as np
@@ -184,7 +186,7 @@ def illustrate_domains(
     cmd = f"""pdftk
     {output_dir}/*.annotations.pdf
     cat
-    output 
+    output
     {output_dir}/topological_domain_annotations.pdf"""
     os.system(cmd.replace("\n", " "))
 

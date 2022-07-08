@@ -8,6 +8,7 @@ import sys
 import typing as tp
 
 import numpy as np
+import tifffile
 
 from imc import ROI
 from imc.scripts import build_cli
@@ -39,6 +40,8 @@ def main(cli: tp.Sequence[str] = None) -> int:
 
     if (args.sample_names is None) or (len(args.input_files) != len(args.sample_names)):
         args.sample_names = [None] * len(args.input_files)
+
+    args.compression = getattr(tifffile.TIFF.COMPRESSION, args.compression)
 
     mcds = [file for file in args.input_files if file.endswith(MCD_FILE_ENDINGS)]
     tiffs = [file for file in args.input_files if file.endswith(TIFF_FILE_ENDINGS)]

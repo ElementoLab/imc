@@ -42,7 +42,7 @@ def generate_disk_masks(
     mask = np.zeros(shape, dtype=bool)
 
     area = np.multiply(*mask.shape)
-    n = int(np.ceil(mask.size * seeding_density) * (disk_diameter ** 2 / area))
+    n = int(np.ceil(mask.size * seeding_density) * (disk_diameter**2 / area))
     centroids = np.random.choice(np.arange(mask.size), n, replace=False)
 
     r = disk_diameter // 2
@@ -51,9 +51,7 @@ def generate_disk_masks(
     y = centroids % shape[1]
     for i in range(n):
         s = mask[x[i] - r : x[i] + r + 1, y[i] - r : y[i] + r + 1].shape
-        mask[x[i] - r : x[i] + r + 1, y[i] - r : y[i] + r + 1] = disk[
-            : s[0], : s[1]
-        ]
+        mask[x[i] - r : x[i] + r + 1, y[i] - r : y[i] + r + 1] = disk[: s[0], : s[1]]
     return ndi.label(mask)[0]
 
 
@@ -120,7 +118,7 @@ def generate_stack(
 
 def write_tiff(array: Array, output_file: Path) -> None:
     fr = tifffile.TiffWriter(output_file)
-    fr.save(array)
+    fr.write(array)
     fr.close()
 
 
@@ -131,9 +129,7 @@ def write_roi_to_disk(mask: Array, stack: Array, output_prefix: Path) -> None:
     write_tiff(stack, output_prefix + "_full.tiff")
     # channel_labels
     labels = [str(c).zfill(2) for c in range(1, stack.shape[0] + 1)]
-    channel_labels = pd.Series(
-        [f"Ch{c}(Ch{c})" for c in labels], name="channel"
-    )
+    channel_labels = pd.Series([f"Ch{c}(Ch{c})" for c in labels], name="channel")
     channel_labels.to_csv(output_prefix + "_full.csv")
 
 
@@ -172,9 +168,7 @@ def generate_project(
     processed_dir.mkdir(exist_ok=True)
 
     if sample_names is None:
-        sample_names = [
-            "test_sample_" + str(i).zfill(2) for i in range(1, n_samples + 1)
-        ]
+        sample_names = ["test_sample_" + str(i).zfill(2) for i in range(1, n_samples + 1)]
     _meta: Dict[str, Dict[str, Union[str, int]]] = dict()
     for sample in sample_names:
         tiffs_dir = processed_dir / sample / "tiffs"

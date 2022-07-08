@@ -45,7 +45,7 @@ dependencies = [
     "scanpy",
     "bbknn",
     "numpy_groupies",
-    "tifffile>=2020.7.22",
+    "tifffile>=2022.5.4",
     "seaborn-extensions"
 ]
 dynamic = ['version']
@@ -137,7 +137,7 @@ python = "^3.8"
 ordered-set = "^4.0.2"
 PyYAML = "^5.4.1"
 pandas = ">=1.0.1"
-tifffile = ">=2020.7.22"
+tifffile = ">=2022.5.4"
 imctools = "^2.1.0"
 imagecodecs = "^2020.5.30"
 colorama = "^0.4.3"

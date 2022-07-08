@@ -288,13 +288,14 @@ cli_config = {
                 },
             },
             {
-                "args": ["--compression-level"],
+                "args": ["--compression"],
                 "kwargs": {
-                    "dest": "compression_level",
-                    "type": int,
-                    "default": 3,
-                    "help": "The level of compression of output TIFF files (0-9). "
-                    "Higher compression creates smaller files, but takes longer to read and write.",
+                    "dest": "compression",
+                    "type": str,
+                    "default": "ZSTD",
+                    "help": "The type of compression of output TIFF files. "
+                    "One of tifffile.TIFF.COMPRESSION. "
+                    "Also see https://docs.openmicroscopy.org/ome-model/5.6.0/developers/compression.html#recommendations.",
                 },
             },
             {
