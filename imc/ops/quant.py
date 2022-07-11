@@ -91,7 +91,7 @@ def quantify_cell_morphology(
         "major_axis_length",
         # In some images I get ValueError for 'minor_axis_length'
         # just like https://github.com/scikit-image/scikit-image/issues/2625
-        # 'orientation', # should be random for non-optical imaging, so I'm not including it
+        # 'orientation', # should be ~random for non-optical imaging, so I'm not including it
         "eccentricity",
         "solidity",
         "centroid",
@@ -103,7 +103,7 @@ def quantify_cell_morphology(
     if not border_objs:
         mask = clear_border(mask)
 
-    return (
+    morph = (
         pd.DataFrame(
             skimage.measure.regionprops_table(mask, properties=attributes),
             index=[c for c in np.unique(mask) if c != 0],
@@ -111,6 +111,11 @@ def quantify_cell_morphology(
         .rename_axis(index="obj_id")
         .rename(columns={"centroid-0": "X_centroid", "centroid-1": "Y_centroid"})
     )
+    if ("minor_axis_length" in attributes) and ("major_axis_length" in attributes):
+        morph["ratio_axis_length"] = (
+            morph["major_axis_length"] / morph["minor_axis_length"]
+        )
+    return morph
 
 
 def _quantify_cell_intensity__roi(roi: _roi.ROI, **kwargs) -> DataFrame:
