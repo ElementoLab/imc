@@ -82,6 +82,14 @@ def phenotyping(
         print(f"Reading h5ad file: '{a}'.")
         a = sc.read(a)
 
+    if remove_batch:
+        if a.obs[batch_variable].nunique() <= 1:
+            print(
+                "Batch correction not possible as only one batch detected. "
+                "Check `batch_variable` keyord argument."
+            )
+            remove_batch = False
+
     if "sample" not in a.obs.columns:
         a.obs["sample"] = a.obs["roi"].str.extract(r"(.*)-\d+")[0].fillna("")
     if a.raw is None:
@@ -99,6 +107,7 @@ def phenotyping(
         a = a[:, ~a.var.index.isin(channels_exclude)]
     if channels_include is not None:
         a = a[:, channels_include]
+    a = a.copy()
 
     # # reduce DNA chanels to one, and move to obs
     dnas = a.var.index[a.var.index.str.contains(r"DNA\d")]
@@ -122,7 +131,7 @@ def phenotyping(
     if z_score:
         _ads = list()
         for roi_name in a.obs["roi"].unique():
-            a2 = a[a.obs["roi"] == roi_name, :]
+            a2 = a[a.obs["roi"] == roi_name, :].copy()
             sc.pp.scale(a2, max_value=z_score_cap)
             a2.X[a2.X < -z_score_cap] = -z_score_cap
             # print(a2.X.min(), a2.X.max())
@@ -130,9 +139,8 @@ def phenotyping(
         a = anndata.concat(_ads)
         sc.pp.scale(a)
     if remove_batch:
-        if a.obs[batch_variable].nunique() > 1:
-            sc.pp.combat(a, batch_variable)
-            sc.pp.scale(a)
+        sc.pp.combat(a, batch_variable)
+        sc.pp.scale(a)
 
     # Dimensionality reduction
     print("Performing dimensionality reduction.")
