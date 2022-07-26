@@ -1,4 +1,5 @@
 setuptools_scm
+outdated
 ordered-set
 PyYAML
 parmap

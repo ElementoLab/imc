@@ -29,6 +29,7 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "setuptools_scm",
+    "outdated",
     "ordered-set",
     "urlpath",
     "PyYAML",

@@ -8,7 +8,7 @@ import logging
 from functools import partialmethod
 from pathlib import Path as _Path
 
-# from outdated import warn_if_outdated
+from outdated import warn_if_outdated
 from joblib import Memory
 import matplotlib
 import matplotlib.pyplot as plt
@@ -27,7 +27,7 @@ except ImportError:
     version = __version__ = _get_version(root="..", relative_to=__file__)
 
 
-# warn_if_outdated("imc", __version__)
+warn_if_outdated("imc", __version__)
 
 plt.rcParams["svg.fonttype"] = "none"
 plt.rcParams["font.family"] = "Arial"
