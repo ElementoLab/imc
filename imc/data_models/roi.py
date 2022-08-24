@@ -1048,11 +1048,12 @@ class ROI:
             axes[i, 0].imshow(self.get_mean_all_channels() * 0.1, cmap=bckgd_cmap)
             # plot each of the cell types with different colors
             res = cell_labels_to_mask(self.cell_mask, clusters)
-            rgb, cmap = values_to_rgb_colors(res, from_palette=palette)
+            rgb, cmaps = values_to_rgb_colors(res, from_palette=palette)
+            cmaps = {l: v for (k, v), l in zip(cmaps.items(), labels)}
             if position is not None:
                 rgb = rgb[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
             axes[i, 0].imshow(rgb)
-            patches += [mpatches.Patch(color=c, label=l) for l, c in cmap.items()]
+            patches += [mpatches.Patch(color=c, label=l) for l, c in cmaps.items()]
             axes[i, 0].axis("off")
             if add_scale:
                 _add_scale(axes[i, 0])
