@@ -181,7 +181,13 @@ def measure_cell_type_adjacency(
     if adjacency_graph is None:
         adjacency_graph = roi.adjacency_graph
 
-    adj, order = nx.linalg.attrmatrix.attr_matrix(adjacency_graph, node_attr="cluster")
+    import warnings  # Networkx warns that the output of nx.linalg.attrmatrix.attr_matrix will be an array instead of a matrix
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        adj, order = nx.linalg.attrmatrix.attr_matrix(
+            adjacency_graph, node_attr="cluster"
+        )
     order = pd.Series(order).astype(
         roi.clusters.dtype
     )  #  passing dtype at instantiation gives warning
@@ -243,7 +249,11 @@ def correct_interaction_background_random(
         shuffled_attr = pd.Series(values).sample(frac=1)
         shuffled_attr.index = values
         nx.set_node_attributes(g2, shuffled_attr.to_dict(), name=attribute)
-        rf, rl = nx.linalg.attrmatrix.attr_matrix(g2, node_attr=attribute)
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            rf, rl = nx.linalg.attrmatrix.attr_matrix(g2, node_attr=attribute)
         rl = pd.Series(rl, dtype=roi.clusters.dtype)
         shuffled_freqs.append(
             pd.DataFrame(rf, index=rl, columns=rl).sort_index(axis=0).sort_index(axis=1)
