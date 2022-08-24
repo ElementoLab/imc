@@ -480,6 +480,51 @@ def cellpose_postprocessing(image: Array, mask: Array, flow: Array):
     return seg_t > 0.5
 
 
+def try_all_segmentations(
+    image: Array,
+    compartment: str = "nuclear",
+    models: list[str] = ["stardist", "deepcell", "cellpose"],
+) -> Array:
+    """
+    Try out various models for segmentation.
+    Only nuclear available so far.
+    """
+    assert compartment in ["nuclear"]
+
+    masks = np.zeros((len(models), *image.shape))
+    i = 0
+    if "stardist" in models:
+        masks[i] = stardist_segment_nuclei(image)
+        i += 1
+
+    if "deepcell" in models:
+        masks[i] = deepcell_segment(
+            image[np.newaxis, ..., np.newaxis], compartment=compartment
+        )
+        i += 1
+
+    if "cellpose" in models:
+        masks[i] = cellpose_segment(image, compartment=compartment)
+        i += 1
+
+    return masks
+
+
+def plot_all_segmentations(
+    masks: Array, image: Array = None, model_names: list[str] = None
+) -> Figure:
+    """
+    Plot the output of various segmentation models.
+    """
+    if image is None:
+        image = np.zeros(masks.shape[1:])
+    if model_names is None:
+        model_names = [f"Model {i}" for i, _ in enumerate(masks, 1)]
+
+    fig = plot_image_and_mask(image=image, mask_dict=dict(zip(model_names, masks)))
+    return fig
+
+
 def inflection_point(curve: tp.Sequence[float]) -> int:
     """Return the index of the inflection point of a curve"""
     from numpy.matlib import repmat
@@ -516,10 +561,7 @@ def plot_image_and_mask(image: Array, mask_dict: tp.Dict[str, Array]) -> Figure:
     axes[0].imshow(image, rasterized=True)
     axes[0].set(title="Original signal")
     cmap = random_label_cmap()
-    for ax in axes:
-        ax.axis("off")
-    for i, comp in enumerate(mask_dict):
-        ax = axes[1 + i]
+    for comp, ax in zip(mask_dict, axes[1:]):
         ax.imshow(mask_dict[comp], cmap=cmap, interpolation="none")
         ax.set(title=f"{comp.capitalize()} mask")
     # for i, comp in enumerate(mask_dict):
@@ -533,6 +575,8 @@ def plot_image_and_mask(image: Array, mask_dict: tp.Dict[str, Array]) -> Figure:
     #         except Exception:
     #             pass
     #     ax.set(title=f"{comp.capitalize()} mask")
+    for ax in axes:
+        ax.axis("off")
     return fig
 
 
