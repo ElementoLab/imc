@@ -758,9 +758,14 @@ class ROI:
             minmaxes.append(minmax)
         return ", ".join(labels), np.asarray(arrays), np.asarray(minmaxes)
 
-    def get_mean_all_channels(self) -> Array:
+    def get_mean_all_channels(self, equalize: bool = True) -> Array:
         """Get an array with mean of all channels"""
-        return eq(self.stack.mean(axis=0))
+        mean = np.asarray(
+            [c for i, c in enumerate(self.stack) if not self.channel_exclude[i]]
+        ).mean(axis=0)
+        if equalize:
+            mean = eq(mean)
+        return mean
 
     def plot_channel(
         self,
