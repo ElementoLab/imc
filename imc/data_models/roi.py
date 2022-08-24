@@ -524,7 +524,7 @@ class ROI:
 
     def get(self, attr):
         try:
-            return self.__getattribute(attr)
+            return self.__getattribute__(attr)
         except AttributeError:
             return None
 
