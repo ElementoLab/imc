@@ -487,7 +487,7 @@ def cellpose_postprocessing(image: Array, mask: Array, flow: Array):
 def try_all_segmentations(
     image: Array,
     compartment: str = "nuclear",
-    models: list[str] = ["stardist", "deepcell", "cellpose"],
+    models: tp.Sequence[str] = ["stardist", "deepcell", "cellpose"],
 ) -> Array:
     """
     Try out various models for segmentation.
@@ -515,7 +515,7 @@ def try_all_segmentations(
 
 
 def plot_all_segmentations(
-    masks: Array, image: Array = None, model_names: list[str] = None
+    masks: Array, image: Array = None, model_names: tp.Sequence[str] = None
 ) -> Figure:
     """
     Plot the output of various segmentation models.
