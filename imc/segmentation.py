@@ -136,8 +136,8 @@ def extract_features(
 def train_pixel_classifier(
     x: Array,
     y: Array,
-    save_model: bool,
-    output_file: Path,
+    output_file: Path = None,
+    save_model: bool = True,
     model: str = "RandomForestClassifier",
     subsample_frac: float = None,
     subsample_n: float = None,
@@ -151,10 +151,11 @@ def train_pixel_classifier(
         Array with shape BCXY (smaple,channel,X,Y) of signal
     y: np.ndarray, list
         Array with shape BXY (smaple,X,Y) of cellular compartments (nucleus, cytoplasm, background).
-    save_model: bool
-        Whether to save the trained model.
     output_file: pathlib.Path
         File to save model to. Traditionally ends in '.sav'.
+        Only required if save_model is True.
+    save_model: bool
+        Whether to save the trained model.
     model: str
         Type of model to use. Only 'RandomForestClassifier' available for the time being.
     subsample_frac: float
@@ -166,6 +167,9 @@ def train_pixel_classifier(
     import joblib
 
     assert model == "RandomForestClassifier"
+
+    if save_model:
+        assert output_file is not None
 
     if subsample_frac is not None:
         assert subsample_n is None

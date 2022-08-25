@@ -78,6 +78,7 @@ dev = [
     "mypy>=0.900",  # pin to version supporting pyproject.toml
     "pandas-stubs",
     "pylint",
+    "flake8",
     "git-lint",
     "pydocstyle",
     "rich",

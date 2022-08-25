@@ -157,7 +157,7 @@ def channel_stats(roi: _roi.ROI, channels: tp.Sequence[str] = None):
         [np.ma.masked_array(stack[i], mask=~mask).std() for i in range(len(channels))],
         index=channels,
     )
-    res["noises"] = pd.Series([estimate_noise(ch) for ch in stack], index=channels)
+    # res["noises"] = pd.Series([estimate_noise(ch) for ch in stack], index=channels)
     res["sigmas"] = pd.Series(
         estimate_sigma(np.moveaxis(stack, 0, -1), multichannel=True), index=channels
     )

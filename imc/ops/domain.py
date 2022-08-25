@@ -469,14 +469,14 @@ def get_domain_mask(
         region_names.append(label + str(count[label]))
 
     for_mask = np.asarray(
-        [m for l, m in zip(region_types, masks) if l not in exclude_domains]
+        [m for ll, m in zip(region_types, masks) if ll not in exclude_domains]
     ).sum(0)
     if fill_remaining is not None:
         masks += [for_mask == 0]
         region_types += [fill_remaining]
         for_mask[for_mask == 0] = -1
     exc_mask = np.asarray(
-        [m for l, m in zip(region_types, masks) if l in exclude_domains]
+        [m for ll, m in zip(region_types, masks) if ll in exclude_domains]
     ).sum(0)
     mask: Array = (
         ((for_mask != 0) & ~(exc_mask != 0))
@@ -486,9 +486,9 @@ def get_domain_mask(
 
     if per_domain:
         nmask = np.empty_like(mask, dtype="object")
-        for r, l in zip(masks, region_types):
-            if l not in exclude_domains:
-                nmask[mask & r] = l
+        for r, ll in zip(masks, region_types):
+            if ll not in exclude_domains:
+                nmask[mask & r] = ll
         mask = np.ma.masked_array(nmask, mask=nmask == None)
 
     return mask

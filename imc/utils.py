@@ -1238,12 +1238,18 @@ def filter_hot_pixels(img, n_bins=1000):
 
     mod = sm.GLM(y2, np.vstack([x2, np.ones(x2.shape)]).T, family=sm.families.Poisson())
     res = mod.fit()
-    f1 = lambda x: np.e ** (res.params[0] * x + res.params[1])
+
+    def f1(x):
+        return np.e ** (res.params[0] * x + res.params[1])
+
     g1 = vmap(grad(f1))
 
     mod = LinearRegression()
     mod.fit(x2.reshape((-1, 1)), np.log2(y2))
-    f2 = lambda x: 2 ** (mod.coef_[0] * x + mod.intercept_)
+
+    def f2(x):
+        return 2 ** (mod.coef_[0] * x + mod.intercept_)
+
     g2 = vmap(grad(f2))
 
     f3 = scipy.interpolate.interp1d(x2, y2, fill_value="extrapolate")

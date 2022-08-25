@@ -2,8 +2,8 @@ import pytest
 
 
 class TestHighOrderFunctions:
-    @pytest.mark.slow
-    # @pytest.mark.xfail
+    # @pytest.mark.slow
+    @pytest.mark.xfail
     def test_cluster_cells(self, project):
         project.cluster_cells()
 

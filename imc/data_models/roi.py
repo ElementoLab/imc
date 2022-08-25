@@ -1058,7 +1058,7 @@ class ROI:
             if position is not None:
                 rgb = rgb[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
             axes[i, 0].imshow(rgb)
-            patches += [mpatches.Patch(color=c, label=l) for l, c in cmaps.items()]
+            patches += [mpatches.Patch(color=c, label=ll) for ll, c in cmaps.items()]
             axes[i, 0].axis("off")
             if add_scale:
                 _add_scale(axes[i, 0])
@@ -1220,11 +1220,34 @@ class ROI:
         self,
         channel_include: tp.Sequence[str] = None,
         channel_exclude: tp.Sequence[str] = None,
-        layers: tp.Sequence[str] = ["cell"],
+        layers: tp.Sequence[str] = None,
         **kwargs,
     ) -> DataFrame:
-        """Quantify intensity of each cell in each channel."""
+        """
+        Quantify intensity of each cell in each channel.
+
+        Parameters
+        ----------
+
+        channel_include: list[str]
+            Channels to include in quantification.
+            Default is all.
+        channel_exclude: list[str]
+            Channels to exclude from quantification.
+            Default is non.
+        layers: list[str]
+            What mask layer to quantify. The masks must exist for the ROI. Options are:
+            - 'cell': Whole cell mask.
+            - 'nuclei': Nuclear mask.
+            - 'membrane': Membrane mask - this is usually not a real mask but cell mask minus a fixed value.
+            - 'cytoplasm':  Mask of the cell cytoplasm.
+            - 'extracellular': Mask of the local neighborhood of the cell excluding other cells.
+            Default is value of ROI.mask_layer which is by default 'cell.
+        """
         from imc.ops.quant import quantify_cell_intensity
+
+        if layers is None:
+            layers = [self.mask_layer]
 
         if channel_include is not None:
             kwargs["channel_include"] = self.channel_labels.str.contains(
