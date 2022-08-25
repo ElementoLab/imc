@@ -867,6 +867,42 @@ class Project:
             )
         self.set_clusters(clusters)
 
+    def get_attribute_dataframe(
+        self,
+        attributes: tp.Optional[
+            tp.Union[tp.Sequence[str], tp.Dict[str, tp.Sequence[str]]]
+        ] = None,
+        level: str = "roi",
+        subset: tp.Sequence[tp.Union[IMCSample, ROI]] = None,
+    ):
+        assert level in ["roi", "sample"]
+        attrs = list(attributes.keys()) if isinstance(attributes, dict) else attributes
+        objs = getattr(self, level + "s")
+
+        # group samples by desired attributes
+        df = (
+            pd.DataFrame(
+                {
+                    k: v
+                    for k, v in obj.__dict__.items()
+                    if isinstance(v, (str, ROI, IMCSample))
+                }
+                for obj in objs
+            )
+            .set_index("name")
+            .rename_axis(level)
+        )
+        if "sample" in df:
+            df["sample"] = [x.name for x in df["sample"]]
+        if subset is not None:
+            df = df.loc[[o.name for o in objs]]
+        if isinstance(attrs, list):
+            df = df[attributes]
+        elif isinstance(attributes, dict):
+            for attr, order in attributes.items():
+                df[attr] = pd.Categorical(df[attr], ordered=True, categories=order)
+        return df
+
     def sample_comparisons(
         self,
         sample_attributes: tp.Union[
@@ -898,21 +934,9 @@ class Project:
         output_prefix.parent.mkdir(exist_ok=True)
 
         # group samples by desired attributes
-        sample_df = (
-            pd.DataFrame(
-                {k: v for k, v in sample.__dict__.items() if isinstance(v, str)}
-                for sample in samples
-            )[["name"] + attributes]
-            .set_index("name")
-            .rename_axis("sample")
-            .reset_index()
+        sample_df = self.get_attribute_dataframe(
+            level="sample", attributes=sample_attributes
         )
-        if isinstance(sample_attributes, dict):
-            for attr, order in sample_attributes.items():
-                sample_df[attr] = pd.Categorical(
-                    sample_df[attr], ordered=True, categories=order
-                )
-
         sample_roi_df = pd.DataFrame(
             [(roi.name, roi.sample.name) for roi in rois],
             columns=["roi", "sample"],
@@ -922,7 +946,6 @@ class Project:
 
         # Whole channel means
         if "channel_mean" in steps:
-            to_plot.append((channel_df, "channel", "channel_mean", "value"))
             channel_means: DataFrame = self.channel_summary(
                 plot=False, channel_exclude=channel_exclude
             )
@@ -938,16 +961,10 @@ class Project:
                 .sort_values(attributes)
             )
             channel_df.to_csv(output_prefix + "channel_mean.csv", index=False)
+            to_plot.append((channel_df, "channel", "channel_mean", "value"))
 
         # cell type abundance per sample or group of samples
         if "cell_type_abundance" in steps:
-            to_plot.append(
-                (cluster_df, "cluster", "cell_type_abundance_area", "cell_mm2")
-            )
-            to_plot.append(
-                (cluster_df, "cluster", "cell_type_abundance_percentage", "cell_perc")
-            )
-
             cluster_counts = (
                 self.clusters.groupby(level=["sample", "roi"])
                 .value_counts()
@@ -970,6 +987,12 @@ class Project:
             )
             cluster_df = cluster_df.drop("area", axis=1)
             cluster_df.to_csv(output_prefix + "cell_type_abundance.csv", index=False)
+            to_plot.append(
+                (cluster_df, "cluster", "cell_type_abundance_area", "cell_mm2")
+            )
+            to_plot.append(
+                (cluster_df, "cluster", "cell_type_abundance_percentage", "cell_perc")
+            )
 
         # Test difference between channels/clusters
         # # plot boxplots, volcano, and heatmaps
