@@ -1450,6 +1450,9 @@ def polygon_to_mask(
         if isinstance(inter, (MultiPolygon, GeometryCollection)):
             return np.asarray([polygon_to_mask(x, shape) for x in inter.geoms]).sum(0) > 0
         inter_verts = np.asarray(inter.exterior.coords.xy).T.tolist()
+        # check this is not empty, most likely means polygon is outside mask shape
+        if len(inter_verts) == 0:
+            return np.zeros(shape[::-1]).astype(bool)
     else:
         inter_verts = polygon_vertices
     x, y = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]))
