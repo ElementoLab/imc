@@ -1040,7 +1040,7 @@ class Project:
         rois = self._get_rois(samples, rois)
 
         # Get graph for missing ROIs
-        _rois = [r for r in rois if r._adjacency_graph is None]
+        _rois = [r for r in rois if r.adjacency_graph is None]
         if _rois:
             gs = parmap.map(get_adjacency_graph, _rois, pm_pbar=True)
             # gs = [get_adjacency_graph(roi) for roi in _rois]
