@@ -99,7 +99,7 @@ def phenotyping(
     sel = a.var.index.str.contains(r"\(")
     v = a.var.index[~sel]
     for col in v:
-        a.obs[col] = a[:, col].X
+        a.obs[col] = a[:, col].X.tolist()
     a = a[:, sel]
 
     # Filter out channels
