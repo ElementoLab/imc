@@ -11,7 +11,7 @@ scipy>=1.7
 pandas>=1.0.1
 matplotlib>=3.5
 imctools>=2.1.0
-tifffile>=2022.5.4
+tifffile==2022.4.8
 scikit-image==0.17.2
 leidenalg
 python-louvain
@@ -19,3 +19,4 @@ networkx
 scanpy
 bbknn
 seaborn-extensions
+harmonypy
