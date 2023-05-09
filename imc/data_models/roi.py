@@ -469,12 +469,14 @@ class ROI:
 
     @property
     def adjacency_graph(self) -> nx.Graph:
+        import pickle
+
         if self._adjacency_graph is not None:
             return self._adjacency_graph
+
         try:
-            self._adjacency_graph = nx.readwrite.read_gpickle(
-                self.get_input_filename("adjacency_graph")
-            )
+            with open(self.get_input_filename("adjacency_graph"), "rb") as h:
+                self._adjacency_graph = pickle.load(h)
         except FileNotFoundError:
             return None
         return self._adjacency_graph

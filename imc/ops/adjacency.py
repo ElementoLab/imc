@@ -46,6 +46,8 @@ def get_adjacency_graph(
     networkx.Graph
         Adjacency graph for cells in ROI.
     """
+    import pickle
+
     clusters = roi.clusters
     if clusters is None:
         print("ROI does not have assigned clusters.")
@@ -113,8 +115,10 @@ def get_adjacency_graph(
     if clusters is not None:
         nx.set_node_attributes(g, roi.clusters.to_dict(), name="cluster")
         nx.set_node_attributes(g, roi.clusters.index.to_series().to_dict(), name="obj_id")
+
     # save graph
-    nx.readwrite.write_gpickle(g, output_prefix + "neighbor_graph.gpickle")
+    with open(output_prefix + "neighbor_graph.gpickle", "wb") as f:
+        pickle.dump(g, f)
     return g
 
 

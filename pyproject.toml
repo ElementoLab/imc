@@ -37,7 +37,7 @@ dependencies = [
     "joblib",
     "leidenalg",
     "python-louvain",
-    "networkx",
+    "networkx>=3.0.0",
     "pandas>=1.0.1",
     "matplotlib>=3.5.0",
     "scikit-image>=0.20.0",
@@ -150,7 +150,7 @@ anndata = "^0.7.3"
 scanpy = "^1.5.1"
 leidenalg = "^0.8.1"
 python-louvain = "^0.14"
-networkx = "^2.4"
+networkx = "^3.0"
 parmap = "^1.5.2"
 joblib = "^0.15.1"
 
