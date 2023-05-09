@@ -211,17 +211,21 @@ def is_datetime(x: Series) -> bool:
 def is_numeric(x: tp.Union[Series, tp.Any]) -> bool:
     if not isinstance(x, pd.Series):
         x = pd.Series(x)
-    if x.dtype.name in [
-        "float",
-        "float32",
-        "float64",
-        "int",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "Int64",
-    ] or is_datetime(x):
+    if (
+        x.dtype.name
+        in [
+            "float",
+            "float32",
+            "float64",
+            "int",
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "Int64",
+        ]
+        or is_datetime(x)
+    ):
         return True
     if x.dtype.name in ["object", "string", "boolean", "bool"]:
         return False
@@ -387,7 +391,7 @@ def downcast_int(arr: Array, kind: str = "u") -> Array:
         assert arr.min() >= 0
     m = arr.max()
     for i in [8, 16, 32, 64]:
-        if m <= (2**i - 1):
+        if m <= (2 ** i - 1):
             return arr.astype(f"{kind}int{i}")
     return arr
 
@@ -967,7 +971,7 @@ def stack_to_probabilities(
 def save_probabilities(probs: Array, output_tiff: Path):
     import tifffile
 
-    tifffile.imsave(output_tiff, np.moveaxis((probs * 2**16).astype("uint16"), 0, -1))
+    tifffile.imsave(output_tiff, np.moveaxis((probs * 2 ** 16).astype("uint16"), 0, -1))
 
 
 def txt_to_tiff(
@@ -1461,6 +1465,28 @@ def polygon_to_mask(
     path = matplotlib.path.Path(inter_verts)
     grid = path.contains_points(points, radius=-1)
     return grid.reshape((shape[1], shape[0]))
+
+Array = np.ndarray
+def mask_to_polygon(
+    labeled_image: Array,
+    simplify: bool = True,
+    simplification_threshold: float = 5.0,
+) -> tp.List[Array]:
+    from imantics import Mask
+    from shapely.geometry import Polygon
+
+    polygons = Mask(labeled_image).polygons()
+    shapes = list()
+    for point in polygons.points:
+
+        if not simplify:
+            poly = np.asarray(point).tolist()
+        else:
+            poly = np.asarray(
+                Polygon(point).simplify(simplification_threshold).exterior.coords.xy
+            ).T.tolist()
+        shapes.append(poly)
+    return shapes
 
 
 def mask_to_labelme(

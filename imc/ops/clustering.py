@@ -2,27 +2,17 @@
 Functions for single-cell clustering.
 """
 
-import os
-import re
-import json
 import typing as tp
 
-from ordered_set import OrderedSet
 import numpy as np
 import pandas as pd
-import matplotlib
 import matplotlib.pyplot as plt
-import seaborn as sns
 from tqdm import tqdm
 
 from anndata import AnnData
 import scanpy as sc
 
-import imc.data_models.sample as _sample
-import imc.data_models.roi as _roi
-from imc.exceptions import cast
-from imc.types import DataFrame, Series, Path, MultiIndexSeries
-from imc.utils import minmax_scale, double_z_score
+from imc.types import DataFrame, Path
 from imc.graphics import rasterize_scanpy
 
 

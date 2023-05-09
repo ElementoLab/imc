@@ -11,7 +11,7 @@ import seaborn as sns
 from tqdm import tqdm
 import scipy.ndimage as ndi
 from skimage import exposure
-from skimage.future import graph
+from skimage import graph
 import networkx as nx
 
 import imc.data_models.roi as _roi

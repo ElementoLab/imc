@@ -11,10 +11,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import scanpy as sc
 
-from imc import Project, ROI
-from imc.ops.clustering import phenotyping, plot_phenotyping
+from imc import Project
 from imc.scripts import build_cli, find_tiffs, find_h5ad
-from imc.utils import filter_kwargs_by_callable
 
 figkws = dict(dpi=300, bbox_inches="tight")
 

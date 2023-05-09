@@ -40,6 +40,7 @@ dependencies = [
     "networkx",
     "pandas>=1.0.1",
     "matplotlib>=3.5.0",
+    "scikit-image>=0.20.0",
     "seaborn",
     "fastcluster",
     "parmap",
@@ -141,6 +142,7 @@ PyYAML = "^5.4.1"
 pandas = ">=1.0.1"
 tifffile = ">=2022.5.4"
 imctools = "^2.1.0"
+scikit-image = "^0.20.0"
 imagecodecs = "^2020.5.30"
 colorama = "^0.4.3"
 h5py = "^2.10.0"
