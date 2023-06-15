@@ -58,7 +58,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     if args.output is None:
         f = Path("processed").mkdir() / "quantification.csv.gz"
     else:
-        f = args.output
+        f = Path(args.output)
     quant.to_csv(f, index=False)
     print(f"Wrote CSV file to '{f.absolute()}'.")
 
