@@ -15,7 +15,6 @@ from imc.types import Path
 from imc.ops.quant import quantify_cells_rois
 from imc.scripts import build_cli, find_tiffs
 
-
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("quantify")
     args = parser.parse_args(cli)

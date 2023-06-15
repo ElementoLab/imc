@@ -19,6 +19,13 @@ Development is still underway, so use at your own risk.
 
 Requires `Python >= 3.8`. `imc` uses a `pyproject.toml` configuration only, so you'll need a up-to-date version of `pip` before installing. Base packages as `gcc` and `g++` will also need to be installed on system using the command `sudo apt install g++` or likewise. We also highly recommend installing the package on a `conda` environment to avoid dependency issues.
 
+To install the most updated version of the program:
+```bash
+git clone https://github.com/ElementoLab/imc.git
+cd imc
+make install
+```
+
 Install from [PyPI](https://pypi.org/project/imc/) with [`pip`](https://pip.pypa.io/) or with [poetry](https://python-poetry.org/):
 ```bash
 pip install imc
@@ -87,10 +94,26 @@ imc segment \
 
 ## Quantify channel intensity and morphology for each single cell in every image
 imc quantify $TIFFS
-
-## Phenotype cells into clusters
-imc phenotype processed/quantification.h5ad
 ```
+
+Once all MCD files have been processed for the project, create a concatenated AnnData object containing all cells within a project.
+
+```python
+from glob import glob
+import os
+import anndata
+pattern = glob('processed/*.h5ad')
+adatas = [anndata.read(f) for f in pattern if os.path.exists(f)]
+adata = anndata.concat(adatas)
+adata.write('results/quant.h5ad')
+```
+
+To perform batch correction and cell clustering:
+```bash
+## Phenotype cells into clusters
+imc phenotype processed/quant.h5ad
+```
+
 There are many customization options for each step. Do `imc --help` or `imc <subcommand> --help` to see all.
 
 `imc` also includes a lightweight interactive image viewer:
