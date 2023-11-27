@@ -40,7 +40,7 @@ dependencies = [
     "networkx>=3.0.0",
     "pandas>=1.0.1",
     "matplotlib>=3.5.0",
-    "scikit-image>=0.21.0",
+    "scikit-image==0.19.0",
     "seaborn",
     "fastcluster",
     "parmap",
