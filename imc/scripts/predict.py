@@ -113,7 +113,29 @@ def get_ilastik(lib_dir: Path, version: str = "1.3.3post2") -> Path:
         download_file(base_url + file, lib_dir / file)
         print("Extracting ilastik archive.")
         with tarfile.open(lib_dir / file, "r:bz2") as tar:
-            tar.extractall(lib_dir)
+            
+            import os
+            
+            def is_within_directory(directory, target):
+                
+                abs_directory = os.path.abspath(directory)
+                abs_target = os.path.abspath(target)
+            
+                prefix = os.path.commonprefix([abs_directory, abs_target])
+                
+                return prefix == abs_directory
+            
+            def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+            
+                for member in tar.getmembers():
+                    member_path = os.path.join(path, member.name)
+                    if not is_within_directory(path, member_path):
+                        raise Exception("Attempted Path Traversal in Tar File")
+            
+                tar.extractall(path, members, numeric_owner=numeric_owner) 
+                
+            
+            safe_extract(tar, lib_dir)
         (lib_dir / file).unlink()
     return f
 
