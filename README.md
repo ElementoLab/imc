@@ -17,7 +17,7 @@ Development is still underway, so use at your own risk.
 
 ## Requirements and installation
 
-Requires `Python >= 3.8`. `imc` uses a `pyproject.toml` configuration only, so you'll need a up-to-date version of `pip` before installing. Base packages as `gcc` and `g++` will also need to be installed on system using the command `sudo apt install g++` or likewise. We also highly recommend installing the package on a `conda` environment to avoid dependency issues.
+Requires `Python >= 3.9`. `imc` uses a `pyproject.toml` configuration only, so you'll need a up-to-date version of `pip` before installing. Base packages as `gcc` and `g++` will also need to be installed on system using the command `sudo apt install g++` or likewise. We also highly recommend installing the package on a `conda` environment to avoid dependency issues.
 
 To install the most updated version of the program:
 ```bash
