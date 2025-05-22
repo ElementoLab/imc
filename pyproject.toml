@@ -110,74 +110,12 @@ imc = "imc.cli:main"
 build-backend = "setuptools.build_meta"
 requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.0"]
 
-# build-backend = "poetry.masonry.api"
-# requires = ["poetry>=1.2.0b1", "setuptools>=45", "wheel", "poetry-dynamic-versioning-plugin"]
-
 # build-backend = "flit_core.buildapi"
 # requires = ["flit_core >=3.2,<4"]
 
 [tool.setuptools_scm]
 write_to = "imc/_version.py"
 write_to_template = 'version = __version__ = "{version}"'
-
-# Poetry
-[tool.poetry-dynamic-versioning]
-enable = true
-vcs = "git"
-style = "semver"
-
-[tool.poetry]
-name = "imc"
-version = "0.0.0"  # waiting on next release of poetry to use dynamic-versioning extension
-description = "A package for the analysis of imaging mass cytometry (IMC) data"
-authors = ["Andre Rendeiro <afrendeiro@gmail.com>"]
-homepage = "https://github.com/ElementoLab/imc"
-repository = "https://github.com/ElementoLab/imc"
-documentation = "https://github.com/ElementoLab/imc"
-
-[tool.poetry.dependencies]
-python = "^3.8"
-ordered-set = "^4.0.2"
-PyYAML = "^5.4.1"
-pandas = ">=1.0.1"
-tifffile = ">=2022.5.4"
-imctools = "^2.1.0"
-scikit-image = "^0.20.0"
-imagecodecs = "^2020.5.30"
-colorama = "^0.4.3"
-h5py = "^2.10.0"
-anndata = "^0.7.3"
-scanpy = "^1.5.1"
-leidenalg = "^0.8.1"
-python-louvain = "^0.14"
-networkx = "^3.0"
-parmap = "^1.5.2"
-joblib = "^0.15.1"
-
-[tool.poetry.dev-dependencies]
-ipython = "^7.16.1"
-pylint = "^2.5.3"
-git-lint = "^0.1.2"
-black = {extras = ["d"], version = "^19.10b0"}
-mypy = "^0.900"
-pytest = "^5.4.3"
-Sphinx = "^3.1.1"
-sphinx-issues = "^1.2.0"
-sphinx-rtd-theme = "^0.5.0"
-
-[tool.poetry.extras]
-stardist = [
-    "stardist",
-]
-deepcell = [
-    "DeepCell",
-]
-cellpose = [
-    "cellpose",
-]
-astir = [
-    "astir",
-]
 
 [tool.black]
 line-length = 90
