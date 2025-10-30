@@ -3,7 +3,6 @@
 """
 Quantify images in stacks.
 """
-
 import sys
 import typing as tp
 
@@ -18,6 +17,7 @@ from imc.scripts import build_cli, find_tiffs
 def main(cli: tp.Sequence[str] = None) -> int:
     parser = build_cli("quantify")
     args = parser.parse_args(cli)
+    args.morphology = True
     if not args.tiffs:
         args.tiffs = sorted(find_tiffs())
         if not args.tiffs:
@@ -57,7 +57,7 @@ def main(cli: tp.Sequence[str] = None) -> int:
     if args.output is None:
         f = Path("processed").mkdir() / "quantification.csv.gz"
     else:
-        f = Path(args.output)
+        f = args.output
     quant.to_csv(f, index=False)
     print(f"Wrote CSV file to '{f.absolute()}'.")
 
@@ -66,7 +66,12 @@ def main(cli: tp.Sequence[str] = None) -> int:
         idx = quant["roi"] + "-" + quant["obj_id"].astype(str).str.zfill(v)
         quant.index = idx
 
-        cols = ["sample", "roi", "obj_id", "X_centroid", "Y_centroid", "layer"]
+        # cols = ["sample", "roi", "obj_id", "X_centroid", "Y_centroid", "layer"]
+        cols = [
+            "sample", "roi", "obj_id", "X_centroid", "Y_centroid", "layer",
+            "area", "perimeter", "minor_axis_length", "major_axis_length",
+            "eccentricity", "solidity"
+        ]
         cols = [c for c in cols if c in quant.columns]
         ann = anndata.AnnData(
             quant.drop(cols, axis=1, errors="ignore").astype(float), obs=quant[cols]
@@ -76,12 +81,11 @@ def main(cli: tp.Sequence[str] = None) -> int:
         f = f.replace_(".csv.gz", ".h5ad")
         ann.write(f)
         print(f"Wrote h5ad file to '{f.absolute()}'.")
-        ann2 = anndata.read(f)
+        ann2 = anndata.read_h5ad(f)
         assert np.allclose(ann.X, ann2.X)
 
     print("Finished quantification step.")
     return 0
-
 
 if __name__ == "__main__":
     try:

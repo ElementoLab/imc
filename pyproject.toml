@@ -37,17 +37,18 @@ dependencies = [
     "joblib",
     "leidenalg",
     "python-louvain",
-    "networkx>=3.0.0",
+    "networkx>=2.6,<3.0",
     "pandas>=1.0.1",
     "matplotlib>=3.5.0",
-    "scikit-image==0.19.0",
+    "scikit-image==0.19.3",
+    "tifffile==2021.11.2",
+    "numpy<2.0",
     "seaborn",
     "fastcluster",
     "parmap",
     "scanpy",
     "bbknn",
     "numpy_groupies",
-    "tifffile==2022.4.8",
     "seaborn-extensions"
 ]
 dynamic = ['version']

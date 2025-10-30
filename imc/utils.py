@@ -513,9 +513,7 @@ def mcd_to_dir(
     output_dir: Path = None,
     output_format: str = "tiff",
     overwrite: bool = False,
-    compression: tp.Union[
-        str, tifffile.TIFF.COMPRESSION
-    ] = tifffile.TIFF.COMPRESSION.ZSTD,
+    compression_level: int = 3,
     sample_name: str = None,
     partition_panels: bool = False,
     filter_full: bool = True,
@@ -686,14 +684,14 @@ def mcd_to_dir(
                     ac.save_tiff(
                         p + file_ending,
                         names=channel_labels.str.extract(r"\((.*)\)")[0],
-                        compression=compression,
+                        compression=compression_level,
                     )
                 elif output_format == "ome-tiff":
                     write_ometiff(
                         arr=ac._image_data,
                         labels=channel_labels.tolist(),
                         output_path=p + file_ending,
-                        compression=compression,
+                        compression_level=compression_level,
                         description="; ".join(
                             [f"{k}={v}" for k, v in ac.acquisition.metadata.items()]
                         ),
@@ -772,9 +770,7 @@ def write_ometiff(
     arr: Array,
     labels: tp.Sequence[str],
     output_path: tp.Union[Path, str],
-    compression: tp.Union[
-        str, tifffile.TIFF.COMPRESSION
-    ] = tifffile.TIFF.COMPRESSION.ZSTD,
+    compression_level: int = 3,
     description: str = None,
     **tiff_kwargs,
 ) -> None:
@@ -847,9 +843,10 @@ def write_ometiff(
         description=xml,
         contiguous=True,
         photometric="minisblack",
-        resolution=(25400, 25400, "inch"),
+        resolution=(25400, 25400),
+        resolutionunit="INCH",  # ← new argument (must be uppercase)
         metadata={"Channel": {"Name": labels}},
-        compression=compression,
+        compression="deflate",  # ← keep this
         ome=True,
         **tiff_kwargs,
     )
@@ -1242,18 +1239,12 @@ def filter_hot_pixels(img, n_bins=1000):
 
     mod = sm.GLM(y2, np.vstack([x2, np.ones(x2.shape)]).T, family=sm.families.Poisson())
     res = mod.fit()
-
-    def f1(x):
-        return np.e ** (res.params[0] * x + res.params[1])
-
+    f1 = lambda x: np.e ** (res.params[0] * x + res.params[1])
     g1 = vmap(grad(f1))
 
     mod = LinearRegression()
     mod.fit(x2.reshape((-1, 1)), np.log2(y2))
-
-    def f2(x):
-        return 2 ** (mod.coef_[0] * x + mod.intercept_)
-
+    f2 = lambda x: 2 ** (mod.coef_[0] * x + mod.intercept_)
     g2 = vmap(grad(f2))
 
     f3 = scipy.interpolate.interp1d(x2, y2, fill_value="extrapolate")
@@ -1454,9 +1445,6 @@ def polygon_to_mask(
         if isinstance(inter, (MultiPolygon, GeometryCollection)):
             return np.asarray([polygon_to_mask(x, shape) for x in inter.geoms]).sum(0) > 0
         inter_verts = np.asarray(inter.exterior.coords.xy).T.tolist()
-        # check this is not empty, most likely means polygon is outside mask shape
-        if len(inter_verts) == 0:
-            return np.zeros(shape[::-1]).astype(bool)
     else:
         inter_verts = polygon_vertices
     x, y = np.meshgrid(np.arange(shape[0]), np.arange(shape[1]))
@@ -1465,28 +1453,6 @@ def polygon_to_mask(
     path = matplotlib.path.Path(inter_verts)
     grid = path.contains_points(points, radius=-1)
     return grid.reshape((shape[1], shape[0]))
-
-Array = np.ndarray
-def mask_to_polygon(
-    labeled_image: Array,
-    simplify: bool = True,
-    simplification_threshold: float = 5.0,
-) -> tp.List[Array]:
-    from imantics import Mask
-    from shapely.geometry import Polygon
-
-    polygons = Mask(labeled_image).polygons()
-    shapes = list()
-    for point in polygons.points:
-
-        if not simplify:
-            poly = np.asarray(point).tolist()
-        else:
-            poly = np.asarray(
-                Polygon(point).simplify(simplification_threshold).exterior.coords.xy
-            ).T.tolist()
-        shapes.append(poly)
-    return shapes
 
 
 def mask_to_labelme(
