@@ -1225,7 +1225,27 @@ class ROI:
         layers: tp.Sequence[str] = None,
         **kwargs,
     ) -> DataFrame:
-        """Quantify intensity of each cell in each channel."""
+        """
+        Quantify intensity of each cell in each channel.
+
+        Parameters
+        ----------
+
+        channel_include: list[str]
+            Channels to include in quantification.
+            Default is all.
+        channel_exclude: list[str]
+            Channels to exclude from quantification.
+            Default is non.
+        layers: list[str]
+            What mask layer to quantify. The masks must exist for the ROI. Options are:
+            - 'cell': Whole cell mask.
+            - 'nuclei': Nuclear mask.
+            - 'membrane': Membrane mask - this is usually not a real mask but cell mask minus a fixed value.
+            - 'cytoplasm':  Mask of the cell cytoplasm.
+            - 'extracellular': Mask of the local neighborhood of the cell excluding other cells.
+            Default is value of ROI.mask_layer which is by default 'cell.
+        """
         from imc.ops.quant import quantify_cell_intensity
 
         if layers is None:
