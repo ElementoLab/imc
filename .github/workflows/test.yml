@@ -13,9 +13,9 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up Python 3.8
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: 3.8
     - name: Install dependencies
@@ -39,17 +39,17 @@ jobs:
         ls -l results/phenotyping
     - name: Cache resources
       id: cache-resources
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: /home/$USER/.imc
         key: imc-resources-linux
 
   osx:
-    runs-on: macos-10.14
+    runs-on: macos-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up Python 3.8
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: 3.8
     - name: Install dependencies
@@ -73,7 +73,7 @@ jobs:
         ls -l results/phenotyping
     - name: Cache resources
       id: cache-resources
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: /home/$USER/.imc
         key: imc-resources-osx
