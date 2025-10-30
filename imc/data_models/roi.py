@@ -98,7 +98,7 @@ class ROI:
         roi_number: tp.Optional[int] = None,
         channel_labels: tp.Optional[tp.Union[Path, Series]] = None,
         root_dir: tp.Optional[Path] = None,
-        stacks_dir: tp.Optional[Path] = None,
+        stacks_dir: tp.Optional[Path] = None,  # TODO: make these relative to the root_dir
         masks_dir: tp.Optional[Path] = None,
         single_cell_dir: tp.Optional[Path] = None,
         sample: tp.Optional[_sample.IMCSample] = None,
@@ -137,7 +137,7 @@ class ROI:
         self.mask_layer = default_mask_layer
         # TODO: make sure channel labels conform to internal specification: "Label(Metal\d+)"
         self._channel_labels: tp.Optional[Series] = (
-            pd.read_csv(channel_labels, index_col=0).squeeze()
+            pd.read_csv(channel_labels, index_col=0, squeeze=True)
             if isinstance(channel_labels, (str, Path))
             else channel_labels
         )
@@ -239,7 +239,9 @@ class ROI:
             )
             raise FileNotFoundError(msg)
 
-        preview = pd.read_csv(channel_labels_file, header=None).squeeze()
+        # squeeze parameter was removed, this also converts a one-column DataFrame to a pandas Series
+        preview = pd.read_csv(channel_labels_file, header=None).squeeze("columns")
+
         if isinstance(preview, pd.Series):
             order = preview.to_frame(name="ChannelName").set_index("ChannelName")
             # read reference
@@ -469,14 +471,12 @@ class ROI:
 
     @property
     def adjacency_graph(self) -> nx.Graph:
-        import pickle
-
         if self._adjacency_graph is not None:
             return self._adjacency_graph
-
         try:
-            with open(self.get_input_filename("adjacency_graph"), "rb") as h:
-                self._adjacency_graph = pickle.load(h)
+            self._adjacency_graph = nx.readwrite.read_gpickle(
+                self.get_input_filename("adjacency_graph")
+            )
         except FileNotFoundError:
             return None
         return self._adjacency_graph
@@ -526,7 +526,7 @@ class ROI:
 
     def get(self, attr):
         try:
-            return self.__getattribute__(attr)
+            return self.__getattribute(attr)
         except AttributeError:
             return None
 
@@ -760,14 +760,9 @@ class ROI:
             minmaxes.append(minmax)
         return ", ".join(labels), np.asarray(arrays), np.asarray(minmaxes)
 
-    def get_mean_all_channels(self, equalize: bool = True) -> Array:
+    def get_mean_all_channels(self) -> Array:
         """Get an array with mean of all channels"""
-        mean = np.asarray(
-            [c for i, c in enumerate(self.stack) if not self.channel_exclude[i]]
-        ).mean(axis=0)
-        if equalize:
-            mean = eq(mean)
-        return mean
+        return eq(self.stack.mean(axis=0))
 
     def plot_channel(
         self,
@@ -1055,12 +1050,11 @@ class ROI:
             axes[i, 0].imshow(self.get_mean_all_channels() * 0.1, cmap=bckgd_cmap)
             # plot each of the cell types with different colors
             res = cell_labels_to_mask(self.cell_mask, clusters)
-            rgb, cmaps = values_to_rgb_colors(res, from_palette=palette)
-            cmaps = {l: v for (k, v), l in zip(cmaps.items(), labels)}
+            rgb, cmap = values_to_rgb_colors(res, from_palette=palette)
             if position is not None:
                 rgb = rgb[slice(*position[0][::-1], 1), slice(*position[1][::-1], 1)]
             axes[i, 0].imshow(rgb)
-            patches += [mpatches.Patch(color=c, label=ll) for ll, c in cmaps.items()]
+            patches += [mpatches.Patch(color=c, label=l) for l, c in cmap.items()]
             axes[i, 0].axis("off")
             if add_scale:
                 _add_scale(axes[i, 0])
@@ -1222,7 +1216,7 @@ class ROI:
         self,
         channel_include: tp.Sequence[str] = None,
         channel_exclude: tp.Sequence[str] = None,
-        layers: tp.Sequence[str] = None,
+        layers: tp.Sequence[str] = ["cell"],
         **kwargs,
     ) -> DataFrame:
         """
@@ -1247,9 +1241,6 @@ class ROI:
             Default is value of ROI.mask_layer which is by default 'cell.
         """
         from imc.ops.quant import quantify_cell_intensity
-
-        if layers is None:
-            layers = [self.mask_layer]
 
         if channel_include is not None:
             kwargs["channel_include"] = self.channel_labels.str.contains(
@@ -1319,3 +1310,4 @@ class ROI:
         """Get cell density in ROI."""
         cells = np.unique(self.mask) - 1
         return len(cells) / self.area
+
