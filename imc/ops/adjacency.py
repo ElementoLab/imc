@@ -11,7 +11,15 @@ import seaborn as sns
 from tqdm import tqdm
 import scipy.ndimage as ndi
 from skimage import exposure
-from skimage import graph
+
+# skimage version compatibility issue
+import skimage
+from packaging import version
+if version.parse(skimage.__version__) < version.parse("0.20"):
+    from skimage.future import graph
+else:
+    from skimage import graph
+
 import networkx as nx
 
 import imc.data_models.roi as _roi
@@ -86,7 +94,12 @@ def get_adjacency_graph(
     )
 
     # Construct adjacency graph based on cell distances
-    g = graph.rag_mean_color(image_mean, mask, connectivity=2, mode="distance")
+    # skimage compatibility
+    if hasattr(graph, "rag_mean_color"):
+        g = graph.rag_mean_color(image_mean, mask, connectivity=2, mode="distance")
+    else:
+        raise AttributeError(f"scikit-image {skimage.__version__} does not include rag_mean_color; "
+            "please use <=0.19.3 or update to a compatible implementation.")
     # g = skimage.future.graph.RAG(mask, connectivity=2)
     # remove background node (unfortunately it can't be masked beforehand)
     if 0 in g.nodes:
