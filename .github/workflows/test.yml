@@ -1,5 +1,6 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+# 10/31/2025 compatibility issue for MacOS: all DeepCell versions require TensorFlow 2.8.0, which is not available for macOS ARM64. Skipped optional deepcell backend for MacOS
 
 name: Test imc package
 
@@ -110,15 +111,8 @@ jobs:
           ${{ env.pythonLocation }}/bin/python -m pip install pytest pytest-cov
           ${{ env.pythonLocation }}/bin/pip install "numpy<2.0" "scipy>=1.11,<1.16" "pandas>=2.0,<3.0" "matplotlib>=3.7,<3.11" "scikit-image==0.19.3" "tifffile>=2025.5" "networkx>=2.6,<3.0" "seaborn>=0.13,<0.14" "fastcluster==1.2.6"
           ${{ env.pythonLocation }}/bin/pip install "imctools>=2.1.8" "joblib>=1.2,<1.6" "leidenalg>=0.10.2" "python-louvain>=0.16" "scanpy>=1.9,<1.12" "bbknn>=1.6" "numpy-groupies>=0.9,<0.12" "parmap>=1.6,<2.0" "seaborn-extensions>=0.2.0" "outdated>=0.2.2" "ordered-set>=4.1.0" "urlpath>=1.2.0" "PyYAML>=6.0"
-          ${{ env.pythonLocation }}/bin/pip install "tensorflow>=2.13,<2.14" "tensorflow-addons"
-          ${{ env.pythonLocation }}/bin/pip install "DeepCell>=0.12.9"
           ${{ env.pythonLocation }}/bin/pip install -e .
 
       - name: Test with pytest
         run: |
           ${{ env.pythonLocation }}/bin/python -m pytest imc/
-          mkdir -p imctest
-          cd imctest
-          imc process https://zenodo.org/record/5018260/files/COVID19_brain_Patient03_ROI3_COVID19_olfactorybulb.txt?download=1
-          ls -l processed/
-          ls -l results/phenotyping
