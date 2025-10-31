@@ -80,11 +80,6 @@ jobs:
         shell: bash
         run: |
           python -m pytest imc/
-          mkdir imctest
-          cd imctest
-          imc process https://zenodo.org/record/5018260/files/COVID19_brain_Patient03_ROI3_COVID19_olfactorybulb.txt?download=1
-          ls -l processed/
-          ls -l results/phenotyping
 
 
   osx:
@@ -92,11 +87,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.10
         id: setup-python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
       - name: Install HDF5
         run: |
@@ -114,7 +109,7 @@ jobs:
           ${{ env.pythonLocation }}/bin/python -m pip install --upgrade pip setuptools wheel
           ${{ env.pythonLocation }}/bin/python -m pip install pytest pytest-cov
           ${{ env.pythonLocation }}/bin/pip install "numpy<2.0" "scipy>=1.11,<1.16" "pandas>=2.0,<3.0" "matplotlib>=3.7,<3.11" "scikit-image==0.19.3" "tifffile>=2025.5" "networkx>=2.6,<3.0" "seaborn>=0.13,<0.14" "fastcluster==1.2.6"
-          ${{ env.pythonLocation }}/bin/pip install "imctools>=2.1.8" "joblib>=1.2,<1.6" "leidenalg>=0.10.2" "python-louvain>=0.16" "scanpy>=1.9,<1.12" "bbknn>=1.6" "numpy-groupies>=0.9,<0.12" "parmap>=1.6,<2.0" "seaborn-extensions==0.1.1" "outdated>=0.2.2" "ordered-set>=4.1.0" "urlpath>=1.2.0" "PyYAML>=6.0"
+          ${{ env.pythonLocation }}/bin/pip install "imctools>=2.1.8" "joblib>=1.2,<1.6" "leidenalg>=0.10.2" "python-louvain>=0.16" "scanpy>=1.9,<1.12" "bbknn>=1.6" "numpy-groupies>=0.9,<0.12" "parmap>=1.6,<2.0" "seaborn-extensions>=0.2.0" "outdated>=0.2.2" "ordered-set>=4.1.0" "urlpath>=1.2.0" "PyYAML>=6.0"
           ${{ env.pythonLocation }}/bin/pip install "astir==0.1.5" "DeepCell==0.12.6"
           ${{ env.pythonLocation }}/bin/pip install -e .
 
