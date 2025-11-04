@@ -26,22 +26,6 @@ cd imc
 make install
 ```
 
-Install from [PyPI](https://pypi.org/project/imc/) with [`pip`](https://pip.pypa.io/) or with [poetry](https://python-poetry.org/):
-```bash
-pip install imc
-# or
-poetry install imc
-```
-
-## Quick start
-
-Install the package from [PyPI](https://pypi.org/project/imc/) with extra packages required for all steps:
-```bash
-pip install imc[extra]
-# or
-poetry install imc[extra]
-```
-
 ### Use case 1 (pipeline processing)
 
 #### Example: Lung sample processing from MCD to single-cell h5ad
