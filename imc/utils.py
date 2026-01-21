@@ -992,7 +992,35 @@ def txt_to_tiff(
     df = df.drop(
         ["Start_push", "End_push", "Pushes_duration", "Z"], axis=1, errors="ignore"
     )
-    df = df.pivot_table(index="X", columns="Y")[df.columns.drop(["X", "Y"])]
+    
+    # Check that required columns exist (handle case sensitivity)
+    required_cols = {"X", "Y"}
+    actual_cols = set(df.columns)
+    
+    # Try case-insensitive matching
+    col_mapping = {}
+    for req_col in required_cols:
+        if req_col not in actual_cols:
+            # Try lowercase
+            if req_col.lower() in [c.lower() for c in actual_cols]:
+                matching_col = [c for c in actual_cols if c.lower() == req_col.lower()][0]
+                col_mapping[req_col] = matching_col
+            else:
+                raise KeyError(
+                    f"Required column '{req_col}' not found in file. "
+                    f"Available columns: {list(df.columns)}"
+                )
+        else:
+            col_mapping[req_col] = req_col
+    
+    # Use the mapped column names
+    x_col = col_mapping["X"]
+    y_col = col_mapping["Y"]
+    
+    # Get channel columns (all columns except X and Y)
+    channel_cols = [c for c in df.columns if c not in {x_col, y_col}]
+    
+    df = df.pivot_table(index=x_col, columns=y_col)[channel_cols]
     chs = df.columns.get_level_values(0).unique()
     stack = np.asarray([df[c].values for c in chs])
 
