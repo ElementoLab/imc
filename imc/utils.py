@@ -989,7 +989,31 @@ def txt_to_tiff(
     write_channel_labels :
         Whether to write a file with labels for the channel names.
     """
+    # Check if file is valid (not HTML or empty)
+    try:
+        with open(txt_file, 'r', encoding='utf-8') as f:
+            first_line = f.readline().strip()
+            # Check if file appears to be HTML
+            if first_line.startswith('<') or '<html' in first_line.lower() or '<!DOCTYPE' in first_line.lower():
+                raise ValueError(
+                    f"File '{txt_file}' appears to be HTML instead of a data file. "
+                    f"This may indicate a failed download or corrupted file. "
+                    f"Please check the file and re-download if necessary."
+                )
+    except (UnicodeDecodeError, IOError) as e:
+        raise ValueError(
+            f"Could not read file '{txt_file}': {e}. "
+            f"The file may be corrupted or in an unexpected format."
+        )
+    
     df = pd.read_table(txt_file)
+    
+    # Check if dataframe is empty or has no valid columns
+    if df.empty:
+        raise ValueError(
+            f"File '{txt_file}' is empty or contains no valid data rows."
+        )
+    
     df = df.drop(
         ["Start_push", "End_push", "Pushes_duration", "Z"], axis=1, errors="ignore"
     )
@@ -997,6 +1021,18 @@ def txt_to_tiff(
     # Check that required columns exist (handle case sensitivity)
     required_cols = {"X", "Y"}
     actual_cols = set(df.columns)
+    
+    # Check if any column names look like HTML tags (indicating HTML was read as data)
+    html_indicators = ['<html', '<!', '<head', '<body', '<div']
+    for col in actual_cols:
+        col_str = str(col).strip().lower()
+        if any(html_ind in col_str for html_ind in html_indicators):
+            raise ValueError(
+                f"File '{txt_file}' appears to contain HTML content instead of data. "
+                f"First column name suggests HTML: '{col}'. "
+                f"This may indicate a failed download or corrupted file. "
+                f"Please check the file and re-download if necessary."
+            )
     
     # Try case-insensitive matching
     col_mapping = {}
@@ -1008,8 +1044,9 @@ def txt_to_tiff(
                 col_mapping[req_col] = matching_col
             else:
                 raise KeyError(
-                    f"Required column '{req_col}' not found in file. "
-                    f"Available columns: {list(df.columns)}"
+                    f"Required column '{req_col}' not found in file '{txt_file}'. "
+                    f"Available columns: {list(df.columns)}. "
+                    f"This may indicate an invalid or corrupted file format."
                 )
         else:
             col_mapping[req_col] = req_col
