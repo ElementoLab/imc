@@ -70,6 +70,8 @@ def predict_with_ilastik(
     """
     Use a trained ilastik model to classify pixels in an IMC image.
     """
+    # Don't redirect output if not quiet, so errors are visible
+    # Even when quiet, we might want to see errors, so we'll capture stderr separately
     quiet_arg = "\n        --redirect_output /dev/null \\" if quiet else ""
     cmd = f"""{ilastik_sh} \\
         --headless \\
@@ -79,7 +81,8 @@ def predict_with_ilastik(
         """
     # Shell expansion of input files won't happen in subprocess call
     cmd += " ".join([x.replace_(" ", r"\ ").as_posix() for x in tiff_files])
-    return run_shell_command(cmd, quiet=True)
+    # Don't use quiet=True so we can see errors even when redirecting ilastik output
+    return run_shell_command(cmd, quiet=quiet)
 
 
 def get_ilastik(lib_dir: Path, version: str = "1.3.3post2") -> Path:

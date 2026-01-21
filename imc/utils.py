@@ -347,7 +347,9 @@ def run_shell_command(cmd: str, dry_run: bool = False, quiet: bool = False) -> i
     # and needs a command to be called prior such as conda activate, etc
     symbol = any(x in cmd for x in ["&", "&&", "|"])
     source = cmd.startswith("source")
-    shell = bool(symbol or source)
+    # Commands with line continuations (backslashes) need shell processing
+    has_line_continuation = "\\" in cmd and "\n" in cmd
+    shell = bool(symbol or source or has_line_continuation)
     if not quiet:
         print(
             "Running command:\n",
@@ -358,19 +360,35 @@ def run_shell_command(cmd: str, dry_run: bool = False, quiet: bool = False) -> i
         if shell:
             if not quiet:
                 print("Running command in shell.")
-            code = subprocess.call(cmd, shell=shell)
+            # Capture stderr to show actual error messages when command fails
+            result = subprocess.run(cmd, shell=shell, capture_output=True, text=True)
+            code = result.returncode
+            stdout_output = result.stdout
+            stderr_output = result.stderr
         else:
             # Allow spaces in file names
             c = re.findall(r"\S+", cmd.replace(r"\ ", "__space__").replace("\\\n", ""))
             c = [x.replace("__space__", " ") for x in c]
-            code = subprocess.call(c, shell=shell)
+            # Capture stderr to show actual error messages when command fails
+            result = subprocess.run(c, shell=shell, capture_output=True, text=True)
+            code = result.returncode
+            stdout_output = result.stdout
+            stderr_output = result.stderr
         if code != 0:
-            error_msg = "Process for command below failed with exit code {}.\nCommand:\n{}\nTerminating pipeline.\n".format(
+            error_msg = "Process for command below failed with exit code {}.\nCommand:\n{}\n".format(
                 code,
                 textwrap.dedent(cmd)
             )
+            if stdout_output:
+                error_msg += f"\nStdout:\n{stdout_output}\n"
+            if stderr_output:
+                error_msg += f"\nStderr:\n{stderr_output}\n"
+            error_msg += "Terminating pipeline.\n"
             print(error_msg)
             sys.exit(code)
+        elif not quiet and stdout_output:
+            # Print output if not quiet and there's output
+            print(stdout_output)
         if not shell:
             pass
             # usage = resource.getrusage(resource.RUSAGE_SELF)
