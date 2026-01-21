@@ -5,7 +5,14 @@ Inspect MCD files, reporting on their basic statistics, saving
 metadata as YAML files, and panel information as CSV files.
 """
 
+import os
 import sys
+import warnings
+
+# Suppress warnings before any other imports
+os.environ.setdefault("OUTDATED_IGNORE", "1")
+warnings.filterwarnings("ignore")
+
 import argparse
 from argparse import RawTextHelpFormatter
 import typing as tp

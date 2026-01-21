@@ -4,9 +4,37 @@
 from __future__ import annotations
 import os
 import sys
+
+# Set environment variables BEFORE any other imports
+# Suppress outdated package warnings
+os.environ.setdefault("OUTDATED_IGNORE", "1")
+
+# Suppress Python warnings at environment level (applies before any imports)
+if "PYTHONWARNINGS" not in os.environ:
+    os.environ["PYTHONWARNINGS"] = "ignore"
+
 import logging
 from functools import partialmethod
 from pathlib import Path as _Path
+
+# Suppress pkg_resources deprecation warnings - must be set BEFORE any imports
+import warnings
+
+# Configure warning filters to suppress common noisy warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", module="outdated")
+warnings.filterwarnings("ignore", module="pkg_resources")
+
+# Fix macOS threading issues with scipy/numpy imports
+# Must be set BEFORE importing any packages that use scipy/numpy
+if sys.platform == "darwin":  # macOS
+    # Limit threading to avoid mutex/deadlock issues on macOS
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+    os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
 
 from outdated import warn_if_outdated
 from joblib import Memory
@@ -27,7 +55,13 @@ except ImportError:
     version = __version__ = _get_version(root="..", relative_to=__file__)
 
 
-warn_if_outdated("imc", __version__)
+# Suppress warnings during version check
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    try:
+        warn_if_outdated("imc", __version__)
+    except Exception:
+        pass  # Silently ignore any errors in version checking
 
 plt.rcParams["svg.fonttype"] = "none"
 plt.rcParams["font.family"] = "Arial"
