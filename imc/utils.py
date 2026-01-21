@@ -365,10 +365,11 @@ def run_shell_command(cmd: str, dry_run: bool = False, quiet: bool = False) -> i
             c = [x.replace("__space__", " ") for x in c]
             code = subprocess.call(c, shell=shell)
         if code != 0:
-            print(
-                "Process for command below failed with error:\n'%s'\nTerminating pipeline.\n",
-                textwrap.dedent(cmd),
+            error_msg = "Process for command below failed with exit code {}.\nCommand:\n{}\nTerminating pipeline.\n".format(
+                code,
+                textwrap.dedent(cmd)
             )
+            print(error_msg)
             sys.exit(code)
         if not shell:
             pass

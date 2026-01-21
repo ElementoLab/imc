@@ -186,9 +186,28 @@ class ROI:
 
         # reason = "Stack file must end with '_full.tiff' for the time being."
         # assert stack_file.endswith("_full.tiff")
+        # Try multiple patterns to extract ROI number (more permissive)
+        # Try original pattern first (with dash before number)
         roi_numbers = re.findall(r".*-(\d+)_full\.tiff", stack_file.as_posix())
         if len(roi_numbers) != 1:
-            print("Could not determine ROI number.")
+            # Try pattern with underscore or dash before number (e.g., R_4_full.tiff or -4_full.tiff)
+            roi_numbers = re.findall(r"[R_\-](\d+)_full\.tiff", stack_file.as_posix(), re.IGNORECASE)
+            if len(roi_numbers) != 1:
+                # Try finding any sequence of digits immediately before _full
+                # This catches cases like "_4_full.tiff" or "-4_full.tiff"
+                roi_numbers = re.findall(r"[\-_](\d+)_full\.tiff", stack_file.as_posix())
+                if len(roi_numbers) != 1:
+                    # Try finding the last number before _full (most permissive)
+                    # This handles cases where there are multiple numbers
+                    all_numbers = re.findall(r"(\d+)_full\.tiff", stack_file.as_posix())
+                    if len(all_numbers) == 1:
+                        roi_numbers = all_numbers
+                    elif len(all_numbers) > 1:
+                        # If multiple numbers found, use the last one (most likely to be ROI number)
+                        roi_numbers = [all_numbers[-1]]
+        if len(roi_numbers) != 1:
+            # ROI number is optional - allow None and continue
+            print(f"Warning: Could not determine ROI number from filename: {stack_file.name}. Continuing without ROI number.")
             roi_number = None
         else:
             roi_number = int(roi_numbers[0])
