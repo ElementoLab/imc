@@ -41,7 +41,11 @@ def main(cli: tp.Sequence[str] = None) -> int:
     if (args.sample_names is None) or (len(args.input_files) != len(args.sample_names)):
         args.sample_names = [None] * len(args.input_files)
 
-    args.compression = getattr(tifffile.TIFF.COMPRESSION, args.compression)
+    # Handle tifffile API change: TIFF.COMPRESSION was moved to module-level in newer versions
+    try:
+        args.compression = getattr(tifffile.TIFF.COMPRESSION, args.compression)
+    except AttributeError:
+        args.compression = getattr(tifffile.COMPRESSION, args.compression)
 
     mcds = [file for file in args.input_files if file.endswith(MCD_FILE_ENDINGS)]
     tiffs = [file for file in args.input_files if file.endswith(TIFF_FILE_ENDINGS)]
