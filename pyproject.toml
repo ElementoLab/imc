@@ -156,10 +156,10 @@ parmap = "^1.5.2"
 joblib = "^0.15.1"
 
 [tool.poetry.dev-dependencies]
-ipython = "^7.16.1"
+ipython = ">=8.10.0"
 pylint = "^2.5.3"
 git-lint = "^0.1.2"
-black = {extras = ["d"], version = "^19.10b0"}
+black = {extras = ["d"], version = ">=24.0.0"}
 mypy = "^0.900"
 pytest = "^5.4.3"
 Sphinx = "^3.1.1"
