@@ -148,9 +148,23 @@ def main(cli: tp.Sequence[str] = None) -> int:
         segment(opts["segment"] + tiffs)
     if "quantify" in args.steps:
         quantify(opts["quantify"] + tiffs)
-    h5ad_f = "processed/quantification.h5ad"
     if "phenotype" in args.steps:
-        phenotype(opts["phenotype"] + [h5ad_f])
+        # Collect per-TIFF h5ad files produced by quantify and merge for phenotype
+        import anndata
+
+        h5ad_files = sorted(PROCESSED_DIR.glob("**/*_quantification.h5ad"))
+        if not h5ad_files:
+            print("No quantification h5ad files found, skipping phenotype step.")
+        else:
+            merged_h5ad = PROCESSED_DIR.mkdir() / "quantification.h5ad"
+            if len(h5ad_files) == 1:
+                import shutil
+                shutil.copy2(str(h5ad_files[0]), str(merged_h5ad))
+            else:
+                anns = [anndata.read_h5ad(f) for f in h5ad_files]
+                merged = anndata.concat(anns)
+                merged.write(merged_h5ad)
+            phenotype(opts["phenotype"] + [str(merged_h5ad)])
 
     print("Finished processing!")
     return 0
