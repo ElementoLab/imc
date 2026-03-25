@@ -636,11 +636,12 @@ cli_config = {
                 },
             },
             {
-                "args": ["--output"],
+                "args": ["-o", "--output"],
                 "kwargs": {
                     "dest": "output",
-                    "help": "Output file with quantification. "
-                    "Default is 'processed/quantification.csv'.",
+                    "type": Path,
+                    "help": "Output directory for quantification files. "
+                    "Default is to write next to each input TIFF.",
                 },
             },
             {
